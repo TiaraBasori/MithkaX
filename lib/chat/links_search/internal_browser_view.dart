@@ -1,12 +1,17 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../../components/app_icons.dart';
 import '../../components/app_interactive_surface.dart';
+import '../../components/toast.dart';
 import '../../components/ui_components.dart';
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_theme.dart';
+import '../instant_view/instant_view_view.dart';
+import '../instant_view/instant_view_web.dart';
 import 'link_browser.dart';
 
 class InternalBrowserView extends StatefulWidget {
@@ -30,6 +35,7 @@ class _InternalBrowserViewState extends State<InternalBrowserView> {
   var _canGoBack = false;
   var _canGoForward = false;
   var _navigationRevision = 0;
+  var _instantBusy = false;
 
   @override
   void initState() {
@@ -130,6 +136,43 @@ class _InternalBrowserViewState extends State<InternalBrowserView> {
     await _refreshNavigationState();
   }
 
+  /// exteraless's "Open local Instant View": read the page already loaded in
+  /// this WebView and show it in the article surface. No JS channel is added:
+  /// the extractor returns its JSON through `runJavaScriptReturningResult`, so
+  /// an untrusted page never gets a native bridge.
+  Future<void> _openInstantView() async {
+    if (_instantBusy) return;
+    final url = _currentUri.toString();
+    setState(() => _instantBusy = true);
+    try {
+      final script = await instantViewExtractionScript();
+      final raw = await _controller
+          .runJavaScriptReturningResult(script)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      final json = decodeInstantViewWebResult(raw);
+      final page = json == null
+          ? null
+          : parseWebInstantViewPage(json, url: url);
+      if (page == null || page.isEmpty) {
+        showToast(context, AppStrings.t(AppStringKeys.instantViewLoadFailed));
+        return;
+      }
+      await Navigator.of(context).push<void>(
+        AppPageRoute<void>(
+          pageBuilder: (_, _, _) =>
+              InstantViewView(url: url, initialPage: page, fallbackUrl: url),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        showToast(context, AppStrings.t(AppStringKeys.instantViewLoadFailed));
+      }
+    } finally {
+      if (mounted) setState(() => _instantBusy = false);
+    }
+  }
+
   String get _originLabel {
     final defaultPort = _currentUri.scheme == 'https' ? 443 : 80;
     final port = _currentUri.hasPort && _currentUri.port != defaultPort
@@ -194,6 +237,14 @@ class _InternalBrowserViewState extends State<InternalBrowserView> {
                     ),
                     icon: HeroAppIcons.arrowsRotate,
                     onTap: () => unawaited(_controller.reload()),
+                  ),
+                  _BrowserToolbarButton(
+                    semanticLabel: AppStrings.t(
+                      AppStringKeys.instantViewOpenLocal,
+                    ),
+                    icon: HeroAppIcons.newspaper,
+                    enabled: !_instantBusy,
+                    onTap: () => unawaited(_openInstantView()),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(

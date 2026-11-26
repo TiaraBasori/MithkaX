@@ -3,11 +3,12 @@
 //
 //  The card that offers a newer build. The app's own surface — mark, title,
 //  the version pair, an optional note, and tall stacked actions — instead of a
-//  bare two-line alert, so an update prompt reads as part of Mithka X rather
+//  bare two-line alert, so an update prompt reads as part of Mithka rather
 //  than as something the platform drew over it.
 //
 
 import 'package:flutter/widgets.dart';
+
 import '../components/app_icons.dart';
 import '../components/app_interactive_surface.dart';
 import '../l10n/app_localizations.dart';

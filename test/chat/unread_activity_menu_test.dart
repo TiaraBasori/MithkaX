@@ -3,9 +3,9 @@
 //
 //  The floating @ / reaction pills inside a chat keep their tap-to-jump
 //  behavior. Long press on @ opens the narrow anchored "Mark all as read"
-//  menu (exteraless's ReadAllMentionsMenu over the chat's side control, not a
+//  menu (the reference client's ReadAllMentionsMenu over the chat's side control, not a
 //  bottom sheet); long press on the reaction pill clears reactions directly,
-//  exactly like exteraless's side control.
+//  exactly like the reference client's side control.
 //
 
 import 'dart:async';
@@ -17,7 +17,7 @@ import 'package:mithka/auth/auth_manager.dart';
 import 'package:mithka/chat/chat_view.dart';
 import 'package:mithka/chats/chat_list_view.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';

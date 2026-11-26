@@ -25,6 +25,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/auth/account_store.dart';
 import 'package:mithka/auth/auth_manager.dart';
+import 'package:mithka/chat/admin/chat_info_view.dart';
 import 'package:mithka/chat/chat_view.dart';
 import 'package:mithka/chat/pinned_messages_view.dart';
 import 'package:mithka/components/app_anchored_menu.dart';
@@ -33,7 +34,7 @@ import 'package:mithka/components/app_icons.dart';
 import 'package:mithka/components/drawer_controller.dart' as dc;
 import 'package:mithka/l10n/app_locale_controller.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
@@ -432,7 +433,7 @@ void main() {
       )
       .icon;
 
-  testWidgets('every chat type carries the overflow menu, none a search icon', (
+  testWidgets('every chat type carries the menu, search and a details title', (
     tester,
   ) async {
     for (final kind in _Kind.values) {
@@ -447,12 +448,12 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('chatHeaderSearch')),
-        findsNothing,
-        reason: '$kind must not keep a standalone search glyph',
+        findsOneWidget,
+        reason: '$kind keeps its own search control beside the menu',
       );
-      // The details control stays its own button; the menu is the only new
-      // header item.
-      expect(find.byKey(const ValueKey('chatHeaderInfo')), findsOneWidget);
+      // The details door is the title now; the old info button is gone.
+      expect(find.byKey(const ValueKey('chatHeaderInfo')), findsNothing);
+      expect(find.byKey(const ValueKey('chatHeaderTitle')), findsOneWidget);
 
       await closeChat(tester);
     }
@@ -514,17 +515,58 @@ void main() {
     await closeChat(tester);
   });
 
-  testWidgets('the overflow glyph is distinct from the chat-info control', (
-    tester,
-  ) async {
+  testWidgets('the menu button is the action-bar bars glyph', (tester) async {
     await openChat(tester);
 
-    expect(headerIcon(tester, 'chatHeaderInfo'), HeroAppIcons.bars);
-    expect(headerIcon(tester, 'chatHeaderMenu'), HeroAppIcons.ellipsisVertical);
+    expect(headerIcon(tester, 'chatHeaderMenu'), HeroAppIcons.bars);
+
+    await closeChat(tester);
+  });
+
+  testWidgets('a topic chat orders the topic list, new topic, then the menu', (
+    tester,
+  ) async {
+    _kind = _Kind.forumCreator;
+    await openChat(tester);
+
+    double centreX(String key) =>
+        tester.getCenter(find.byKey(ValueKey(key))).dx;
+    final topics = centreX('chatHeaderTopics');
+    final newTopic = centreX('chatHeaderNewTopic');
+    final menu = centreX('chatHeaderMenu');
+    expect(topics, lessThan(newTopic), reason: 'topic list sits left of +');
+    expect(newTopic, lessThan(menu), reason: '+ sits left of the menu');
     expect(
-      headerIcon(tester, 'chatHeaderMenu'),
-      isNot(headerIcon(tester, 'chatHeaderInfo')),
+      tester.getRect(find.byKey(const ValueKey('chatHeaderMenu'))).right,
+      greaterThan(
+        tester.getRect(find.byKey(const ValueKey('chatHeaderNewTopic'))).right,
+      ),
+      reason: 'the menu is the rightmost control',
     );
+
+    await closeChat(tester);
+  });
+
+  testWidgets('the title opens the details page for a topic chat', (
+    tester,
+  ) async {
+    _kind = _Kind.forumCreator;
+    await openChat(tester);
+
+    await tester.tap(find.byKey(const ValueKey('chatHeaderTitle')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatInfoView), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('topic-selector-list')),
+      findsNothing,
+      reason: 'the title is the details door now, not the topic list',
+    );
+
+    // Leave the page before the harness replaces the tree: a route popped
+    // while its host is being torn down lays out against a vanishing width.
+    Navigator.of(tester.element(find.byType(ChatInfoView))).pop();
+    await tester.pumpAndSettle();
 
     await closeChat(tester);
   });
@@ -612,22 +654,66 @@ void main() {
     await closeChat(tester);
   });
 
-  testWidgets('mute asks for a duration and then unmutes on the next tap', (
+  testWidgets('mute opens its durations as a submenu of the same card', (
     tester,
   ) async {
     await openChat(tester);
     await openMenu(tester);
     expect(find.text('Mute'), findsOneWidget);
+    final card = tester.getRect(
+      find.byKey(const ValueKey('app-anchored-menu')),
+    );
 
     await tester.tap(row('mute'));
     await tester.pumpAndSettle();
-    // exteraless's durations, in the sheet the row opens.
+    // exteraless's durations, inside the menu card rather than a sheet.
     expect(find.text('For 1 hour'), findsOneWidget);
     expect(find.text('For 8 hours'), findsOneWidget);
     expect(find.text('For 2 days'), findsOneWidget);
     expect(find.text('Forever'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('app-anchored-menu-back')),
+      findsOneWidget,
+    );
+    // exteraless's submenu items are text-only: the back chevron is the only
+    // glyph left in the card.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-anchored-menu')),
+        matching: find.byType(AppIcon),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-anchored-menu-back')),
+        matching: find.text('Mute'),
+      ),
+      findsOneWidget,
+      reason: 'the back row names the row the submenu belongs to',
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('app-anchored-menu'))).left,
+      card.left,
+      reason: 'the submenu keeps the card where it opened',
+    );
+    expect(
+      find.text('Search in chat'),
+      findsNothing,
+      reason: 'the submenu replaces the column it came from',
+    );
 
-    await tester.tap(find.byKey(const ValueKey('chat-menu-mute-28800')));
+    // Back returns to the column without closing the menu.
+    await tester.tap(find.byKey(const ValueKey('app-anchored-menu-back')));
+    await tester.pumpAndSettle();
+    expect(row('search'), findsOneWidget);
+    expect(find.text('For 8 hours'), findsNothing);
+    await tester.tap(row('mute'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('app-anchored-menu-mute-28800')),
+    );
     await tester.pumpAndSettle();
     final mute = _queries.lastWhere(
       (request) => request['@type'] == 'setChatNotificationSettings',
@@ -655,18 +741,42 @@ void main() {
     await closeChat(tester);
   });
 
-  testWidgets('auto-delete picks a timer through the same options', (
-    tester,
-  ) async {
+  testWidgets('auto-delete picks a timer from its own submenu', (tester) async {
     await openChat(tester);
     await openMenu(tester);
+    final card = tester.getRect(
+      find.byKey(const ValueKey('app-anchored-menu')),
+    );
 
     await tester.tap(row('auto-delete'));
     await tester.pumpAndSettle();
-    expect(find.text('Auto-delete messages'), findsWidgets);
+    // The same card as mute's: back row, then the four timers, no glyphs.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-anchored-menu-back')),
+        matching: find.text('Auto-delete messages'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Off'), findsOneWidget);
+    expect(find.text('1 day'), findsOneWidget);
+    expect(find.text('7 days'), findsOneWidget);
+    expect(find.text('1 month'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-anchored-menu')),
+        matching: find.byType(AppIcon),
+      ),
+      findsOneWidget,
+      reason: 'only the back chevron stays in the card',
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('app-anchored-menu'))).left,
+      card.left,
+    );
 
     await tester.tap(
-      find.byKey(const ValueKey('chat-menu-auto-delete-604800')),
+      find.byKey(const ValueKey('app-anchored-menu-auto-delete-604800')),
     );
     await tester.pumpAndSettle();
     final request = _queries.lastWhere(
@@ -862,8 +972,9 @@ void main() {
     _kind = _Kind.forumCreator;
     await openChat(tester);
 
-    // The title opens the list; the header's own action starts a topic.
-    expect(find.byKey(const ValueKey('chatHeaderTopics')), findsNothing);
+    // The list has its own header control; the header's second action starts
+    // a topic.
+    expect(find.byKey(const ValueKey('chatHeaderTopics')), findsOneWidget);
     final newTopic = find.byKey(const ValueKey('chatHeaderNewTopic'));
     expect(newTopic, findsOneWidget);
     expect(headerIcon(tester, 'chatHeaderNewTopic'), HeroAppIcons.plus);
@@ -921,8 +1032,8 @@ void main() {
         findsNothing,
         reason: '$kind has no right to start a topic',
       );
-      // The topic list is still reachable — through the title.
-      expect(find.byKey(const ValueKey('chatHeaderTitle')), findsOneWidget);
+      // The topic list is still reachable — through its own header control.
+      expect(find.byKey(const ValueKey('chatHeaderTopics')), findsOneWidget);
 
       await closeChat(tester);
     }
@@ -952,14 +1063,16 @@ void main() {
     await closeChat(tester);
   });
 
-  testWidgets('a join screen with nothing to act on has no overflow button', (
+  testWidgets('a join screen with nothing to act on has no menu button', (
     tester,
   ) async {
     _kind = _Kind.unjoinedChannel;
     await openChat(tester);
 
     expect(find.byKey(const ValueKey('chatHeaderMenu')), findsNothing);
-    expect(find.byKey(const ValueKey('chatHeaderSearch')), findsNothing);
+    // Search keeps its own header slot the way it always had one; only the
+    // menu disappears when it would be empty.
+    expect(find.byKey(const ValueKey('chatHeaderSearch')), findsOneWidget);
 
     await closeChat(tester);
   });

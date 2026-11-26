@@ -11,6 +11,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/theme_controller.dart';
 import 'custom_emoji.dart';
 
@@ -48,6 +49,12 @@ class _ComposerTextEntity {
 }
 
 class EmojiTextEditingController extends TextEditingController {
+  /// A bot command as Telegram types it: a slash, the command, and the
+  /// optional `@bot` suffix that scopes it to one bot in a group.
+  static final RegExp _botCommand = RegExp(
+    r'^/[A-Za-z0-9_]{1,64}(?:@[A-Za-z0-9_]{3,64})?(?=\s|$)',
+  );
+
   final Map<int, _Emoji> _byCode = {}; // PUA code unit -> emoji
   final Map<int, int> _codeForId = {}; // custom_emoji_id -> PUA code unit
   final List<_ComposerTextEntity> _entities = [];
@@ -343,11 +350,16 @@ class EmojiTextEditingController extends TextEditingController {
     required bool withComposing,
   }) {
     final entities = _validEntities();
-    if (_byCode.isEmpty && entities.isEmpty) {
+    // A bot command is markup, not prose: Telegram paints the leading
+    // `/command` in the link colour so the reader can see the field holds an
+    // instruction for the bot rather than a message to a person.
+    final commandEnd = _botCommand.firstMatch(text)?.end ?? 0;
+    if (_byCode.isEmpty && entities.isEmpty && commandEnd == 0) {
       return TextSpan(style: style, text: text);
     }
 
     final cuts = <int>{0, text.length};
+    if (commandEnd > 0) cuts.add(commandEnd);
     for (var i = 0; i < text.length; i++) {
       if (_byCode.containsKey(text.codeUnitAt(i))) {
         cuts.add(i);
@@ -384,12 +396,14 @@ class EmojiTextEditingController extends TextEditingController {
       final active = entities
           .where((entity) => entity.offset < end && entity.end > start)
           .toList(growable: false);
-      spans.add(
-        TextSpan(
-          text: text.substring(start, end),
-          style: _entityStyle(context, active, style),
-        ),
-      );
+      var spanStyle = _entityStyle(context, active, style);
+      if (commandEnd > 0 && start < commandEnd) {
+        spanStyle = (spanStyle ?? const TextStyle()).copyWith(
+          color: context.colors.linkBlue,
+          fontWeight: FontWeight.w500,
+        );
+      }
+      spans.add(TextSpan(text: text.substring(start, end), style: spanStyle));
     }
     return TextSpan(style: style, children: spans);
   }

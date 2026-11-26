@@ -2,7 +2,7 @@
 //  forward_handoff.dart
 //
 //  Carries a forward from the chat the user picked it in (source) to the
-//  chat it must land in (target), mirroring exteraless's forward flow: the
+//  chat it must land in (target), mirroring the reference client's forward flow: the
 //  picker only chooses the recipient, and the target chat's composer holds
 //  the pending forward as a reply-style preview panel until the user sends.
 //
@@ -39,7 +39,7 @@ class ForwardMessagesHandoff {
   final int clientId;
 
   /// Whether any source message is captioned media — the only selection
-  /// shape the 移除说明 option applies to (exteraless `hasCaption`).
+  /// shape the 移除说明 option applies to (the reference client `hasCaption`).
   final bool hasCaption;
 
   /// Markdown detected in the forwarded text, for the render-markdown chip.
@@ -78,7 +78,7 @@ class PendingForward {
   bool _removeSender;
   bool _removeCaption;
 
-  /// exteraless `returnSendersNames`: remembers that hiding the sender was
+  /// the reference client `returnSendersNames`: remembers that hiding the sender was
   /// forced by hiding the caption, so restoring the caption restores the
   /// sender too. Any manual sender toggle clears the memory.
   bool _returnSendersNames = false;
@@ -102,7 +102,7 @@ class PendingForward {
     richText: renderMarkdown,
   );
 
-  /// exteraless sendersNameButton semantics: showing the sender again also
+  /// the reference client sendersNameButton semantics: showing the sender again also
   /// brings captions back (a caption cannot be dropped from a forwarded
   /// original).
   void toggleSender() {
@@ -111,7 +111,7 @@ class PendingForward {
     if (!_removeSender) _removeCaption = false;
   }
 
-  /// exteraless captionButton semantics: hiding the caption forces the copy
+  /// the reference client captionButton semantics: hiding the caption forces the copy
   /// path (sender hidden), remembering to restore the sender when the
   /// caption returns.
   void toggleCaption() {
@@ -142,7 +142,7 @@ PendingForward pendingForwardFromHandoff(ForwardMessagesHandoff handoff) =>
     ).._renderMarkdown = handoff.markdownOffer.suggested;
 
 /// Whether any message in the selection is captioned media — the only shape
-/// the 移除说明 option applies to. Mirrors exteraless `hasCaption`
+/// the 移除说明 option applies to. Mirrors the reference client `hasCaption`
 /// (`!TextUtils.isEmpty(messageObject.caption)`): plain text messages carry
 /// no caption, and media without text carries nothing to remove.
 bool forwardSelectionHasCaption(List<ChatMessage> messages) {

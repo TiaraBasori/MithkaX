@@ -31,9 +31,9 @@ void main() {
   });
 
   test(
-    '"All chats" honours main_chat_list_position instead of pinning first',
+    'a fresh list opens on the first tab, not always on a late "All chats"',
     () {
-      final model = ChatListViewModel();
+      final model = ChatListViewModel(selectFirstFilterOnLoad: true);
       addTearDown(model.dispose);
 
       model.applyUpdateForTesting({
@@ -46,13 +46,14 @@ void main() {
       });
 
       expect(model.filters.map((f) => f.folderId), [7, 8, null]);
-      expect(model.selectedFilter.isAll, isTrue);
-      // "All" is present, just not first: it is not hidden by the preference.
+      // The strip's first tab is Business; opening the app shows it rather
+      // than jumping to the "All chats" tab parked at the end.
+      expect(model.selectedFilter.folderId, 7);
       expect(model.selectionHiddenByFilterPreference, isFalse);
 
       model.hideAllFilter = true;
       expect(model.filters.map((f) => f.folderId), [7, 8]);
-      expect(model.selectionHiddenByFilterPreference, isTrue);
+      expect(model.selectionHiddenByFilterPreference, isFalse);
       model.selectFirstVisibleFilterIfHidden();
       expect(model.selectedFilter.folderId, 7);
 
@@ -62,8 +63,40 @@ void main() {
     },
   );
 
+  test('a folder picked by the user survives later folder snapshots', () {
+    final model = ChatListViewModel(selectFirstFilterOnLoad: true);
+    addTearDown(model.dispose);
+
+    model.applyUpdateForTesting({
+      '@type': 'updateChatFolders',
+      'chat_folders': [
+        {'id': 7, 'title': 'Business'},
+        {'id': 8, 'title': 'Personal'},
+      ],
+    });
+    expect(model.selectedFilter.folderId, null);
+
+    // The user taps the Personal tab; a folder list update (a new folder, a
+    // rename, an unread recount) must not move the list back to the front.
+    model.selectFilter(model.filters.firstWhere((f) => f.folderId == 8));
+    expect(model.selectedFilter.folderId, 8);
+
+    model.applyUpdateForTesting({
+      '@type': 'updateChatFolders',
+      'chat_folders': [
+        {'id': 7, 'title': 'Business'},
+        {'id': 8, 'title': 'Personal'},
+        {'id': 9, 'title': 'News'},
+      ],
+      'main_chat_list_position': 1,
+    });
+
+    expect(model.filters.map((f) => f.folderId), [7, null, 8, 9]);
+    expect(model.selectedFilter.folderId, 8);
+  });
+
   test('an update without main_chat_list_position keeps "All" first', () {
-    final model = ChatListViewModel();
+    final model = ChatListViewModel(selectFirstFilterOnLoad: true);
     addTearDown(model.dispose);
 
     model.applyUpdateForTesting({
@@ -74,6 +107,26 @@ void main() {
     });
 
     expect(model.filters.map((f) => f.folderId), [null, 7]);
+    expect(model.selectedFilter.isAll, isTrue);
+  });
+
+  test('a picker-style model keeps every chat until its user picks', () {
+    // Chat pickers, moments and topic-channel lists share this model but have
+    // no folder strip of their own; they must not narrow to the first folder.
+    final model = ChatListViewModel();
+    addTearDown(model.dispose);
+
+    model.applyUpdateForTesting({
+      '@type': 'updateChatFolders',
+      'chat_folders': [
+        {'id': 7, 'title': 'Business'},
+        {'id': 8, 'title': 'Personal'},
+      ],
+      'main_chat_list_position': 2,
+    });
+
+    expect(model.filters.map((f) => f.folderId), [7, 8, null]);
+    expect(model.selectedFilter.isAll, isTrue);
   });
 
   test('enabling the preference later is applied after the frame', () {

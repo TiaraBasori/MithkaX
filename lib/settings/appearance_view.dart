@@ -41,12 +41,13 @@ import '../theme/emoji_font_catalog.dart';
 import '../theme/global_theme_view.dart';
 import '../theme/message_bubble_background.dart';
 import '../theme/message_name_colors.dart';
+import '../theme/platform_font_defaults.dart';
 import '../theme/system_font_catalog.dart';
 import '../theme/theme_controller.dart';
-import 'app_icon_controller.dart';
-import 'content_size_settings_view.dart';
-import 'interface_scale_control.dart';
-import 'message_bubble_settings_view.dart';
+import 'appearance/app_icon_controller.dart';
+import 'appearance/content_size_settings_view.dart';
+import 'appearance/interface_scale_control.dart';
+import 'appearance/message_bubble_settings_view.dart';
 import 'quick_reaction_settings_view.dart';
 
 class AppearanceView extends StatelessWidget {
@@ -1409,7 +1410,7 @@ class ChatViewAppearanceSettingsView extends StatelessWidget {
         ),
         appearance._navigationRow(
           context,
-          AppStrings.t(AppStringKeys.mithkaxChannelBottomBar),
+          AppStrings.t(AppStringKeys.channelBottomBar),
           AppStrings.t(theme.channelBottomBarMode.label),
           () => Navigator.of(context).push(
             AppPageRoute<void>(
@@ -1421,7 +1422,7 @@ class ChatViewAppearanceSettingsView extends StatelessWidget {
         appearance._toggleRow(
           context,
           HeroAppIcons.eye.data,
-          AppStrings.t(AppStringKeys.mithkaxChannelPostStats),
+          AppStrings.t(AppStringKeys.channelPostStats),
           theme.showChannelPostStats,
           (value) => theme.showChannelPostStats = value,
         ),
@@ -2568,17 +2569,26 @@ class _FontCacheManagementViewState extends State<FontCacheManagementView> {
   Set<String> _activeGoogleFamilies(ThemeController theme) {
     final googleFamilies = GoogleFonts.asMap().keys.toSet();
     final active = <String>{};
-    void addIfGoogle(String? family) {
+    void addIfGoogle(String? family, {bool explicitGoogle = false}) {
       final value = family?.trim();
       if (value == null || value.isEmpty) return;
-      final decoded = decodeGoogleFontFamily(value) ?? value;
-      if (googleFamilies.contains(decoded)) active.add(decoded);
+      if (explicitGoogle) {
+        if (googleFamilies.contains(value)) active.add(value);
+        return;
+      }
+      final decoded = decodeGoogleFontFamily(value);
+      if (decoded != null) {
+        if (googleFamilies.contains(decoded)) active.add(decoded);
+        return;
+      }
+      if (theme.isLocalFontFamily(value)) return;
+      if (googleFamilies.contains(value)) active.add(value);
     }
 
     for (final family in theme.fontFallbackChain) {
       addIfGoogle(family);
     }
-    addIfGoogle(theme.monospaceFontChoice.googleFamily);
+    addIfGoogle(theme.monospaceFontChoice.googleFamily, explicitGoogle: true);
     if (theme.monospaceFontChoice.isCustom) {
       addIfGoogle(theme.customMonospaceFontFamily);
     }
@@ -3063,26 +3073,33 @@ Future<Set<String>> _cachedGoogleFontFamilies() async {
   return cached;
 }
 
-List<String> _fontTitleFallback() {
-  return switch (defaultTargetPlatform) {
-    TargetPlatform.iOS || TargetPlatform.macOS => [
-      AppFontChoice.apple.fontFamily,
-      'SF Pro',
-      'Helvetica Neue',
-      'Arial',
-    ],
-    TargetPlatform.android => const ['sans-serif', 'Roboto', 'Noto Sans'],
-    _ => const ['sans-serif', 'Arial'],
-  };
+ThemeController? _maybeThemeController(BuildContext context) {
+  try {
+    return Provider.of<ThemeController>(context, listen: false);
+  } on ProviderNotFoundException {
+    return null;
+  }
 }
 
-TextStyle _fontTitleStyle(
+List<String> _fontTitleFallback([BuildContext? context]) {
+  if (context == null) return PlatformFontDefaults.effectiveFontChain();
+  final theme = _maybeThemeController(context);
+  return PlatformFontDefaults.effectiveFontChain(
+    appLocale:
+        theme?.effectiveTypographyLocale ??
+        Localizations.maybeLocaleOf(context),
+    systemLocale: WidgetsBinding.instance.platformDispatcher.locale,
+  );
+}
+
+TextStyle _buildFontCandidateStyle(
   String family,
   TextStyle base, {
+  BuildContext? context,
   String? googleFamily,
   bool googleLoaded = false,
 }) {
-  final fallback = _fontTitleFallback();
+  final fallback = _fontTitleFallback(context);
   if (googleFamily != null && googleLoaded) {
     return GoogleFonts.getFont(
       googleFamily,
@@ -3096,64 +3113,45 @@ TextStyle _fontTitleStyle(
   );
 }
 
+TextStyle _fontTitleStyle(
+  String family,
+  TextStyle base, {
+  BuildContext? context,
+  String? googleFamily,
+  bool googleLoaded = false,
+}) => _buildFontCandidateStyle(
+  family,
+  base,
+  context: context,
+  googleFamily: googleFamily,
+  googleLoaded: googleLoaded,
+);
+
+TextStyle _fontPreviewStyle(
+  String family,
+  TextStyle base, {
+  BuildContext? context,
+  String? googleFamily,
+  bool googleLoaded = false,
+}) => _buildFontCandidateStyle(
+  family,
+  base,
+  context: context,
+  googleFamily: googleFamily,
+  googleLoaded: googleLoaded,
+);
+
 String _fontPreviewSample() => appFontPreviewText;
 
-int _popularSystemFontPriority(String family) {
-  final popular = switch (defaultTargetPlatform) {
-    TargetPlatform.iOS || TargetPlatform.macOS => [
-      AppFontChoice.apple.fontFamily,
-      'SF Pro',
-      'Helvetica Neue',
-      'Helvetica',
-      'Avenir Next',
-      'Avenir',
-      'Futura',
-      'Gill Sans',
-      'Optima',
-      'Palatino',
-      'Georgia',
-      'Times New Roman',
-      'Didot',
-      'American Typewriter',
-      'Courier New',
-      'Menlo',
-      'PingFang SC',
-      'PingFang TC',
-      'PingFang HK',
-      'Hiragino Sans',
-    ],
-    TargetPlatform.android => const [
-      'sans',
-      'sans-serif',
-      'Roboto',
-      'Noto Sans',
-      'Noto Serif',
-      'Droid Sans',
-      'monospace',
-      'serif',
-    ],
-    _ => const [
-      'Arial',
-      'Helvetica',
-      'Verdana',
-      'Tahoma',
-      'Georgia',
-      'Times New Roman',
-      'Courier New',
-      'monospace',
-      'sans-serif',
-      'serif',
-    ],
-  };
-  final exact = popular.indexWhere(
-    (font) => font.toLowerCase() == family.toLowerCase(),
-  );
-  if (exact >= 0) return exact;
-  final prefix = popular.indexWhere(
-    (font) => family.toLowerCase().startsWith(font.toLowerCase()),
-  );
-  return prefix >= 0 ? prefix : popular.length + 1;
-}
+int _popularSystemFontPriority(
+  String family, {
+  Locale? appLocale,
+  Locale? systemLocale,
+}) => PlatformFontDefaults.rankSystemFontFamily(
+  family,
+  appLocale: appLocale,
+  systemLocale: systemLocale,
+);
 
 const _googleMonospaceFamilies = {
   'Anonymous Pro',
@@ -3217,7 +3215,210 @@ bool _isSystemMonospaceFontFamily(String family) {
   final normalized = family.toLowerCase();
   return normalized.contains('mono') ||
       normalized.contains('menlo') ||
-      normalized.contains('courier');
+      normalized.contains('monaco') ||
+      normalized.contains('courier') ||
+      normalized.contains('consolas') ||
+      normalized.contains('cascadia') ||
+      normalized.contains('lucida console') ||
+      normalized.contains('fira code') ||
+      normalized.contains('source code') ||
+      normalized.contains('inconsolata');
+}
+
+bool _isSystemMonospaceEntry(SystemFontEntry entry) =>
+    entry.isMonospace ?? _isSystemMonospaceFontFamily(entry.family);
+
+/// Consumes any error from a reload future assigned to a `FutureBuilder` so
+/// refreshing local fonts never emits an unhandled async error on a derived
+/// future, while still clearing loading state once it settles.
+Future<void> _consumeFontReload<T>(
+  Future<T> future,
+  VoidCallback onSettled,
+) async {
+  try {
+    await future;
+  } catch (_) {
+    // FutureBuilder surfaces snapshot errors from [future] directly.
+  } finally {
+    onSettled();
+  }
+}
+
+class _VirtualCardRow extends StatelessWidget {
+  const _VirtualCardRow({
+    required this.first,
+    required this.last,
+    required this.child,
+  });
+
+  final bool first;
+  final bool last;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = Radius.circular(AppRadius.card);
+    return ClipRRect(
+      borderRadius: BorderRadius.vertical(
+        top: first ? radius : Radius.zero,
+        bottom: last ? radius : Radius.zero,
+      ),
+      child: ColoredBox(color: context.colors.card, child: child),
+    );
+  }
+}
+
+class _FontEmptyOrErrorPanel extends StatelessWidget {
+  const _FontEmptyOrErrorPanel({
+    required this.message,
+    this.onRetry,
+    this.onSwitchOnline,
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+  final VoidCallback? onSwitchOnline;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return ListView(
+      padding: AppInsets.screen.copyWith(top: AppSpacing.sm),
+      children: [
+        SettingsPanel(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                message,
+                style: TextStyle(
+                  fontSize: AppTextSize.body,
+                  color: c.textSecondary,
+                ),
+              ),
+              if (onRetry != null || onSwitchOnline != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    if (onRetry != null)
+                      SettingsFilterChip(
+                        label: AppStrings.t(
+                          AppStringKeys.appearanceReloadFonts,
+                        ),
+                        selected: false,
+                        onTap: onRetry!,
+                      ),
+                    if (onSwitchOnline != null)
+                      SettingsFilterChip(
+                        label: AppStrings.t(
+                          AppStringKeys.appearanceOnlineFonts,
+                        ),
+                        selected: true,
+                        onTap: onSwitchOnline!,
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+enum _FontSourceTab { local, online }
+
+class _FontSourceFilterBar extends StatelessWidget {
+  const _FontSourceFilterBar({
+    required this.selected,
+    required this.localCount,
+    required this.onlineCount,
+    required this.onSelected,
+    this.onRefreshLocal,
+    this.isRefreshingLocal = false,
+  });
+
+  final _FontSourceTab selected;
+  final int localCount;
+  final int onlineCount;
+  final ValueChanged<_FontSourceTab> onSelected;
+  final VoidCallback? onRefreshLocal;
+  final bool isRefreshingLocal;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  SettingsFilterChip(
+                    label: AppStrings.t(AppStringKeys.appearanceLocalFonts),
+                    trailingLabel: '$localCount',
+                    selected: selected == _FontSourceTab.local,
+                    onTap: () => onSelected(_FontSourceTab.local),
+                  ),
+                  SettingsFilterChip(
+                    label: AppStrings.t(AppStringKeys.appearanceOnlineFonts),
+                    trailingLabel: '$onlineCount',
+                    selected: selected == _FontSourceTab.online,
+                    onTap: () => onSelected(_FontSourceTab.online),
+                  ),
+                ],
+              ),
+            ),
+            if (selected == _FontSourceTab.local && onRefreshLocal != null)
+              AppInteractiveSurface(
+                onTap: () {
+                  if (!isRefreshingLocal) onRefreshLocal!();
+                },
+                borderRadius: BorderRadius.circular(AppRadius.control),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isRefreshingLocal) ...[
+                        const AppActivityIndicator(size: 12),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
+                      Text(
+                        AppStrings.t(AppStringKeys.appearanceReloadFonts),
+                        style: AppTextStyle.footnote(
+                          isRefreshingLocal ? c.textTertiary : c.linkBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          AppStrings.t(
+            selected == _FontSourceTab.local
+                ? AppStringKeys.appearanceLocalFontsDescription
+                : AppStringKeys.appearanceOnlineFontsDescription,
+          ),
+          style: AppTextStyle.footnote(c.textTertiary).copyWith(height: 1.35),
+        ),
+      ],
+    );
+  }
 }
 
 class TextFontView extends StatelessWidget {
@@ -3284,12 +3485,6 @@ class TextFontView extends StatelessWidget {
     final c = context.colors;
     final googleFamily = decodeGoogleFontFamily(family);
     final displayFamily = displayStoredFontFamily(family);
-    TextStyle previewStyle(TextStyle base) {
-      if (googleFamily != null) {
-        return GoogleFonts.getFont(googleFamily, textStyle: base);
-      }
-      return base.copyWith(fontFamily: family);
-    }
 
     return SizedBox(
       height: AppMetric.menuRowHeight + AppSpacing.md,
@@ -3322,6 +3517,7 @@ class TextFontView extends StatelessWidget {
                         color: c.textPrimary,
                         fontWeight: FontWeight.w500,
                       ),
+                      context: context,
                       googleFamily: googleFamily,
                       googleLoaded: googleFamily != null,
                     ),
@@ -3331,11 +3527,15 @@ class TextFontView extends StatelessWidget {
                     _fontPreviewSample(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: previewStyle(
+                    style: _fontPreviewStyle(
+                      family,
                       TextStyle(
                         fontSize: AppTextSize.footnote,
                         color: c.textSecondary,
                       ),
+                      context: context,
+                      googleFamily: googleFamily,
+                      googleLoaded: googleFamily != null,
                     ),
                   ),
                 ],
@@ -3377,7 +3577,10 @@ class TextFontView extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const FontAddView()),
             );
             if (family == null || !context.mounted) return;
-            context.read<ThemeController>().addFontToFallbackChain(family);
+            context.read<ThemeController>().addFontToFallbackChain(
+              family,
+              isLocal: decodeGoogleFontFamily(family) == null,
+            );
           },
         ),
         if (theme.fontFallbackChain.isNotEmpty) ...[
@@ -3994,12 +4197,20 @@ class FontAddView extends StatefulWidget {
 }
 
 class _FontAddViewState extends State<FontAddView> {
-  late final Future<List<_FontCandidate>> _fonts = _loadFonts();
+  Future<List<_FontCandidate>>? _fonts;
+  bool _reloadingLocalFonts = false;
+  _FontSourceTab _sourceTab = _FontSourceTab.local;
   String _query = '';
   String? _loadingGoogleFamily;
   String? _failedGoogleFamily;
   Timer? _searchDebounce;
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _fonts ??= _loadFontsForContext();
+  }
 
   @override
   void dispose() {
@@ -4008,17 +4219,50 @@ class _FontAddViewState extends State<FontAddView> {
     super.dispose();
   }
 
-  Future<List<_FontCandidate>> _loadFonts() async {
-    final systemFonts = await SystemFontCatalog.loadFonts();
+  void _reloadLocalFonts() {
+    if (_reloadingLocalFonts) return;
+    final next = _loadFontsForContext();
+    setState(() {
+      _reloadingLocalFonts = true;
+      _fonts = next;
+    });
+    unawaited(
+      _consumeFontReload(next, () {
+        if (mounted) setState(() => _reloadingLocalFonts = false);
+      }),
+    );
+  }
+
+  Future<List<_FontCandidate>> _loadFontsForContext() {
+    final theme = _maybeThemeController(context);
+    return _loadFonts(
+      appLocale:
+          theme?.effectiveTypographyLocale ??
+          Localizations.maybeLocaleOf(context),
+      systemLocale: WidgetsBinding.instance.platformDispatcher.locale,
+    );
+  }
+
+  Future<List<_FontCandidate>> _loadFonts({
+    Locale? appLocale,
+    Locale? systemLocale,
+  }) async {
+    final systemEntries = await SystemFontCatalog.loadFontEntries();
     final cachedGoogleFamilies = await _cachedGoogleFontFamilies();
     final candidates = <_FontCandidate>[
-      for (final font in systemFonts)
+      for (final entry in systemEntries)
         _FontCandidate(
-          label: font,
-          family: font,
+          label: entry.displayName != entry.family
+              ? '${entry.displayName} (${entry.family})'
+              : entry.displayName,
+          family: entry.family,
           preview: _fontPreviewSample(),
           source: AppStringKeys.appearanceSystem,
-          priority: _popularSystemFontPriority(font),
+          priority: _popularSystemFontPriority(
+            entry.family,
+            appLocale: appLocale,
+            systemLocale: systemLocale,
+          ),
         ),
       for (final family in GoogleFonts.asMap().keys)
         _FontCandidate(
@@ -4044,75 +4288,111 @@ class _FontAddViewState extends State<FontAddView> {
     return SettingsPageScaffold(
       title: AppStrings.t(AppStringKeys.appearanceAddFont),
       onBack: () => Navigator.of(context).pop(),
-      child: Column(
-        children: [
-          Padding(
-            padding: AppInsets.screen.copyWith(bottom: AppSpacing.sm),
-            child: SettingsSearchField(
-              controller: _searchController,
-              hintText: AppStringKeys.appearanceSearchFont,
-              // Each filter pass scans the ~1900 Google families; a keystroke
-              // burst should only pay for the query the user settles on.
-              onChanged: (value) {
-                final next = value.trim();
-                _searchDebounce?.cancel();
-                if (next == _query) return;
-                _searchDebounce = Timer(
-                  const Duration(milliseconds: 150),
-                  () => setState(() => _query = next),
-                );
-              },
-            ),
-          ),
-          Expanded(
-            child: FutureBuilder<List<_FontCandidate>>(
-              future: _fonts,
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: AppActivityIndicator(size: 24));
-                }
-                final query = _query.toLowerCase();
-                final fonts = snapshot.data!
-                    .where(
-                      (font) =>
-                          query.isEmpty ||
-                          font.lowerLabel.contains(query) ||
-                          font.lowerFamily.contains(query),
-                    )
-                    .toList();
-                return _fontList(context, fonts);
-              },
-            ),
-          ),
-        ],
+      child: FutureBuilder<List<_FontCandidate>>(
+        future: _fonts,
+        builder: (context, snapshot) {
+          final allCandidates = snapshot.data ?? const <_FontCandidate>[];
+          final query = _query.toLowerCase();
+          final localMatches = <_FontCandidate>[];
+          final onlineMatches = <_FontCandidate>[];
+          var totalLocalCount = 0;
+          for (final font in allCandidates) {
+            if (!font.google) totalLocalCount++;
+            final matches =
+                query.isEmpty ||
+                font.lowerLabel.contains(query) ||
+                font.lowerFamily.contains(query);
+            if (!matches) continue;
+            (font.google ? onlineMatches : localMatches).add(font);
+          }
+          final visibleFonts = _sourceTab == _FontSourceTab.local
+              ? localMatches
+              : onlineMatches;
+          return Column(
+            children: [
+              Padding(
+                padding: AppInsets.screen.copyWith(bottom: AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SettingsSearchField(
+                      controller: _searchController,
+                      hintText: AppStringKeys.appearanceSearchFont,
+                      // Each filter pass scans the ~1900 Google families; a
+                      // keystroke burst should only pay for the query the user
+                      // settles on.
+                      onChanged: (value) {
+                        final next = value.trim();
+                        _searchDebounce?.cancel();
+                        if (next == _query) return;
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 150),
+                          () => setState(() => _query = next),
+                        );
+                      },
+                    ),
+                    if (snapshot.hasData) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _FontSourceFilterBar(
+                        selected: _sourceTab,
+                        localCount: localMatches.length,
+                        onlineCount: onlineMatches.length,
+                        onSelected: (tab) => setState(() => _sourceTab = tab),
+                        onRefreshLocal: _reloadLocalFonts,
+                        isRefreshingLocal: _reloadingLocalFonts,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Expanded(
+                child: snapshot.hasError && !snapshot.hasData
+                    ? _FontEmptyOrErrorPanel(
+                        message: AppStrings.t(
+                          AppStringKeys.appearanceNoLocalFonts,
+                        ),
+                        onRetry: _reloadLocalFonts,
+                      )
+                    : !snapshot.hasData
+                    ? const Center(child: AppActivityIndicator(size: 24))
+                    : _fontList(
+                        context,
+                        visibleFonts,
+                        hasAnyLocalFonts: totalLocalCount > 0,
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _fontList(BuildContext context, List<_FontCandidate> fonts) {
+  Widget _fontList(
+    BuildContext context,
+    List<_FontCandidate> fonts, {
+    required bool hasAnyLocalFonts,
+  }) {
     final c = context.colors;
     if (fonts.isEmpty) {
-      return ListView(
-        padding: AppInsets.screen.copyWith(top: AppSpacing.sm),
-        children: [
-          SettingsPanel(
-            padding: const EdgeInsets.all(AppSpacing.xxl),
-            child: Text(
-              AppStrings.t(AppStringKeys.appearanceNoMatchingFonts),
-              style: TextStyle(
-                fontSize: AppTextSize.body,
-                color: c.textSecondary,
-              ),
-            ),
-          ),
-        ],
+      final isMissingLocal =
+          _sourceTab == _FontSourceTab.local && !hasAnyLocalFonts;
+      return _FontEmptyOrErrorPanel(
+        message: AppStrings.t(
+          isMissingLocal
+              ? AppStringKeys.appearanceNoLocalFonts
+              : AppStringKeys.appearanceNoMatchingFonts,
+        ),
+        onRetry: isMissingLocal ? _reloadLocalFonts : null,
+        onSwitchOnline: isMissingLocal
+            ? () => setState(() => _sourceTab = _FontSourceTab.online)
+            : null,
       );
     }
     return ListView.separated(
       padding: AppInsets.screen.copyWith(top: AppSpacing.sm),
       itemCount: fonts.length,
-      itemBuilder: (context, index) => _virtualRow(
-        context,
+      itemBuilder: (context, index) => _VirtualCardRow(
         first: index == 0,
         last: index == fonts.length - 1,
         child: _fontRow(context, fonts[index]),
@@ -4121,22 +4401,6 @@ class _FontAddViewState extends State<FontAddView> {
         color: c.card,
         child: const InsetDivider(leadingInset: AppSpacing.xxl),
       ),
-    );
-  }
-
-  Widget _virtualRow(
-    BuildContext context, {
-    required bool first,
-    required bool last,
-    required Widget child,
-  }) {
-    const radius = Radius.circular(AppRadius.card);
-    return ClipRRect(
-      borderRadius: BorderRadius.vertical(
-        top: first ? radius : Radius.zero,
-        bottom: last ? radius : Radius.zero,
-      ),
-      child: ColoredBox(color: context.colors.card, child: child),
     );
   }
 
@@ -4163,6 +4427,7 @@ class _FontAddViewState extends State<FontAddView> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: font.titleStyle(
+                        context,
                         TextStyle(
                           fontSize: AppTextSize.bodyLarge,
                           color: c.textPrimary,
@@ -4176,6 +4441,7 @@ class _FontAddViewState extends State<FontAddView> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: font.previewStyle(
+                        context,
                         TextStyle(
                           fontSize: AppTextSize.footnote,
                           color: c.textSecondary,
@@ -4268,20 +4534,24 @@ class _FontCandidate {
   String get selectionFamily =>
       google ? encodeGoogleFontFamily(family) : family;
 
-  TextStyle titleStyle(TextStyle base) {
+  TextStyle titleStyle(BuildContext context, TextStyle base) {
     return _fontTitleStyle(
       family,
       base,
+      context: context,
       googleFamily: google ? family : null,
       googleLoaded: downloaded,
     );
   }
 
-  TextStyle previewStyle(TextStyle base) {
-    if (google) {
-      return downloaded ? GoogleFonts.getFont(family, textStyle: base) : base;
-    }
-    return base.copyWith(fontFamily: family);
+  TextStyle previewStyle(BuildContext context, TextStyle base) {
+    return _fontPreviewStyle(
+      family,
+      base,
+      context: context,
+      googleFamily: google ? family : null,
+      googleLoaded: downloaded,
+    );
   }
 
   int get sourceOrder => switch (source) {
@@ -4321,18 +4591,29 @@ class _MonoFontCandidate {
     return 'system:$family';
   }
 
-  TextStyle previewStyle(TextStyle base, {required bool selected}) {
-    if (google && (selected || downloaded)) {
-      return GoogleFonts.getFont(family, textStyle: base);
-    }
-    if (google) return base;
-    return base.copyWith(fontFamily: family);
+  TextStyle previewStyle(
+    BuildContext context,
+    TextStyle base, {
+    required bool selected,
+  }) {
+    return _fontPreviewStyle(
+      family,
+      base,
+      context: context,
+      googleFamily: google ? family : null,
+      googleLoaded: selected || downloaded,
+    );
   }
 
-  TextStyle titleStyle(TextStyle base, {required bool selected}) {
+  TextStyle titleStyle(
+    BuildContext context,
+    TextStyle base, {
+    required bool selected,
+  }) {
     return _fontTitleStyle(
       family,
       base,
+      context: context,
       googleFamily: google ? family : null,
       googleLoaded: selected || downloaded,
     );
@@ -4348,43 +4629,110 @@ class MonospaceFontPickerView extends StatefulWidget {
 }
 
 class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
-  late final Future<List<_MonoFontCandidate>> _fonts = _loadFonts();
+  late Future<List<_MonoFontCandidate>> _fonts = _loadFonts();
+  bool _reloadingLocalFonts = false;
+  _FontSourceTab? _sourceTab;
   String? _loadingGoogleFamily;
   String? _failedGoogleFamily;
+
+  void _reloadLocalFonts() {
+    if (_reloadingLocalFonts) return;
+    final next = _loadFonts();
+    setState(() {
+      _reloadingLocalFonts = true;
+      _fonts = next;
+    });
+    unawaited(
+      _consumeFontReload(next, () {
+        if (mounted) setState(() => _reloadingLocalFonts = false);
+      }),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeController>();
     final selectedKey = _selectedKey(theme);
+    final activeTab =
+        _sourceTab ??
+        (selectedKey.startsWith('google:')
+            ? _FontSourceTab.online
+            : _FontSourceTab.local);
     return SettingsPageScaffold(
       title: AppStrings.t(AppStringKeys.appearanceMonospaceFont),
       onBack: () => Navigator.of(context).pop(),
       child: FutureBuilder<List<_MonoFontCandidate>>(
         future: _fonts,
         builder: (context, snapshot) {
+          if (snapshot.hasError && !snapshot.hasData) {
+            return _FontEmptyOrErrorPanel(
+              message: AppStrings.t(AppStringKeys.appearanceNoLocalFonts),
+              onRetry: _reloadLocalFonts,
+            );
+          }
           if (!snapshot.hasData) {
             return const Center(child: AppActivityIndicator(size: 24));
           }
-          return _fontList(context, snapshot.data!, selectedKey);
+          final allFonts = snapshot.data!;
+          final localFonts = <_MonoFontCandidate>[];
+          final onlineFonts = <_MonoFontCandidate>[];
+          for (final font in allFonts) {
+            (font.google ? onlineFonts : localFonts).add(font);
+          }
+          final visibleFonts = activeTab == _FontSourceTab.local
+              ? localFonts
+              : onlineFonts;
+          return Column(
+            children: [
+              Padding(
+                padding: AppInsets.screen.copyWith(bottom: AppSpacing.sm),
+                child: _FontSourceFilterBar(
+                  selected: activeTab,
+                  localCount: localFonts.length,
+                  onlineCount: onlineFonts.length,
+                  onSelected: (tab) => setState(() => _sourceTab = tab),
+                  onRefreshLocal: _reloadLocalFonts,
+                  isRefreshingLocal: _reloadingLocalFonts,
+                ),
+              ),
+              Expanded(
+                child: _fontList(
+                  context,
+                  visibleFonts,
+                  selectedKey,
+                  isLocalTab: activeTab == _FontSourceTab.local,
+                ),
+              ),
+            ],
+          );
         },
       ),
     );
   }
 
   Future<List<_MonoFontCandidate>> _loadFonts() async {
-    final systemFonts = await SystemFontCatalog.loadFonts();
+    final systemEntries = await SystemFontCatalog.loadFontEntries();
     final cachedGoogleFamilies = await _cachedGoogleFontFamilies();
+    final preferredLocal = _preferredPlatformMonospaceFonts();
+    final seenLocalFamilies = {
+      for (final item in preferredLocal)
+        if (item.choice != AppMonospaceFontChoice.system)
+          item.family.toLowerCase(),
+    };
     final candidates = <_MonoFontCandidate>[
-      ..._preferredPlatformMonospaceFonts(),
+      ...preferredLocal,
       ..._googleMonospaceFonts(cachedGoogleFamilies),
-      for (final family in systemFonts.where(_isSystemMonospaceFontFamily))
-        _MonoFontCandidate(
-          label: family,
-          family: family,
-          preview: appMonospaceFontPreviewText,
-          source: AppStringKeys.appearanceSystem,
-          priority: _systemMonospacePriority(family),
-        ),
+      for (final entry in systemEntries.where(_isSystemMonospaceEntry))
+        if (seenLocalFamilies.add(entry.family.toLowerCase()))
+          _MonoFontCandidate(
+            label: entry.displayName != entry.family
+                ? '${entry.displayName} (${entry.family})'
+                : entry.displayName,
+            family: entry.family,
+            preview: appMonospaceFontPreviewText,
+            source: AppStringKeys.appearanceSystem,
+            priority: _systemMonospacePriority(entry.family),
+          ),
     ];
     final byKey = <String, _MonoFontCandidate>{};
     for (final candidate in candidates) {
@@ -4402,6 +4750,7 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
   List<_MonoFontCandidate> _preferredPlatformMonospaceFonts() {
     final choices = switch (defaultTargetPlatform) {
       TargetPlatform.iOS || TargetPlatform.macOS => const [
+        AppMonospaceFontChoice.system,
         AppMonospaceFontChoice.sfMono,
         AppMonospaceFontChoice.menlo,
         AppMonospaceFontChoice.courierNew,
@@ -4469,6 +4818,20 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
         'Roboto Mono',
         'Noto Sans Mono',
       ],
+      TargetPlatform.windows => const [
+        'Consolas',
+        'Cascadia Mono',
+        'Cascadia Code',
+        'Courier New',
+        'Lucida Console',
+      ],
+      TargetPlatform.linux => const [
+        'monospace',
+        'DejaVu Sans Mono',
+        'Liberation Mono',
+        'Ubuntu Mono',
+        'Noto Sans Mono',
+      ],
       _ => const ['monospace', 'Courier New'],
     };
     final exact = priorities.indexWhere((value) => value == family);
@@ -4515,9 +4878,23 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
   Widget _fontList(
     BuildContext context,
     List<_MonoFontCandidate> fonts,
-    String selectedKey,
-  ) {
+    String selectedKey, {
+    required bool isLocalTab,
+  }) {
     final c = context.colors;
+    if (fonts.isEmpty) {
+      return _FontEmptyOrErrorPanel(
+        message: AppStrings.t(
+          isLocalTab
+              ? AppStringKeys.appearanceNoLocalFonts
+              : AppStringKeys.appearanceNoMatchingFonts,
+        ),
+        onRetry: isLocalTab ? _reloadLocalFonts : null,
+        onSwitchOnline: isLocalTab
+            ? () => setState(() => _sourceTab = _FontSourceTab.online)
+            : null,
+      );
+    }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -4528,8 +4905,7 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
       itemCount: fonts.length,
       itemBuilder: (context, index) {
         final font = fonts[index];
-        return _virtualRow(
-          context,
+        return _VirtualCardRow(
           first: index == 0,
           last: index == fonts.length - 1,
           child: _fontRow(
@@ -4546,10 +4922,10 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
                 _trackGoogleFontLoad(null);
                 return;
               }
-              theme.customMonospaceFontFamily = font.google
-                  ? encodeGoogleFontFamily(font.family)
-                  : font.family;
-              theme.monospaceFontChoice = AppMonospaceFontChoice.custom;
+              theme.setCustomMonospaceFont(
+                font.google ? encodeGoogleFontFamily(font.family) : font.family,
+                isLocal: !font.google,
+              );
               _trackGoogleFontLoad(font.google ? font.family : null);
             },
           ),
@@ -4559,22 +4935,6 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
         color: c.card,
         child: const InsetDivider(leadingInset: AppSpacing.xxl),
       ),
-    );
-  }
-
-  Widget _virtualRow(
-    BuildContext context, {
-    required bool first,
-    required bool last,
-    required Widget child,
-  }) {
-    const radius = Radius.circular(AppRadius.card);
-    return ClipRRect(
-      borderRadius: BorderRadius.vertical(
-        top: first ? radius : Radius.zero,
-        bottom: last ? radius : Radius.zero,
-      ),
-      child: ColoredBox(color: context.colors.card, child: child),
     );
   }
 
@@ -4606,6 +4966,7 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: font.titleStyle(
+                        context,
                         TextStyle(
                           fontSize: AppTextSize.bodyLarge,
                           color: c.textPrimary,
@@ -4620,6 +4981,7 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: font.previewStyle(
+                        context,
                         TextStyle(
                           fontSize: AppTextSize.footnote,
                           color: c.textSecondary,
@@ -4642,8 +5004,8 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
                   color: c.textTertiary,
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
               if (loading) ...[
+                const SizedBox(width: AppSpacing.md),
                 SizedBox(
                   width: 48,
                   child: LinearProgressIndicator(
@@ -4652,24 +5014,15 @@ class _MonospaceFontPickerViewState extends State<MonospaceFontPickerView> {
                     backgroundColor: c.divider,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
               ],
-              if (!loading && failed) ...[
-                Text(
-                  AppStrings.t(AppStringKeys.appearanceDownloadFailed),
-                  style: TextStyle(
-                    fontSize: AppTextSize.footnote,
-                    color: c.textTertiary,
-                  ),
-                ),
+              if (selected) ...[
                 const SizedBox(width: AppSpacing.md),
-              ],
-              if (selected)
                 AppIcon(
                   HeroAppIcons.check,
                   size: AppIconSize.lg,
                   color: AppTheme.brand,
                 ),
+              ],
             ],
           ),
         ),

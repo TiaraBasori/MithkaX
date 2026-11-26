@@ -17,23 +17,38 @@ import 'package:mithka/theme/app_motion.dart';
 import 'package:mithka/theme/app_theme.dart';
 
 /// One command in an anchored popup menu.
+///
+/// A row either runs [onSelected] or, when it carries [children], opens a
+/// submenu in the same card — exteraless's ActionBarMenuSubItem with its own
+/// popup page, the shape its Mute row takes: the durations belong to the
+/// command, not to a separate sheet.
 class AppMenuAction {
   const AppMenuAction({
     required this.key,
     required this.label,
-    required this.icon,
-    required this.onSelected,
+    this.icon,
+    this.onSelected,
+    this.children,
     this.destructive = false,
     this.sectionStart = false,
-  });
+  }) : assert(
+         onSelected != null || children != null,
+         'a menu row needs a command or a submenu',
+       );
 
   /// Stable suffix for the row's key, e.g. `edit` or `mark-read`.
   final String key;
 
   /// Already localized label.
   final String label;
-  final AppIconData icon;
-  final VoidCallback onSelected;
+
+  /// Leading glyph. Submenu rows leave it null: exteraless's submenu items are
+  /// text-only, and the label still starts on the parent's text line.
+  final AppIconData? icon;
+  final VoidCallback? onSelected;
+
+  /// Rows of the submenu this row opens instead of running a command.
+  final List<AppMenuAction>? children;
 
   /// Destructive commands render in the danger color, like exteraless's red
   /// Delete item in a tab's popup.
@@ -58,6 +73,9 @@ const double appAnchoredMenuMinWidth = 196;
 /// The optional title block above the rows: 8px top inset, a 13px semibold
 /// line, 6px below.
 const double appAnchoredMenuTitleHeight = 30;
+
+/// A submenu's back row: one full-height row plus the hairline under it.
+const double appAnchoredMenuBackRowDivider = 1;
 
 /// How an anchored menu is drawn.
 ///
@@ -353,7 +371,16 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
 
   bool _reducedSeen = false;
 
+  /// The pages pushed so far. The first page is the caller's column; a row
+  /// with children pushes another one onto the same card, so a submenu reads
+  /// as belonging to the row that opened it instead of a second popup.
+  late final List<_AppAnchoredMenuPage> _pages = [
+    _AppAnchoredMenuPage(title: null, actions: widget.actions),
+  ];
+
   bool get _hasHeader => (widget.header ?? '').isNotEmpty;
+  bool get _inSubmenu => _pages.length > 1;
+  _AppAnchoredMenuPage get _page => _pages.last;
 
   @override
   void initState() {
@@ -385,6 +412,30 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
     super.dispose();
   }
 
+  /// A row with children swaps the card to its submenu; a leaf row runs its
+  /// command and closes the menu.
+  void _select(AppMenuAction action) {
+    final children = action.children;
+    if (children != null && children.isNotEmpty) {
+      setState(
+        () => _pages.add(
+          _AppAnchoredMenuPage(title: action.label, actions: children),
+        ),
+      );
+      return;
+    }
+    final invoke = action.onSelected;
+    dismiss();
+    invoke?.call();
+  }
+
+  /// Back out of a submenu — Escape or the header row — without closing the
+  /// menu the user is still browsing.
+  void _back() {
+    if (!mounted || !_inSubmenu) return;
+    setState(() => _pages.removeLast());
+  }
+
   void dismiss() {
     if (!mounted || !_open) return;
     _open = false;
@@ -396,12 +447,6 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
     }
   }
 
-  void _select(AppMenuAction action) {
-    final invoke = action.onSelected;
-    dismiss();
-    invoke();
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -409,18 +454,30 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+        // The width measures every level, so opening a submenu resizes
+        // nothing — the card stays where the finger left it.
         final menuWidth = appAnchoredMenuWidthFor(context, style, [
-          for (final action in widget.actions) action.label,
+          for (final root in widget.actions) ...[
+            root.label,
+            for (final child in root.children ?? const <AppMenuAction>[])
+              child.label,
+          ],
         ]);
-        final sectionCount = widget.actions
+        final actions = _page.actions;
+        final sectionCount = actions
             .where((action) => action.sectionStart)
             .length;
-        final contentHeight = appAnchoredMenuHeightFor(
-          widget.actions.length,
-          hasTitle: _hasHeader,
-          sectionCount: sectionCount,
-          style: style,
-        );
+        final backRow = _inSubmenu
+            ? style.rowHeight + appAnchoredMenuBackRowDivider
+            : 0.0;
+        final contentHeight =
+            appAnchoredMenuHeightFor(
+              actions.length,
+              hasTitle: _hasHeader && !_inSubmenu,
+              sectionCount: sectionCount,
+              style: style,
+            ) +
+            backRow;
         // A chat menu can outgrow the screen (a channel admin's column carries
         // a dozen rows); exteraless caps the popup and scrolls its contents
         // instead of letting the column run off the window.
@@ -469,7 +526,11 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
               top: origin.dy,
               child: CallbackShortcuts(
                 bindings: <ShortcutActivator, VoidCallback>{
-                  const SingleActivator(LogicalKeyboardKey.escape): dismiss,
+                  // Escape backs out of a submenu first, the way exteraless's
+                  // action bar pops one level per press.
+                  const SingleActivator(LogicalKeyboardKey.escape): _inSubmenu
+                      ? _back
+                      : dismiss,
                 },
                 child: FocusTraversalGroup(
                   child: Focus(
@@ -515,7 +576,18 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                if (_hasHeader)
+                                if (_inSubmenu) ...[
+                                  _AppAnchoredMenuBackRow(
+                                    title: _page.title ?? '',
+                                    style: style,
+                                    onTap: _back,
+                                  ),
+                                  Container(
+                                    height: appAnchoredMenuBackRowDivider,
+                                    color: c.divider,
+                                  ),
+                                ],
+                                if (_hasHeader && !_inSubmenu)
                                   Padding(
                                     padding: const EdgeInsets.fromLTRB(
                                       16,
@@ -534,7 +606,7 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
                                       ),
                                     ),
                                   ),
-                                for (final action in widget.actions)
+                                for (final action in actions)
                                   _AppAnchoredMenuRow(
                                     action: action,
                                     style: style,
@@ -553,6 +625,73 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
           ],
         );
       },
+    );
+  }
+}
+
+/// One level of the card: the caller's column, or a submenu pushed over it.
+class _AppAnchoredMenuPage {
+  const _AppAnchoredMenuPage({required this.title, required this.actions});
+
+  /// The parent row's label, shown beside the back chevron. Null on the root.
+  final String? title;
+  final List<AppMenuAction> actions;
+}
+
+/// The submenu's header: a back chevron and the parent row's label, the way
+/// exteraless titles a pushed action-bar page.
+class _AppAnchoredMenuBackRow extends StatelessWidget {
+  const _AppAnchoredMenuBackRow({
+    required this.title,
+    required this.style,
+    required this.onTap,
+  });
+
+  final String title;
+  final AppAnchoredMenuStyle style;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return AppInteractiveSurface(
+      key: const ValueKey('app-anchored-menu-back'),
+      semanticLabel: title,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(style.rowRadius),
+      child: SizedBox(
+        height: style.rowHeight,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: style.horizontalPadding),
+          child: Row(
+            children: [
+              SizedBox(
+                width: style.iconSlot,
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: AppIcon(
+                    HeroAppIcons.chevronLeft,
+                    size: style.iconSize,
+                    color: c.textSecondary,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: style.labelSize,
+                    fontWeight: style.labelWeight,
+                    color: c.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -590,11 +729,15 @@ class _AppAnchoredMenuRow extends StatelessWidget {
                 width: style.iconSlot,
                 child: Align(
                   alignment: AlignmentDirectional.centerStart,
-                  child: AppIcon(
-                    action.icon,
-                    size: style.iconSize,
-                    color: foreground,
-                  ),
+                  // A submenu row keeps the slot empty so its label still
+                  // starts on the line the parent's text does.
+                  child: action.icon == null
+                      ? null
+                      : AppIcon(
+                          action.icon!,
+                          size: style.iconSize,
+                          color: foreground,
+                        ),
                 ),
               ),
               Expanded(

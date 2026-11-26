@@ -5,6 +5,7 @@
 //
 
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -113,7 +114,7 @@ class LiveArchivedChatsView extends StatelessWidget {
   );
 }
 
-/// The archived list, with the same long-press edit mode exteraless gives its
+/// The archived list, with the same long-press edit mode the reference client gives its
 /// archive folder (a DialogsActivity with folderId=1 runs the identical action
 /// mode): a body long press selects, the header becomes a command bar, and
 /// every command maps onto the archive's own row actions.

@@ -1,8 +1,9 @@
 import 'dart:async';
+
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_models.dart';
 
-/// Forwarding out of protected chats as a copy (exteraless
+/// Forwarding out of protected chats as a copy (the reference client
 /// ForwardProtectedAsCopy / AyuGram parity).
 ///
 /// The server forbids `forwardMessages` from a `has_protected_content` chat,
@@ -11,7 +12,7 @@ import '../tdlib/td_models.dart';
 /// `inputFileLocal` upload of the already-downloaded file. The re-send is a
 /// normal outgoing message — the server never sees a forward at all — which
 /// is why permission is verified up front (`can_be_copied`) and the copy
-/// carries no author attribution, exactly like exteraless.
+/// carries no author attribution, exactly like the reference client.
 ///
 /// Media that has not finished downloading is NOT silently skipped: the
 /// caller is handed the missing ids so it can offer a real download first
@@ -28,7 +29,7 @@ class ProtectedForwardPlan {
   final int copiedCount;
 
   /// Messages that cannot be copied at all (poll, location, contact, …) —
-  /// exteraless `canSendSingleMessageAsCopy` excludes the same kinds.
+  /// the reference client `canSendSingleMessageAsCopy` excludes the same kinds.
   final List<int> skippedIds;
 
   /// Media messages whose local file is not complete yet. Retrying after a
@@ -39,7 +40,7 @@ class ProtectedForwardPlan {
 }
 
 /// Whether a raw TDLib `message` content block can be re-sent as a copy.
-/// Mirrors exteraless MessageHelper.canSendSingleMessageAsCopy: text,
+/// Mirrors the reference client MessageHelper.canSendSingleMessageAsCopy: text,
 /// emoji/stickers, photos, videos, documents and captioned media qualify;
 /// polls, locations, contacts, games, invoices and story media do not.
 bool canCopyContent(Map<String, dynamic>? content) {
@@ -108,7 +109,7 @@ typedef ProtectedForwardQuery =
 /// protected chat it is false for every message — gating on it would kill
 /// the copy path wholesale. Permission lives in the user's opt-in toggle
 /// that routed the selection here; the copyable-kind filter below carries
-/// the rest, exactly like exteraless ForwardProtectedAsCopy.
+/// the rest, exactly like the reference client ForwardProtectedAsCopy.
 ///
 /// Returns the plan describing what was sent, what was skipped and which
 /// media still needs a download. Never throws for restricted content; only

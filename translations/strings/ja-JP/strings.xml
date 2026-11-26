@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MithkaX's string catalogue. Edit translations here; run tools/gen_assets.py to push them into the app. -->
+<!-- Mithka's string catalogue. Edit translations here; run translations/tools/gen_assets.py to push them into the app. -->
 <resources>
     <string name="aboutCheckForUpdates">アップデートを確認</string>
     <string name="aboutCheckingForUpdates">確認中…</string>
@@ -7,6 +7,7 @@
     <string name="aboutReportProblem">問題を報告</string>
     <string name="aboutReportProblemDetail">プライバシーに配慮した診断情報を含む</string>
     <string name="aboutTelegramChannel">Telegram チャンネル</string>
+    <string name="aboutCommunityChat">コミュニティチャット</string>
     <string name="aboutTitle">概要</string>
     <string name="aboutUpToDate">最新バージョンです</string>
     <string name="aboutUpdateAvailable">バージョン {value1} が利用できます</string>
@@ -234,6 +235,8 @@
     <string name="aiServerModelHint">モデル名</string>
     <string name="aiServerPrivacy">有効な AI 機能で使用するテキストがこのエンドポイントに送信されます。API キーはこのデバイスの安全なストレージにのみ保存されます。</string>
     <string name="aiSettingsTitle">AI 設定</string>
+    <string name="aiShowComposerButton">メッセージ欄に AI ボタンを表示</string>
+    <string name="aiShowComposerButtonDescription">オフにすると、メッセージ入力欄の横にあるきらめきボタンが表示されなくなります。</string>
     <string name="aiSummarizePrompts">要約プロンプト</string>
     <string name="aiSummarizeUsing">要約に使用</string>
     <string name="aiSummaryActions">アクション項目</string>
@@ -390,6 +393,7 @@
     <string name="appLockAutoLockDisabled">無効</string>
     <string name="appLockAutoLockFiveHours">5 時間後</string>
     <string name="appLockAutoLockFiveMinutes">5 分後</string>
+    <string name="appLockAutoLockImmediately">すぐに</string>
     <string name="appLockAutoLockOneHour">1 時間後</string>
     <string name="appLockAutoLockOneMinute">1 分後</string>
     <string name="appLockBiometricDescription">アプリロックの表示後、{value1}で Mithka X をロック解除できます。</string>
@@ -433,6 +437,7 @@
     <string name="appLockTryBiometric">{value1}を使用</string>
     <string name="appLockUnlockMethod">ロック解除方法</string>
     <string name="appLockUnlockTitle">Mithka X のロックを解除</string>
+    <string name="appLockUnlocked">ロック解除</string>
     <string name="appLockUseBiometric">{value1}でロック解除</string>
     <string name="appLockVerifyTitle">アプリロックを確認</string>
     <string name="appLockWrongGesture">ジェスチャーが正しくありません。</string>
@@ -486,6 +491,8 @@
     <string name="appearanceInUseSize">使用中</string>
     <string name="appearanceInterfaceSize">画面サイズ</string>
     <string name="appearanceLivePreviewUnavailable">ライブプレビューを利用できません</string>
+    <string name="appearanceLocalFonts">ローカルフォント</string>
+    <string name="appearanceLocalFontsDescription">このデバイスにインストールされているフォントです。ダウンロード不要でそのまま使えます。</string>
     <string name="appearanceManage">管理</string>
     <string name="appearanceMergeConsecutiveImages">メディアアルバムをまとめて表示</string>
     <string name="appearanceMessageActionMenu">メッセージ操作メニュー</string>
@@ -500,6 +507,9 @@
     <string name="appearanceNameColorPremium">Premium ユーザー</string>
     <string name="appearanceNoCleanableFonts">クリーンアップ可能な項目なし</string>
     <string name="appearanceNoDownloadedFontCache">ダウンロード済みのフォントキャッシュはありません。</string>
+    <string name="appearanceNoLocalFonts">インストール済みのローカルフォントが見つかりません。</string>
+    <string name="appearanceOnlineFonts">Google Fonts（オンライン）</string>
+    <string name="appearanceOnlineFontsDescription">Google Fonts のオンラインフォントです。選択時に取得してキャッシュします。</string>
     <string name="appearanceNoMatchingFonts">一致するフォントがありません</string>
     <string name="appearancePerAccountTheming">アカウントごとにテーマを使用</string>
     <string name="appearancePreviewAlbumCaption">グループアルバムからの2つの瞬間。</string>
@@ -510,6 +520,7 @@
     <string name="appearancePreviewMessageSample">Jennie: チャットでね</string>
     <string name="appearancePreviewUsersSample">Mithka X ユーザー</string>
     <string name="appearanceRefreshCacheList">キャッシュ一覧を更新</string>
+    <string name="appearanceReloadFonts">ローカルフォントを再読み込み</string>
     <string name="appearanceRoundGroupAvatars">グループチャットのアイコンを丸く表示</string>
     <string name="appearanceSearchFont">フォントを検索</string>
     <string name="appearanceSectionChat">チャット</string>
@@ -874,6 +885,8 @@
     <string name="chatCannotSendMessages">このチャットではメッセージを送信できません</string>
     <string name="chatConnectedBusinessBot">接続中のビジネスボット</string>
     <string name="chatContactCallsOnly">連絡先との通話のみ対応しています</string>
+    <string name="chatContextPaneHide">グループ情報を隠す</string>
+    <string name="chatContextPaneShow">グループ情報を表示</string>
     <string name="chatDelete">削除</string>
     <string name="chatDeleteActionsDone">完了しました</string>
     <string name="chatDeleteActionsFailed">操作を実行できませんでした: {value1}</string>
@@ -2089,6 +2102,18 @@
     <string name="imageEditTextTool">テキスト</string>
     <string name="imageEditTitle">画像を編集</string>
     <string name="imagePreviewTitle">画像プレビュー</string>
+    <string name="instantViewTextSize">文字サイズ</string>
+    <string name="instantViewExtracting">記事を抽出中…</string>
+    <string name="instantViewOpenLocal">インスタントビューで開く</string>
+    <string name="instantViewSearch">検索</string>
+    <string name="instantViewPreviousMatch">前の一致</string>
+    <string name="instantViewNextMatch">次の一致</string>
+    <string name="instantViewTitle">インスタントビュー</string>
+    <string name="instantViewOpenInBrowser">ブラウザで開く</string>
+    <string name="instantViewLoadFailed">このページを読み込めませんでした</string>
+    <string name="instantViewShowMore">もっと見る</string>
+    <string name="instantViewShowLess">折りたたむ</string>
+    <string name="instantViewRetry">再試行</string>
     <string name="keywordBlockerAddFromMessageTitle">キーワードをブロック</string>
     <string name="keywordBlockerDescription">キーワードを追加すると、一致するメッセージはチャットに表示されず、ローカル通知も届きません。通常のキーワード、re:正規表現、regex:正規表現、/正規表現/i に対応しています。リモートリストは1行に1ルールで、# または // で始まる行はコメントです。</string>
     <string name="keywordBlockerDownload">ダウンロード</string>
@@ -2407,6 +2432,10 @@
     <string name="messageChecklistTaskHint">Task description</string>
     <string name="messageLeaveAComment">コメントを残す</string>
     <string name="messageLinkCopied">リンクをコピーしました</string>
+    <string name="messageLinkCopyEmail">メールをコピー</string>
+    <string name="messageLinkCopyHashtag">ハッシュタグをコピー</string>
+    <string name="messageLinkCopyUsername">ユーザー名をコピー</string>
+    <string name="messageLinkShareQr">QRコードを共有</string>
     <string name="messagePollClosed">Closed</string>
     <string name="messagePollStop">Close poll</string>
     <string name="messagePollStopConfirm">Voting cannot continue after this poll is closed.</string>
@@ -4008,7 +4037,6 @@
     <string name="videoPlayerUseSystemOrientation">システムの向きを使用</string>
     <string name="videoPlayerWaitingForFile">動画ファイルを待機中</string>
     <string name="videoTrimFailed">トリミングした動画を作成できませんでした。</string>
-    <string name="vipBadgeLabel">VIP</string>
     <string name="voiceNotePreviewVoiceMessage">音声メッセージ</string>
     <string name="mediaSpoilerReveal">ネタバレ。タップして表示</string>
     <string name="downloadsTasks">ダウンロードタスク</string>
@@ -4134,4 +4162,22 @@
     <string name="mithkaxScheduledDeleteThreeDays">3日</string>
     <string name="mithkaxScheduledDeleteOneWeek">1週間</string>
     <string name="mithkaxScheduledDeleteOneMonth">1か月</string>
+
+    <string name="channelBottomBar">チャンネルの下部バー</string>
+    <string name="channelBottomBarHidden">完全に非表示</string>
+    <string name="channelBottomBarMute">デフォルト（ミュート / 解除）</string>
+    <string name="channelBottomBarNote">投稿できない購読中チャンネルにのみ適用されます。「ディスカッションとダイレクトメッセージ」では、どちらもないチャンネルの下部バーを完全に隠します。</string>
+    <string name="channelDeleteTopic">トピックを削除</string>
+    <string name="channelMarkAllReadFailed">既読にできませんでした</string>
+    <string name="channelPanelDirect">ダイレクトメッセージ</string>
+    <string name="channelPanelDiscussion">ディスカッション</string>
+    <string name="channelPostForwards">{value1} 回転送</string>
+    <string name="channelPostStats">チャンネル投稿に表示回数と転送数を表示</string>
+    <string name="channelPostViews">{value1} 回表示</string>
+    <string name="channelBottomBarActions">ディスカッションとダイレクトメッセージ</string>
+    <string name="mithkaxTopicTabsDone">完了</string>
+    <string name="mithkaxTopicTabsReorder">タブを並べ替え</string>
+    <string name="mithkaxTopicTabsMoveToBottom">タブバーを下へ移動</string>
+    <string name="mithkaxTopicTabsMoveToSide">タブバーを横へ移動</string>
+    <string name="mithkaxTopicTabsMoveToTop">タブバーを上へ移動</string>
 </resources>

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Render the Mithka X mark into every raster the app ships.
+"""Render the Mithka X mark into the Android cold-start rasters.
 
-The mark is one flat glyph. `tool/app_icons/mithkax_mark.svg` is its canonical
-form (1024 square, glyph centred); Flutter draws the grayscale twin as an alpha
-mask tinted at paint time, so the in-app asset only has to carry the shape.
-Android's cold-start window is native and cannot tint, so it gets baked copies:
-ink for the daytime launch colour, white for the night one, one per density
-bucket so nothing upscales.
+In the app the mark is painted (`lib/components/brand_mark.dart`), so it can
+follow the theme's brand colour and the light/dark appearance. Android's
+starting window is a native drawable and cannot: it gets baked copies instead,
+AZURE (the launcher icon's night body) on the white launch colour and FROST
+(its day body) under `drawable-night-*`, one per density bucket.
+
+`tool/app_icons/mithkax_mark.svg` is the canonical geometry; every raster here
+is generated from it.
 """
 
 import argparse
@@ -15,7 +17,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tool/app_icons/mithkax_mark.svg"
-ASSETS = ROOT / "assets"
 ANDROID_RES = ROOT / "android/app/src/main/res"
 CANVAS = 1024
 
@@ -24,6 +25,11 @@ CANVAS = 1024
 # Android 12 circle mask, which reserves the outer third.
 MASTER_INK_HEIGHT = 0.72
 SPLASH_INK_HEIGHT = 0.62
+
+# Stops sampled from the launcher icon's mark (assets/app_icons/
+# mithkax_default{,_night}.png), top-left to bottom-right.
+AZURE = ((0x2B, 0xA7, 0xF9), (0x0A, 0x8B, 0xF9), (0x01, 0x68, 0xF1))
+FROST = ((0xF5, 0xFB, 0xFF), (0xC9, 0xE5, 0xFC), (0x8C, 0xC5, 0xFB))
 
 DENSITIES = {
     "mdpi": 192,
@@ -122,11 +128,31 @@ def fit(ink, height):
     )
 
 
-def compose(ink, canvas, colour):
-    """Centre [colour] ink on a transparent square canvas."""
+def gradient_plate(size, stops):
+    """Diagonal (top-left → bottom-right) gradient of [stops] at [size]."""
     from PIL import Image
 
-    art = Image.new("RGBA", ink.size, colour)
+    side = 256
+    plate = Image.new("RGB", (side, side))
+    pixels = plate.load()
+    for y in range(side):
+        for x in range(side):
+            t = (x / (side - 1) + y / (side - 1)) / 2
+            if t <= 0.5:
+                a, b, local = stops[0], stops[1], t * 2
+            else:
+                a, b, local = stops[1], stops[2], (t - 0.5) * 2
+            pixels[x, y] = tuple(
+                round(a[i] + (b[i] - a[i]) * local) for i in range(3)
+            )
+    return plate.resize(size, Image.Resampling.BICUBIC)
+
+
+def compose(ink, canvas, stops):
+    """Centre the glyph, filled with [stops], on a transparent square canvas."""
+    from PIL import Image
+
+    art = gradient_plate(ink.size, stops).convert("RGBA")
     art.putalpha(ink.getchannel("A"))
     plate = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
     plate.paste(art, ((canvas - ink.width) // 2, (canvas - ink.height) // 2), art)
@@ -158,33 +184,26 @@ def main():
     master = render_master(4096)
     ink = master.crop(master.getbbox())
 
-    # Flutter: square master plus the canvas-trimmed twin used by layouts that
-    # space the mark by its ink.
-    compose(fit(ink, round(CANVAS * MASTER_INK_HEIGHT)), CANVAS, (0, 0, 0, 255)).save(
-        ASSETS / "brand_mark.png", optimize=True
-    )
-    fit(ink, 800).save(ASSETS / "brand_mark_ink.png", optimize=True)
-
-    # Android cold-start art: ink on the light launch colour, white on the
+    # Android cold-start art: AZURE on the light launch colour, FROST on the
     # night one, sized per density so no bucket upscales.
     for qualifier, size in DENSITIES.items():
         target = round(size * SPLASH_INK_HEIGHT)
         for name in ("penguin_launch", "penguin_splash"):
-            for bucket, colour in (
-                (f"drawable-{qualifier}", (0, 0, 0, 255)),
-                (f"drawable-night-{qualifier}", (255, 255, 255, 255)),
+            for bucket, stops in (
+                (f"drawable-{qualifier}", AZURE),
+                (f"drawable-night-{qualifier}", FROST),
             ):
                 (ANDROID_RES / bucket).mkdir(exist_ok=True)
-                compose(fit(ink, target), size, colour).save(
+                compose(fit(ink, target), size, stops).save(
                     ANDROID_RES / bucket / f"{name}.png", optimize=True
                 )
-    for bucket, colour in (
-        ("drawable", (0, 0, 0, 255)),
-        ("drawable-night", (255, 255, 255, 255)),
+    for bucket, stops in (
+        ("drawable", AZURE),
+        ("drawable-night", FROST),
     ):
         (ANDROID_RES / bucket).mkdir(exist_ok=True)
         compose(
-            fit(ink, round(CANVAS * SPLASH_INK_HEIGHT)), CANVAS, colour
+            fit(ink, round(CANVAS * SPLASH_INK_HEIGHT)), CANVAS, stops
         ).save(ANDROID_RES / bucket / "penguin_launch.png", optimize=True)
     print("ok")
 

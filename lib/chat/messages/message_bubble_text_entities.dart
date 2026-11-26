@@ -242,25 +242,35 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
     var cursor = 0;
     var metaAdded = false;
     for (final block in blocks) {
-      final start = block.offset.clamp(0, sourceText.length).toInt();
-      final end = block.end.clamp(start, sourceText.length).toInt();
-      if (end <= cursor) continue;
+      final rawStart = block.offset.clamp(0, sourceText.length).toInt();
+      final rawEnd = block.end.clamp(rawStart, sourceText.length).toInt();
+      if (rawEnd <= cursor) continue;
+      final (start, end) = trimmedMessageBlockRange(
+        sourceText,
+        rawStart,
+        rawEnd,
+      );
       if (start > cursor) {
-        widgets.add(
-          _richText(
-            sourceText,
-            base,
-            link,
-            cursor,
-            start,
-            outgoing,
-            false,
-            entities: sourceEntities,
-            fontSize: resolvedFontSize,
-            bodyLeading: bodyLeading,
-          ),
-        );
-        widgets.add(const SizedBox(height: 5));
+        // The run between two blocks keeps only real content: a leftover
+        // fence newline would otherwise paint the blank line that was just
+        // trimmed from the block, this time above it.
+        if (sourceText.substring(cursor, start).trim().isNotEmpty) {
+          widgets.add(
+            _richText(
+              sourceText,
+              base,
+              link,
+              cursor,
+              start,
+              outgoing,
+              false,
+              entities: sourceEntities,
+              fontSize: resolvedFontSize,
+              bodyLeading: bodyLeading,
+            ),
+          );
+          widgets.add(const SizedBox(height: 5));
+        }
       }
       widgets.add(
         block.isPreBlock
@@ -287,9 +297,10 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
                 bodyLeading,
               ),
       );
-      cursor = end;
+      cursor = rawEnd;
     }
-    if (cursor < sourceText.length) {
+    if (cursor < sourceText.length &&
+        sourceText.substring(cursor).trim().isNotEmpty) {
       widgets.add(const SizedBox(height: 5));
       widgets.add(
         _richText(
@@ -462,17 +473,34 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
       if (widget.bubble.onHashtagTap == null) {
         return [TextSpan(text: segment, style: style)];
       }
-      final recognizer = TapGestureRecognizer()
-        ..onTap = () =>
-            widget.bubble.onHashtagTap?.call(normalizedHashtag(segment));
+      final recognizer =
+          _MessageLinkRecognizer(
+              kind: MessageLinkKind.hashtag,
+              copyValue: segment,
+              onOpen: () =>
+                  widget.bubble.onHashtagTap?.call(normalizedHashtag(segment)),
+            )
+            ..onTap = () =>
+                widget.bubble.onHashtagTap?.call(normalizedHashtag(segment));
       _linkRecognizers.add(recognizer);
       return [TextSpan(text: segment, style: style, recognizer: recognizer)];
     }
     if (target != null) {
-      final recognizer = TapGestureRecognizer()
-        ..onTap = () => openLink(context, target);
+      final copyValue = _linkCopyValueFor(target, segment);
+      final recognizer = _MessageLinkRecognizer(
+        kind: _linkKindFor(target),
+        copyValue: copyValue,
+        qrValue: _linkQrValueFor(target),
+        onOpen: () => openLink(context, target),
+      )..onTap = () => openLink(context, target);
       _linkRecognizers.add(recognizer);
-      return [TextSpan(text: segment, style: style, recognizer: recognizer)];
+      return [
+        TextSpan(
+          text: segment,
+          style: _pressedLinkStyle(style, copyValue, link),
+          recognizer: recognizer,
+        ),
+      ];
     }
     if (_hasPreCode(active)) return [TextSpan(text: segment, style: style)];
     return _linkSpansStyled(segment, style, link);
@@ -492,7 +520,14 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
             color: _codeBackgroundColor,
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: Text(segment, style: style.copyWith(fontSize: fontSize)),
+          child: Text(
+            segment,
+            // `CodeHighlighting.Span(smallerSize: true)`: inline code sits
+            // below the body by its own length's decrement.
+            style: style.copyWith(
+              fontSize: AppTextSize.messageInlineCode(fontSize, segment.length),
+            ),
+          ),
         ),
       ),
     );
@@ -666,19 +701,40 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
         last = m.end;
         continue;
       }
-      final recognizer = TapGestureRecognizer()
-        ..onTap = () {
-          if (isHashtag) {
-            widget.bubble.onHashtagTap?.call(normalizedHashtag(matched));
-          } else {
-            openLink(context, target);
-          }
-        };
+      final copyValue = isHashtag || isMention ? matched : target;
+      final recognizer =
+          _MessageLinkRecognizer(
+              kind: isHashtag
+                  ? MessageLinkKind.hashtag
+                  : isMention
+                  ? MessageLinkKind.mention
+                  : MessageLinkKind.url,
+              copyValue: copyValue,
+              qrValue: isHashtag ? null : _linkQrValueFor(target),
+              onOpen: () {
+                if (isHashtag) {
+                  widget.bubble.onHashtagTap?.call(normalizedHashtag(matched));
+                } else {
+                  openLink(context, target);
+                }
+              },
+            )
+            ..onTap = () {
+              if (isHashtag) {
+                widget.bubble.onHashtagTap?.call(normalizedHashtag(matched));
+              } else {
+                openLink(context, target);
+              }
+            };
       _linkRecognizers.add(recognizer);
       spans.add(
         TextSpan(
           text: matched,
-          style: _autoLinkStyle(baseStyle, link),
+          style: _pressedLinkStyle(
+            _autoLinkStyle(baseStyle, link),
+            copyValue,
+            link,
+          ),
           recognizer: recognizer,
         ),
       );
@@ -688,6 +744,34 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
       spans.add(TextSpan(text: text.substring(last), style: baseStyle));
     }
     return spans;
+  }
+
+  /// A mail or phone target is not a URL; the copy item names what it is.
+  MessageLinkKind _linkKindFor(String target) {
+    final lower = target.toLowerCase();
+    if (lower.startsWith('mailto:')) return MessageLinkKind.email;
+    if (lower.startsWith('tel:')) return MessageLinkKind.phone;
+    return MessageLinkKind.url;
+  }
+
+  /// A URL copies as itself; a mail or phone run copies the readable value,
+  /// the way exteraless's CopyLink/CopyMail items do.
+  String _linkCopyValueFor(String target, String visible) {
+    final lower = target.toLowerCase();
+    if (lower.startsWith('mailto:')) return target.substring(7);
+    if (lower.startsWith('tel:')) return visible;
+    return target;
+  }
+
+  /// Only a real web address can be shared as a QR code.
+  String? _linkQrValueFor(String target) {
+    final lower = target.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return target;
+    }
+    if (lower.startsWith('www.')) return 'https://$target';
+    if (lower.startsWith('t.me/')) return 'https://$target';
+    return null;
   }
 
   TextStyle _autoLinkStyle(TextStyle baseStyle, Color link) {
@@ -708,4 +792,27 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
       decorationThickness: 1.0,
     );
   }
+}
+
+/// [start]..[end] without the line breaks that framed a fence or opened and
+/// closed a quote.
+///
+/// A block entity keeps the newline that ended the fence's opening line and
+/// the one before its closing line; laid out as-is, each paints a full empty
+/// line — the blank strip under a quote or code plate. Telegram draws none of
+/// that space, so the range is trimmed before layout.
+@visibleForTesting
+(int, int) trimmedMessageBlockRange(String text, int start, int end) {
+  final limit = text.length;
+  var from = start.clamp(0, limit).toInt();
+  var to = end.clamp(from, limit).toInt();
+  while (from < to &&
+      (text.codeUnitAt(from) == 0x0A || text.codeUnitAt(from) == 0x0D)) {
+    from++;
+  }
+  while (to > from &&
+      (text.codeUnitAt(to - 1) == 0x0A || text.codeUnitAt(to - 1) == 0x0D)) {
+    to--;
+  }
+  return (from, to);
 }

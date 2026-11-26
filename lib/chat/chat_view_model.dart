@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/notifications/scope_notification_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../auth/account_store.dart';
 import '../channels/topic_list_actions.dart';
 import '../chats/chat_delete_policy.dart';
@@ -21,10 +22,10 @@ import '../config/build_flags.dart';
 import '../history/message_history_settings.dart';
 import '../history/message_history_store.dart';
 import '../notifications/notification_settings_payload.dart';
-import '../settings/blocked_user_service.dart';
-import '../settings/ghost_mode_controller.dart';
-import '../settings/hidden_sender_store.dart';
-import '../settings/keyword_blocker.dart';
+import '../settings/privacy_security/blocked_user_service.dart';
+import '../settings/privacy_security/ghost_mode_controller.dart';
+import '../settings/privacy_security/hidden_sender_store.dart';
+import '../settings/privacy_security/keyword_blocker.dart';
 import '../tdlib/forum_topic_index.dart';
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_client.dart';
@@ -562,6 +563,7 @@ class ChatViewModel extends ChangeNotifier {
   /// The plan from the most recent protected-content copy forward, for the
   /// UI's partial-migration toast. Null until a copy forward has run.
   ProtectedForwardPlan? protectedForwardLastPlan;
+
   bool _chatCanSend = true; // chat-wide default can_send_basic_messages
 
   /// Topic moderation rights for forum chats. Creating needs the
@@ -696,10 +698,17 @@ class ChatViewModel extends ChangeNotifier {
   /// chat with a bot need no administrator rights there, so the topic menus
   /// must not gate those rows on [canManageTopics] alone.
   bool botTopicsManageable = false;
+  bool _forumTopicsLoaded = false;
 
   /// Pin/edit rights for the topic surfaces: forum administrators
   /// ([canManageTopics]) or a bot topic chat whose bot allows management.
   bool get canPinAndEditTopics => canManageTopics || botTopicsManageable;
+
+  /// Whether the tab strip's pinned block can be rearranged: the same rights
+  /// that allow pinning, plus at least two pinned topics to swap.
+  bool get canReorderPinnedTopics =>
+      canPinAndEditTopics &&
+      forumTopics.where((topic) => topic.isPinned).length > 1;
 
   bool get supportsTopics => isForum || supportsBotTopics;
 
@@ -708,11 +717,6 @@ class ChatViewModel extends ChangeNotifier {
   bool get isBotTopicChat => supportsBotTopics && !isForum;
 
   bool forumTopicsLoading = false;
-
-  /// Set once a getForumTopics round-trip has landed (success or failure).
-  /// Only then does a topic missing from [forumTopics] mean "new"; before
-  /// that every topic is missing because the page is still in flight.
-  bool _forumTopicsLoaded = false;
 
   /// Topic info requests in flight for topics discovered through live traffic.
   final Set<int> _pendingForumTopicInfoRequests = {};
@@ -755,6 +759,7 @@ class ChatViewModel extends ChangeNotifier {
   /// Forward handoffs stamp it so the target chat can pin its forward queries
   /// to the account that supplied the source ids.
   int get accountClientIdForForwarding => _accountClientId;
+
   int _groupBotCommandsGeneration = 0;
 
   Future<Set<String>>? _aiReplyBlockedSenderKeysFuture;
@@ -771,6 +776,13 @@ class ChatViewModel extends ChangeNotifier {
   StreamSubscription? _sub;
 
   final ChatLiveMessageBuffer _liveIncomingMessages = ChatLiveMessageBuffer();
+
+  /// Own messages TDLib pushed into the open transcript (a local echo of a
+  /// send from this device, or the same account sending from another one).
+  /// They are not unread traffic, so they ride their own buffer — the
+  /// transcript only uses them to play the same entrance incoming messages
+  /// get.
+  final ChatLiveMessageBuffer _liveOutgoingMessages = ChatLiveMessageBuffer();
 
   bool _isLoadingOlder = false;
 
@@ -969,7 +981,7 @@ class ChatViewModel extends ChangeNotifier {
 
   /// A topic creation a bot-topic "All" send is awaiting, shared by every
   /// concurrent send so two quick messages land in the same new topic instead
-  /// of opening two (exteraless serialises them the same way).
+  /// of opening two (the reference client serialises them the same way).
   Future<int?>? _botTopicCreation;
 
   /// The topic this view model started for the "All" view's sends. A rich
@@ -981,14 +993,6 @@ class ChatViewModel extends ChangeNotifier {
   /// The topic a send from a bot topic chat's "All" view just started, until
   /// the transcript host consumes it and opens that topic.
   int? _pendingBotTopicOpen;
-
-  /// Hands the topic a send just started to the host exactly once: the
-  /// transcript switches to it after the send settles.
-  int? consumePendingBotTopicOpen() {
-    final topicId = _pendingBotTopicOpen;
-    _pendingBotTopicOpen = null;
-    return topicId;
-  }
 
   String get inputPlaceholder =>
       AppStrings.t(AppStringKeys.chatMessageInputPlaceholder);
@@ -1043,32 +1047,21 @@ class ChatViewModel extends ChangeNotifier {
   /// its open panels the same way the OS keyboard folds on drag.
   int get composerDismissTick => _composerDismissTick;
 
-  /// Collapses any open composer panel without touching the draft or caret.
-  void dismissComposerPanels() {
-    if (_isDisposed) return;
-    _composerDismissTick++;
-    super.notifyListeners();
-  }
-
   ValueListenable<int> messageRevisionListenable(int messageId) =>
       _messageRevisionNotifiers.putIfAbsent(
         messageId,
         () => ValueNotifier<int>(0),
       );
 
-  @visibleForTesting
   int get transcriptScanVisitsForTesting => _transcriptScanVisitsForTesting;
 
-  @visibleForTesting
   int get messageRevisionNotifierCountForTesting =>
       _messageRevisionNotifiers.length;
 
-  @visibleForTesting
   void resetTranscriptScanVisitsForTesting() {
     _transcriptScanVisitsForTesting = 0;
   }
 
-  @visibleForTesting
   void primeMessageIndexesForTesting() {
     _ensureMessageIndexes();
   }
@@ -1130,6 +1123,8 @@ class ChatViewModel extends ChangeNotifier {
   }
 
   List<int> consumeLiveIncomingMessageIds() => _liveIncomingMessages.takeAll();
+
+  List<int> consumeLiveOutgoingMessageIds() => _liveOutgoingMessages.takeAll();
 
   ChatSendFailure? consumeSendFailure() {
     final failure = _pendingSendFailure;
@@ -3691,8 +3686,6 @@ class ChatViewModel extends ChangeNotifier {
     }
   }
 
-  // MARK: - 引用 reply-quote resolution
-
   /// For each message that replies to another, resolve the quoted sender +
   /// preview — from the already-loaded list when possible, else via getMessages.
   void _resolveRepliesIfNeeded(List<ChatMessage> batch) {
@@ -4891,4 +4884,22 @@ class ChatViewModel extends ChangeNotifier {
   final Map<int, String> _viaBotUsernames = {};
 
   final Map<int, List<ChatMessage>> _pendingViaBotUsers = {};
+
+  /// Collapses any open composer panel without touching the draft or caret.
+  void dismissComposerPanels() {
+    if (_isDisposed) return;
+    _composerDismissTick++;
+    notifyListeners();
+  }
+
+  /// Set once a getForumTopics round-trip has landed (success or failure).
+  /// Only then does a topic missing from [forumTopics] mean "new"; before
+  /// that every topic is missing because the page is still in flight.
+  /// Hands the topic a send just started to the host exactly once: the
+  /// transcript switches to it after the send settles.
+  int? consumePendingBotTopicOpen() {
+    final topicId = _pendingBotTopicOpen;
+    _pendingBotTopicOpen = null;
+    return topicId;
+  }
 }

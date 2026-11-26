@@ -173,10 +173,7 @@ def optimize():
     before = inventory()
     native_paths = [*ICONS.glob("*.png"), *NATIVE.rglob("*.png")]
     native_paths += composer_pngs()
-    native_paths += [
-        ROOT / "assets/app_icon.png",
-        ROOT / "assets/brand_mark.png",
-    ]
+    native_paths += [ROOT / "assets/app_icon.png"]
     groups = {}
     for path in native_paths:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()

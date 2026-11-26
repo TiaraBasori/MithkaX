@@ -49,6 +49,7 @@ NON_UI_CALLS = {
 ALLOWED_VISIBLE_VALUES = {
     "",
     "A",
+    "Aa",
     "AI",
     "Apple Color Emoji",
     "GitHub",

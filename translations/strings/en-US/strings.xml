@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MithkaX's string catalogue. Edit translations here; run tools/gen_assets.py to push them into the app. -->
+<!-- Mithka's string catalogue. Edit translations here; run translations/tools/gen_assets.py to push them into the app. -->
 <resources>
     <string name="aboutCheckForUpdates">Check for Updates</string>
     <string name="aboutCheckingForUpdates">Checking…</string>
@@ -7,6 +7,7 @@
     <string name="aboutReportProblem">Report a Problem</string>
     <string name="aboutReportProblemDetail">Includes privacy-safe diagnostics</string>
     <string name="aboutTelegramChannel">Telegram Channel</string>
+    <string name="aboutCommunityChat">Community chat</string>
     <string name="aboutTitle">About</string>
     <string name="aboutUpToDate">Mithka X is up to date</string>
     <string name="aboutUpdateAvailable">Version {value1} is available</string>
@@ -234,6 +235,8 @@
     <string name="aiServerModelHint">Model name</string>
     <string name="aiServerPrivacy">Text used by enabled AI features is sent to this endpoint. Your API key stays in secure storage on this device.</string>
     <string name="aiSettingsTitle">AI Settings</string>
+    <string name="aiShowComposerButton">Show AI Button in Message Box</string>
+    <string name="aiShowComposerButtonDescription">Turn off to remove the sparkle button next to the message field.</string>
     <string name="aiSummarizePrompts">Summarize Prompts</string>
     <string name="aiSummarizeUsing">Summarize using</string>
     <string name="aiSummaryActions">Action Items</string>
@@ -390,6 +393,7 @@
     <string name="appLockAutoLockDisabled">Disabled</string>
     <string name="appLockAutoLockFiveHours">After 5 hours</string>
     <string name="appLockAutoLockFiveMinutes">After 5 minutes</string>
+    <string name="appLockAutoLockImmediately">Immediately</string>
     <string name="appLockAutoLockOneHour">After 1 hour</string>
     <string name="appLockAutoLockOneMinute">After 1 minute</string>
     <string name="appLockBiometricDescription">After app lock appears, use {value1} to unlock Mithka X.</string>
@@ -433,6 +437,7 @@
     <string name="appLockTryBiometric">Use {value1}</string>
     <string name="appLockUnlockMethod">Unlock method</string>
     <string name="appLockUnlockTitle">Unlock Mithka X</string>
+    <string name="appLockUnlocked">Unlocked</string>
     <string name="appLockUseBiometric">Unlock with {value1}</string>
     <string name="appLockVerifyTitle">Verify app lock</string>
     <string name="appLockWrongGesture">That gesture is not correct.</string>
@@ -486,6 +491,8 @@
     <string name="appearanceInUseSize">In Use</string>
     <string name="appearanceInterfaceSize">Interface Size</string>
     <string name="appearanceLivePreviewUnavailable">Live preview unavailable</string>
+    <string name="appearanceLocalFonts">Local Fonts</string>
+    <string name="appearanceLocalFontsDescription">Fonts installed on this device render immediately with no download needed.</string>
     <string name="appearanceManage">Manage</string>
     <string name="appearanceMergeConsecutiveImages">Group Media Albums</string>
     <string name="appearanceMessageActionMenu">Message action menu</string>
@@ -500,6 +507,9 @@
     <string name="appearanceNameColorPremium">Premium users</string>
     <string name="appearanceNoCleanableFonts">Nothing to clean</string>
     <string name="appearanceNoDownloadedFontCache">No downloaded font cache.</string>
+    <string name="appearanceNoLocalFonts">No locally installed fonts detected.</string>
+    <string name="appearanceOnlineFonts">Google Fonts (Online)</string>
+    <string name="appearanceOnlineFontsDescription">Cloud-hosted Google Fonts are downloaded on demand and cached locally.</string>
     <string name="appearanceNoMatchingFonts">No matching fonts</string>
     <string name="appearancePerAccountTheming">Use themes per account</string>
     <string name="appearancePreviewAlbumCaption">Two moments from the group album.</string>
@@ -510,6 +520,7 @@
     <string name="appearancePreviewMessageSample">Jennie: See you in the chat</string>
     <string name="appearancePreviewUsersSample">Mithka X Users</string>
     <string name="appearanceRefreshCacheList">Refresh Cache List</string>
+    <string name="appearanceReloadFonts">Refresh Local Fonts</string>
     <string name="appearanceRoundGroupAvatars">Show Group Avatars as Circles</string>
     <string name="appearanceSearchFont">Search fonts</string>
     <string name="appearanceSectionChat">Chat</string>
@@ -874,6 +885,8 @@
     <string name="chatCannotSendMessages">You can’t send messages in this chat</string>
     <string name="chatConnectedBusinessBot">Connected Business Bot</string>
     <string name="chatContactCallsOnly">Calls are only supported with contacts</string>
+    <string name="chatContextPaneHide">Hide group info</string>
+    <string name="chatContextPaneShow">Show group info</string>
     <string name="chatDelete">Delete</string>
     <string name="chatDeleteActionsDone">Done</string>
     <string name="chatDeleteActionsFailed">Could not apply action: {value1}</string>
@@ -2096,6 +2109,18 @@
     <string name="imageEditTextTool">Text</string>
     <string name="imageEditTitle">Edit Image</string>
     <string name="imagePreviewTitle">Image preview</string>
+    <string name="instantViewTextSize">Text size</string>
+    <string name="instantViewExtracting">Extracting article…</string>
+    <string name="instantViewOpenLocal">Open instant view</string>
+    <string name="instantViewSearch">Search</string>
+    <string name="instantViewPreviousMatch">Previous match</string>
+    <string name="instantViewNextMatch">Next match</string>
+    <string name="instantViewTitle">Instant view</string>
+    <string name="instantViewOpenInBrowser">Open in browser</string>
+    <string name="instantViewLoadFailed">Couldn’t load this page</string>
+    <string name="instantViewShowMore">Show more</string>
+    <string name="instantViewShowLess">Show less</string>
+    <string name="instantViewRetry">Try again</string>
     <string name="keywordBlockerAddFromMessageTitle">Block keyword</string>
     <string name="keywordBlockerDescription">After you add keywords, matching messages will be hidden in chats and will not trigger local notifications. Supports plain keywords, re:regex, regex:regex, and /regex/i. Remote lists use one rule per line; lines starting with # or // are comments.</string>
     <string name="keywordBlockerDownload">Download</string>
@@ -2414,6 +2439,10 @@
     <string name="messageChecklistTaskHint">Task description</string>
     <string name="messageLeaveAComment">Leave a comment</string>
     <string name="messageLinkCopied">Link copied</string>
+    <string name="messageLinkCopyEmail">Copy email</string>
+    <string name="messageLinkCopyHashtag">Copy hashtag</string>
+    <string name="messageLinkCopyUsername">Copy username</string>
+    <string name="messageLinkShareQr">Share QR code</string>
     <string name="messagePollClosed">Closed</string>
     <string name="messagePollStop">Close poll</string>
     <string name="messagePollStopConfirm">Voting cannot continue after this poll is closed.</string>
@@ -4020,7 +4049,6 @@
     <string name="videoPlayerUseSystemOrientation">Use system orientation</string>
     <string name="videoPlayerWaitingForFile">Waiting for video file</string>
     <string name="videoTrimFailed">The trimmed video was not created.</string>
-    <string name="vipBadgeLabel">VIP</string>
     <string name="voiceNotePreviewVoiceMessage">Voice message</string>
     <string name="mediaSpoilerReveal">Spoiler. Tap to reveal</string>
     <string name="downloadsTasks">Download tasks</string>
@@ -4151,4 +4179,22 @@
     <string name="mithkaxScheduledDeleteThreeDays">3 days</string>
     <string name="mithkaxScheduledDeleteOneWeek">1 week</string>
     <string name="mithkaxScheduledDeleteOneMonth">1 month</string>
+
+    <string name="channelBottomBar">Channel bottom bar</string>
+    <string name="channelBottomBarHidden">Hide completely</string>
+    <string name="channelBottomBarMute">Default (mute / unmute)</string>
+    <string name="channelBottomBarNote">Only affects channels you subscribe to but cannot post in. With Discussion and direct messages, a channel that has neither hides the bar entirely.</string>
+    <string name="channelDeleteTopic">Delete topic</string>
+    <string name="channelMarkAllReadFailed">Failed to mark as read</string>
+    <string name="channelPanelDirect">Direct messages</string>
+    <string name="channelPanelDiscussion">Discuss</string>
+    <string name="channelPostForwards">{value1} forwards</string>
+    <string name="channelPostStats">Show views and forwards on channel posts</string>
+    <string name="channelPostViews">{value1} views</string>
+    <string name="channelBottomBarActions">Discussion and direct messages</string>
+    <string name="mithkaxTopicTabsDone">Done</string>
+    <string name="mithkaxTopicTabsReorder">Reorder tabs</string>
+    <string name="mithkaxTopicTabsMoveToBottom">Move tab bar to the bottom</string>
+    <string name="mithkaxTopicTabsMoveToSide">Move tab bar to the side</string>
+    <string name="mithkaxTopicTabsMoveToTop">Move tab bar to the top</string>
 </resources>

@@ -4,7 +4,7 @@
 //  Sticker favorites beyond Telegram's cap. The server keeps a short list
 //  (5 by default, 10 for premium); with the Advanced switch on, a sticker
 //  the server would drop is saved on this device only and merged into the
-//  favorites the server still holds. Port of exteraless' unlimited-faved
+//  favorites the server still holds. Port of the reference client's unlimited-faved
 //  stickers (MediaDataController TYPE_FAVE + NekoConfig).
 //
 //  The switch is off by default and lives in this app's own preference
@@ -18,8 +18,10 @@
 
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_client.dart';
 import '../tdlib/td_models.dart';
@@ -134,7 +136,7 @@ class FavoriteStickerStore extends ChangeNotifier {
   ///
   /// Called when the sticker surface opens (the composer sticker panel or
   /// the store page); re-fetching on open keeps the favorites section in
-  /// sync with other devices, mirroring how exteraless batches
+  /// sync with other devices, mirroring how the reference client batches
   /// getFavoriteStickers with its sticker loads.
   void loadIfNeeded() {
     unawaited(_refreshFromServer());

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MithkaX's string catalogue. Edit translations here; run tools/gen_assets.py to push them into the app. -->
+<!-- Mithka's string catalogue. Edit translations here; run translations/tools/gen_assets.py to push them into the app. -->
 <resources>
     <string name="aboutCheckForUpdates">檢查更新</string>
     <string name="aboutCheckingForUpdates">檢查中…</string>
@@ -7,6 +7,7 @@
     <string name="aboutReportProblem">回報問題</string>
     <string name="aboutReportProblemDetail">附帶不含聊天內容的診斷資訊</string>
     <string name="aboutTelegramChannel">Telegram 頻道</string>
+    <string name="aboutCommunityChat">交流群</string>
     <string name="aboutTitle">關於</string>
     <string name="aboutUpToDate">已是最新版本</string>
     <string name="aboutUpdateAvailable">{value1} 版本可用</string>
@@ -234,6 +235,8 @@
     <string name="aiServerModelHint">模型名稱</string>
     <string name="aiServerPrivacy">已啟用 AI 功能使用的文字會傳送到此端點。API 金鑰只會保存在此裝置的安全儲存空間。</string>
     <string name="aiSettingsTitle">AI 設定</string>
+    <string name="aiShowComposerButton">在訊息輸入框中顯示 AI 按鈕</string>
+    <string name="aiShowComposerButtonDescription">關閉後會移除訊息輸入框旁的閃光按鈕。</string>
     <string name="aiSummarizePrompts">摘要提示詞</string>
     <string name="aiSummarizeUsing">摘要使用</string>
     <string name="aiSummaryActions">待辦事項</string>
@@ -390,6 +393,7 @@
     <string name="appLockAutoLockDisabled">停用</string>
     <string name="appLockAutoLockFiveHours">離開 5 小時後</string>
     <string name="appLockAutoLockFiveMinutes">離開 5 分鐘後</string>
+    <string name="appLockAutoLockImmediately">立即</string>
     <string name="appLockAutoLockOneHour">離開 1 小時後</string>
     <string name="appLockAutoLockOneMinute">離開 1 分鐘後</string>
     <string name="appLockBiometricDescription">App 鎖定畫面顯示後，可使用{value1}解鎖 Mithka X。</string>
@@ -433,6 +437,7 @@
     <string name="appLockTryBiometric">使用{value1}</string>
     <string name="appLockUnlockMethod">解鎖方式</string>
     <string name="appLockUnlockTitle">解鎖 Mithka X</string>
+    <string name="appLockUnlocked">已解鎖</string>
     <string name="appLockUseBiometric">使用{value1}解鎖</string>
     <string name="appLockVerifyTitle">驗證 App 鎖定</string>
     <string name="appLockWrongGesture">手勢不正確。</string>
@@ -486,6 +491,8 @@
     <string name="appearanceInUseSize">使用中</string>
     <string name="appearanceInterfaceSize">介面大小</string>
     <string name="appearanceLivePreviewUnavailable">即時預覽無法使用</string>
+    <string name="appearanceLocalFonts">本機字型</string>
+    <string name="appearanceLocalFontsDescription">已安裝於本機系統中的字型，無需網路下載，可直接套用。</string>
     <string name="appearanceManage">管理</string>
     <string name="appearanceMergeConsecutiveImages">合併顯示媒體相簿</string>
     <string name="appearanceMessageActionMenu">訊息操作選單</string>
@@ -500,6 +507,9 @@
     <string name="appearanceNameColorPremium">Premium 使用者</string>
     <string name="appearanceNoCleanableFonts">沒有可清理項目</string>
     <string name="appearanceNoDownloadedFontCache">沒有已下載的字型快取。</string>
+    <string name="appearanceNoLocalFonts">未偵測到本機已安裝的字型。</string>
+    <string name="appearanceOnlineFonts">Google Fonts（線上字型）</string>
+    <string name="appearanceOnlineFontsDescription">來自 Google Fonts 的線上字型，選用時會按需下載並快取於本機。</string>
     <string name="appearanceNoMatchingFonts">沒有符合的字型</string>
     <string name="appearancePerAccountTheming">每個帳號分別使用主題</string>
     <string name="appearancePreviewAlbumCaption">群組相簿裡的兩個瞬間。</string>
@@ -510,6 +520,7 @@
     <string name="appearancePreviewMessageSample">Jennie：聊天裡見</string>
     <string name="appearancePreviewUsersSample">Mithka X 使用者</string>
     <string name="appearanceRefreshCacheList">重新整理快取列表</string>
+    <string name="appearanceReloadFonts">重新整理本機字型</string>
     <string name="appearanceRoundGroupAvatars">群組頭像顯示為圓形</string>
     <string name="appearanceSearchFont">搜尋字型</string>
     <string name="appearanceSectionChat">聊天</string>
@@ -874,6 +885,8 @@
     <string name="chatCannotSendMessages">你無法在此聊天中傳送訊息</string>
     <string name="chatConnectedBusinessBot">已連接的商務機器人</string>
     <string name="chatContactCallsOnly">僅支援與聯絡人通話</string>
+    <string name="chatContextPaneHide">隱藏群組資訊</string>
+    <string name="chatContextPaneShow">顯示群組資訊</string>
     <string name="chatDelete">刪除</string>
     <string name="chatDeleteActionsDone">操作已完成</string>
     <string name="chatDeleteActionsFailed">操作失敗：{value1}</string>
@@ -2089,6 +2102,18 @@
     <string name="imageEditTextTool">文字</string>
     <string name="imageEditTitle">編輯圖片</string>
     <string name="imagePreviewTitle">圖片預覽</string>
+    <string name="instantViewTextSize">文字大小</string>
+    <string name="instantViewExtracting">正在擷取文章…</string>
+    <string name="instantViewOpenLocal">在即時預覽中開啟</string>
+    <string name="instantViewSearch">搜尋</string>
+    <string name="instantViewPreviousMatch">上一個相符項</string>
+    <string name="instantViewNextMatch">下一個相符項</string>
+    <string name="instantViewTitle">即時預覽</string>
+    <string name="instantViewOpenInBrowser">在瀏覽器中開啟</string>
+    <string name="instantViewLoadFailed">無法載入此頁面</string>
+    <string name="instantViewShowMore">展開</string>
+    <string name="instantViewShowLess">收合</string>
+    <string name="instantViewRetry">重試</string>
     <string name="keywordBlockerAddFromMessageTitle">封鎖關鍵字</string>
     <string name="keywordBlockerDescription">新增關鍵字後，符合的訊息將不會顯示在聊天中，也不會觸發本機通知。支援一般關鍵字、re:正則、regex:正則、/正則/i。遠端列表每行一條規則，以 # 或 // 開頭為註解。</string>
     <string name="keywordBlockerDownload">下載</string>
@@ -2407,6 +2432,10 @@
     <string name="messageChecklistTaskHint">Task description</string>
     <string name="messageLeaveAComment">發表評論</string>
     <string name="messageLinkCopied">連結已複製</string>
+    <string name="messageLinkCopyEmail">複製電子郵件</string>
+    <string name="messageLinkCopyHashtag">複製標籤</string>
+    <string name="messageLinkCopyUsername">複製使用者名稱</string>
+    <string name="messageLinkShareQr">分享 QR 碼</string>
     <string name="messagePollClosed">Closed</string>
     <string name="messagePollStop">Close poll</string>
     <string name="messagePollStopConfirm">Voting cannot continue after this poll is closed.</string>
@@ -4008,7 +4037,6 @@
     <string name="videoPlayerUseSystemOrientation">使用系統螢幕方向</string>
     <string name="videoPlayerWaitingForFile">等待影片檔案</string>
     <string name="videoTrimFailed">未能產生裁剪後的影片。</string>
-    <string name="vipBadgeLabel">VIP</string>
     <string name="voiceNotePreviewVoiceMessage">語音訊息</string>
     <string name="mediaSpoilerReveal">劇透內容，點擊顯示</string>
     <string name="downloadsTasks">下載任務</string>
@@ -4134,4 +4162,22 @@
     <string name="mithkaxScheduledDeleteThreeDays">3 天</string>
     <string name="mithkaxScheduledDeleteOneWeek">1 週</string>
     <string name="mithkaxScheduledDeleteOneMonth">1 個月</string>
+
+    <string name="channelBottomBar">頻道底欄</string>
+    <string name="channelBottomBarHidden">徹底隱藏</string>
+    <string name="channelBottomBarMute">預設（靜音 / 取消靜音）</string>
+    <string name="channelBottomBarNote">只影響已訂閱但不能發言的頻道。選擇「討論與私聊」時，頻道既沒有討論群組也沒有私聊就完全隱藏底欄。</string>
+    <string name="channelDeleteTopic">刪除主題</string>
+    <string name="channelMarkAllReadFailed">標示為已讀失敗</string>
+    <string name="channelPanelDirect">私聊</string>
+    <string name="channelPanelDiscussion">討論</string>
+    <string name="channelPostForwards">{value1} 次轉發</string>
+    <string name="channelPostStats">頻道貼文顯示閱讀次數和轉發次數</string>
+    <string name="channelPostViews">{value1} 次閱讀</string>
+    <string name="channelBottomBarActions">討論與私聊</string>
+    <string name="mithkaxTopicTabsDone">完成</string>
+    <string name="mithkaxTopicTabsReorder">重排標籤頁</string>
+    <string name="mithkaxTopicTabsMoveToBottom">標籤列移到底部</string>
+    <string name="mithkaxTopicTabsMoveToSide">標籤列移到側邊</string>
+    <string name="mithkaxTopicTabsMoveToTop">標籤列移到頂部</string>
 </resources>

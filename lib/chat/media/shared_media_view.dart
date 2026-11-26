@@ -8,10 +8,12 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../app/adaptive_split_layout.dart';
 import '../../app/ipad_window_chrome.dart';
 import '../../app/primary_chat_launcher.dart';
@@ -22,9 +24,9 @@ import '../../components/photo_avatar.dart';
 import '../../components/toast.dart';
 import '../../components/ui_components.dart';
 import '../../media/media_metadata.dart';
-import '../../settings/data_storage_service.dart';
-import '../../settings/downloads_view.dart';
-import '../../settings/retain_download_button.dart';
+import '../../settings/downloads_storage/data_storage_service.dart';
+import '../../settings/downloads_storage/downloads_view.dart';
+import '../../settings/downloads_storage/retain_download_button.dart';
 import '../../tdlib/json_helpers.dart';
 import '../../tdlib/td_client.dart';
 import '../../tdlib/td_models.dart';
@@ -33,11 +35,11 @@ import '../../theme/app_theme.dart';
 import '../../theme/date_text.dart';
 import '../links_search/link_handler.dart';
 import '../messages/media_spoiler.dart';
-import '../video_player_view.dart';
 import 'file_detail_view.dart';
 import 'image_preview.dart';
 import 'music_player_controller.dart';
 import 'video_playback_queue.dart';
+import 'video_player_view.dart';
 import 'voice_audio.dart';
 
 class _MediaTab {

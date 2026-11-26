@@ -191,6 +191,63 @@ void main() {
   );
 
   test(
+    'immediate auto-lock locks on leaving the app, not on focus loss',
+    () async {
+      final storage = <String, String>{};
+      final shieldStates = <bool>[];
+      final controller = _controller(storage, shieldStates: shieldStates);
+      await controller.initialize();
+      await controller.setCredential(AppLockCredentialType.pin, '1357');
+      await controller.setAutoLockOption(AppLockAutoLockOption.immediately);
+      expect(controller.autoLockOption, AppLockAutoLockOption.immediately);
+
+      // A glance at the notification shade or a permission sheet is inactive,
+      // never a departure — exteraless locks on pause, not on focus loss.
+      controller.handleLifecycleState(AppLifecycleState.inactive);
+      expect(controller.locked, isFalse);
+      controller.handleLifecycleState(AppLifecycleState.resumed);
+      expect(controller.locked, isFalse);
+
+      // Leaving the app locks at once; there is no timer to wait out.
+      controller.handleLifecycleState(AppLifecycleState.hidden);
+      expect(controller.locked, isTrue);
+      expect(shieldStates.last, isTrue);
+      controller.handleLifecycleState(AppLifecycleState.resumed);
+      expect(controller.locked, isTrue);
+
+      await controller.unlockWithCredential('1357');
+      expect(controller.locked, isFalse);
+      // Paused arrives without a preceding hidden on some hosts.
+      controller.handleLifecycleState(AppLifecycleState.paused);
+      expect(controller.locked, isTrue);
+
+      final restored = _controller(storage);
+      await restored.initialize();
+      expect(restored.autoLockOption, AppLockAutoLockOption.immediately);
+      expect(restored.locked, isTrue);
+    },
+  );
+
+  test(
+    'choosing immediate while already away locks the running session',
+    () async {
+      final storage = <String, String>{};
+      final controller = _controller(storage);
+      await controller.initialize();
+      await controller.setCredential(AppLockCredentialType.pin, '1357');
+
+      controller.handleLifecycleState(AppLifecycleState.hidden);
+      expect(controller.locked, isFalse, reason: 'auto-lock is disabled');
+
+      await controller.setAutoLockOption(AppLockAutoLockOption.immediately);
+      expect(controller.locked, isTrue);
+
+      controller.handleLifecycleState(AppLifecycleState.resumed);
+      expect(controller.locked, isTrue);
+    },
+  );
+
+  test(
     'a mobile host without secure storage stays unlocked instead of failing closed',
     () async {
       // flutter_secure_storage has no HarmonyOS port: the platform-interface

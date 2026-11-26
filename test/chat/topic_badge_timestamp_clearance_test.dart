@@ -17,10 +17,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/auth/account_store.dart';
 import 'package:mithka/auth/auth_manager.dart';
+import 'package:mithka/channels/topic_navigation.dart';
+import 'package:mithka/channels/topic_tabs_placement.dart';
 import 'package:mithka/chat/chat_view.dart';
 import 'package:mithka/l10n/app_locale_controller.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
@@ -179,6 +181,104 @@ void main() {
       reason:
           'expected exactly one timestamp hanging right above the last '
           'badge, at ${lastPill.top}; stamps were $stamps',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump();
+  });
+
+  // exteraless keeps a per-chat tabs position: a bot forum can walk its topic
+  // strip from under the header to the side dock and then above the composer,
+  // and the choice sticks.
+  testWidgets('topic tabs walk top, side, composer and remember', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    TopicTabsPlacementStore.shared.resetForTesting();
+
+    SharedPreferences.setMockInitialValues({
+      'showChannelsTab': false,
+      'showMomentsTab': false,
+      'communitiesEnabled': false,
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final theme = ThemeController(prefs);
+    final accounts = AccountStore(prefs);
+    final auth = AuthManager();
+    final translation = TranslationController(prefs);
+    addTearDown(theme.dispose);
+    addTearDown(accounts.dispose);
+    addTearDown(auth.dispose);
+    addTearDown(translation.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ThemeController>.value(value: theme),
+          ChangeNotifierProvider<AppLocaleController>.value(
+            value: AppLocaleController(prefs),
+          ),
+          ChangeNotifierProvider<AccountStore>.value(value: accounts),
+          ChangeNotifierProvider<AuthManager>.value(value: auth),
+          ChangeNotifierProvider<TranslationController>.value(
+            value: translation,
+          ),
+        ],
+        child: MaterialApp(
+          theme: ThemeData(
+            brightness: Brightness.light,
+            extensions: [AppColors.light],
+            platform: TargetPlatform.iOS,
+          ),
+          locale: const Locale('en'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const ChatView(chatId: _chatId, title: 'Topic Bot'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(seconds: 2));
+
+    final strip = find.byType(TopicTabStrip);
+    expect(strip, findsOneWidget);
+    final headerSide = tester.getRect(strip);
+    expect(headerSide.top, lessThan(200));
+
+    // exteraless's first step docks the tabs at the conversation's side.
+    await tester.tap(find.byKey(const ValueKey('topic-tabs-placement-toggle')));
+    await tester.pump();
+    expect(find.byType(TopicTabStrip), findsNothing);
+    final sideBar = tester.getRect(find.byType(TopicTabsSideBar));
+    expect(sideBar.width, 64);
+    expect(sideBar.left, 0);
+    expect(prefs.getString('mithka.topicTabsPlacement.v1.0.$_chatId'), 'side');
+
+    // The side bar's own control continues to the composer.
+    await tester.tap(find.byKey(const ValueKey('topic-tabs-placement-toggle')));
+    await tester.pump();
+
+    final composerSide = tester.getRect(strip);
+    expect(
+      composerSide.top,
+      greaterThan(headerSide.top + 200),
+      reason: 'the strip must move down to sit above the composer',
+    );
+    // And it really is above the composer, not under it.
+    expect(composerSide.bottom, lessThan(844));
+    expect(
+      prefs.getString('mithka.topicTabsPlacement.v1.0.$_chatId'),
+      'bottom',
     );
 
     await tester.pumpWidget(const SizedBox.shrink());

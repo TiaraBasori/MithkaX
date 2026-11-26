@@ -109,14 +109,19 @@ void main() {
     });
     store.activeClientIdProvider = () => _clientA;
     SharedPreferences.setMockInitialValues(const {});
-    // The runtime switches default to OFF; this suite exercises the store
-    // with recording enabled.
-    final settings = MessageHistorySettings.shared;
-    settings.setEnableAll(true);
-    settings.setRecordDeleted(true);
-    settings.setRecordEdits(true);
-    settings.setSnapshotPrivate(true);
-    store.initialize(await SharedPreferences.getInstance());
+    final prefs = await SharedPreferences.getInstance();
+    // Recording is off by default; these tests exercise the store with
+    // every chat type recorded.
+    MessageHistorySettings.shared
+      ..initialize(prefs)
+      ..setEnableAll(true)
+      ..setRecordDeleted(true)
+      ..setRecordEdits(true)
+      ..setRecordPrivate(true)
+      ..setRecordGroups(true)
+      ..setRecordChannels(true)
+      ..setSnapshotPrivate(true);
+    store.initialize(prefs);
     notifications = 0;
     store.addListener(() => notifications++);
   });

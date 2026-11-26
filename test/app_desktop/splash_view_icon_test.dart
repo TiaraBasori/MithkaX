@@ -12,7 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/app/content_view.dart' show SplashView;
-import 'package:mithka/settings/app_icon_controller.dart';
+import 'package:mithka/components/brand_mark.dart';
+import 'package:mithka/settings/appearance/app_icon_controller.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,7 +84,7 @@ void main() {
     final asset = AppIconVariant.aurora.standardPickerAsset(Brightness.light);
     expect(imageOf(asset), findsOneWidget);
     expectBundledEverywhere(asset);
-    expect(imageOf('assets/brand_mark.png'), findsNothing);
+    expect(find.byType(BrandMark), findsNothing);
     final background = tester.widget<ColoredBox>(
       find
           .ancestor(
@@ -121,21 +122,15 @@ void main() {
     tester,
   ) async {
     await pumpSplash(tester, icon: 'default');
-    final mark = find.byWidgetPredicate(
-      (widget) => widget is Image && assetOf(widget) == 'assets/brand_mark.png',
-    );
-    expect(mark, findsOneWidget);
+    expect(find.byType(BrandMark), findsOneWidget);
     expect(find.byKey(const ValueKey('splash-icon-default')), findsNothing);
-    // The gradient is brand-coloured in both appearances, so the mark is
-    // drawn white instead of following the theme ink.
-    expect(tester.widget<Image>(mark).color, const Color(0xFFFFFFFF));
   });
 
   testWidgets('the fork\'s shipped mark keeps the brand screen too', (
     tester,
   ) async {
     await pumpSplash(tester, icon: 'mithkax_default');
-    expect(imageOf('assets/brand_mark.png'), findsOneWidget);
+    expect(find.byType(BrandMark), findsOneWidget);
     expect(
       find.byKey(const ValueKey('splash-icon-mithkax_default')),
       findsNothing,
@@ -146,6 +141,6 @@ void main() {
     tester,
   ) async {
     await pumpSplash(tester);
-    expect(imageOf('assets/brand_mark.png'), findsOneWidget);
+    expect(find.byType(BrandMark), findsOneWidget);
   });
 }

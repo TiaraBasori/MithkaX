@@ -1,8 +1,6 @@
 part of 'chat_view_model.dart';
 
 extension ChatViewModelHistory on ChatViewModel {
-  // MARK: - Paging
-
   /// Loads a bounded, read-only slice of older messages for an AI reply.
   ///
   /// Unlike [loadOlder] and [loadAroundMessage], this never merges messages
@@ -773,7 +771,7 @@ extension ChatViewModelHistory on ChatViewModel {
   }
 
   /// Marks every unread mention in this conversation read at once — the
-  /// long-press action on the chat's @ pill (exteraless's ReadAllMentionsMenu).
+  /// long-press action on the chat's @ pill (the reference client's ReadAllMentionsMenu).
   /// TDLib exposes one scoped call per chat / forum topic; a refused call
   /// leaves the counter intact so the pill and a retry stay available.
   Future<bool> markAllMentionsRead() async {

@@ -15,6 +15,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../config/build_flags.dart';
 
 /// How a ghost bubble's deleted badge renders.
@@ -75,7 +76,7 @@ class MessageHistorySettings extends ChangeNotifier {
   bool _snapshotGroups = false;
   bool _snapshotChannels = false;
   bool _renderGhosts = false;
-  // exteraless ForwardProtectedAsCopy parity, except this fork ships it ON:
+  // ForwardProtectedAsCopy parity with the reference client, except this ships it ON:
   // the copy path only ever re-sends what the account can already read.
   bool _forwardProtectedAsCopy = true;
   GhostBadgeStyle _badgeStyle = GhostBadgeStyle.icon;

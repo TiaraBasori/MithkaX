@@ -16,6 +16,7 @@ import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/tdlib/json_helpers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'emoji_channel_source.dart';
+import 'platform_font_defaults.dart';
 
 class EmojiFontChoice {
   const EmojiFontChoice({
@@ -43,13 +44,8 @@ class EmojiFontChoice {
     return _dedupeFontFamilies([family, ...platformEmojiFontFallback()]);
   }
 
-  static List<String> platformEmojiFontFallback() {
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.iOS || TargetPlatform.macOS => const ['Apple Color Emoji'],
-      TargetPlatform.android => const ['Noto Color Emoji'],
-      _ => const ['Noto Color Emoji', 'Apple Color Emoji'],
-    };
-  }
+  static List<String> platformEmojiFontFallback() =>
+      PlatformFontDefaults.emojiFontFallback();
 
   static String runtimeFamilyForKey(String key) {
     final sanitized = key.replaceAll(RegExp(r'[^A-Za-z0-9_]'), '_');

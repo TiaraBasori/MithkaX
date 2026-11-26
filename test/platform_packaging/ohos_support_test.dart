@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mithka/chat/chat_input_bar.dart';
+import 'package:mithka/chat/composer/chat_input_bar.dart';
 import 'package:mithka/platform/ohos_support.dart';
 
 void main() {

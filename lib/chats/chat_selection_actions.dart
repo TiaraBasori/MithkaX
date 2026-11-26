@@ -13,7 +13,7 @@ import '../components/app_confirm_dialog.dart';
 import '../components/app_icons.dart';
 import '../components/toast.dart';
 import '../l10n/app_localizations.dart';
-import '../settings/blocked_user_service.dart';
+import '../settings/privacy_security/blocked_user_service.dart';
 import '../tdlib/td_models.dart';
 import 'chat_list_view_model.dart';
 

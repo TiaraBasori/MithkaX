@@ -131,13 +131,35 @@ void main() {
             'a per-Activity engine cannot survive Back, and a process cannot '
             'host two engines: the second one aborts on td_receive',
       );
+      // A finished Activity is not an exit. The only allowed kill is the one
+      // the icon switch asks for: a launcher re-reads a changed alias only
+      // once the process that changed it is gone, so that path is an exit by
+      // design and lives in its own function.
       expect(
-        activity.contains('killProcess'),
-        isFalse,
+        RegExp('killProcess').allMatches(activity).length,
+        1,
         reason:
-            'a finished Activity is not an exit — killing the process here '
-            'takes the live engine down and the next tap lands in a dying '
-            'process with no window to show',
+            'killing the process on a plain finish takes the live engine '
+            'down and the next tap lands in a dying process with no window '
+            'to show',
+      );
+      final quitStart = activity.indexOf('private fun quitAfterIconChange()');
+      expect(quitStart, isNonNegative);
+      final quitEnd = activity.indexOf(
+        'private fun currentTaskBaseComponent()',
+        quitStart,
+      );
+      expect(quitEnd, greaterThan(quitStart));
+      expect(
+        activity.substring(quitStart, quitEnd),
+        contains('Process.killProcess(Process.myPid())'),
+        reason: 'the icon switch exit is the one place a kill belongs',
+      );
+      final destroyStart = activity.indexOf('override fun onDestroy()');
+      expect(
+        activity.substring(destroyStart).contains('killProcess'),
+        isFalse,
+        reason: 'finishing the Activity never ends the process',
       );
     });
 

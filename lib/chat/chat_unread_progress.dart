@@ -110,6 +110,23 @@ List<int> appendedLiveIncomingMessageIds({
       .toList(growable: false);
 }
 
+/// Live outgoing IDs that were appended to the currently loaded transcript.
+///
+/// An own send first lands as a local echo carrying TDLib's temporary id,
+/// which comes from a separate counter and can sit far BELOW the newest server
+/// id — ordering cannot tell it apart from an old message, so presence in the
+/// loaded window is the whole test. A message sent from another device is the
+/// same event with a server id, and takes the same path.
+List<int> appendedLiveOutgoingMessageIds({
+  required Iterable<int> liveOutgoingMessageIds,
+  required Iterable<int> currentMessageIds,
+}) {
+  final currentIds = currentMessageIds.toSet();
+  return liveOutgoingMessageIds
+      .where(currentIds.contains)
+      .toList(growable: false);
+}
+
 /// Returns the earliest loaded incoming message beyond a captured read
 /// boundary. The boundary must be the value from when the chat opened: TDLib
 /// advances its live boundary as soon as the latest messages are marked read.

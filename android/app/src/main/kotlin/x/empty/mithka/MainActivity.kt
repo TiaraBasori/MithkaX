@@ -18,6 +18,7 @@ import android.media.MediaMuxer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
@@ -28,7 +29,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.iebb.f_videoplayer_pip.FVideoPictureInPicturePlugin
+import com.iebb.cineplay_pip.FVideoPictureInPicturePlugin
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.languageid.LanguageIdentifier
@@ -479,6 +480,14 @@ class MainActivity : FlutterFragmentActivity() {
                                 }
                             }
                         }.start()
+                    }
+                    // Dart asks for this right after an icon switch lands: the
+                    // launcher keeps the old entry until the process that
+                    // changed the alias is gone, so the switch ends here.
+                    "quitApp" -> {
+                        result.success(null)
+                        quitAfterIconChange()
+                        return@setMethodCallHandler
                     }
                     else -> result.notImplemented()
                 }
@@ -1290,6 +1299,26 @@ class MainActivity : FlutterFragmentActivity() {
         if (closeTask) finishAndRemoveTask()
     }
 
+    /**
+     * Applies a deferred icon switch and leaves the process entirely.
+     *
+     * A launcher re-reads an alias only once the app that changed it is gone;
+     * a live window kept drawing the old icon until it died on its own. The
+     * pending switch has to land BEFORE the process dies, or the next open
+     * would still start on the old alias.
+     */
+    private fun quitAfterIconChange() {
+        pendingLauncherIcon()?.let { pending ->
+            try {
+                applyLauncherIcon(pending)
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Could not apply the chosen launcher icon", e)
+            }
+        }
+        finishAndRemoveTask()
+        Process.killProcess(Process.myPid())
+    }
+
     /** The component that opened this window's task, or null if unknown. */
     private fun currentTaskBaseComponent(): ComponentName? = try {
         getSystemService(ActivityManager::class.java)?.appTasks?.firstNotNullOfOrNull { task ->
@@ -1460,7 +1489,7 @@ class MainActivity : FlutterFragmentActivity() {
             add("dev.fluttercommunity.plus.sensors.SensorsPlugin")
             add("io.sentry.flutter.SentryFlutterPlugin")
             add("io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin")
-            add("com.iebb.f_videoplayer_pip.FVideoPictureInPicturePlugin")
+            add("com.iebb.cineplay_pip.FVideoPictureInPicturePlugin")
             add("io.flutter.plugins.urllauncher.UrlLauncherPlugin")
             add("io.flutter.plugins.videoplayer.VideoPlayerPlugin")
             add("io.flutter.plugins.webviewflutter.WebViewFlutterPlugin")

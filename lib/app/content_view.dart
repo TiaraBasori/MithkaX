@@ -19,11 +19,10 @@ import '../chats/search_view.dart';
 import '../components/app_icons.dart';
 import '../components/app_interactive_surface.dart';
 import '../components/brand_mark.dart';
-import '../components/vip_badge.dart';
 import '../l10n/app_localizations.dart';
 import '../platform/adaptive_platform.dart';
 import '../profile/emoji_status_picker.dart';
-import '../settings/app_icon_controller.dart';
+import '../settings/appearance/app_icon_controller.dart';
 import '../settings/desktop_hotkey_controller.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
@@ -31,10 +30,10 @@ import '../theme/theme_controller.dart';
 import 'account_picker_sheet.dart';
 import 'active_conversation.dart';
 import 'app_navigator.dart';
-import 'desktop_chat_list_title_bar_anchors.dart';
-import 'desktop_utility_window.dart';
-import 'desktop_window_controls.dart';
-import 'macos_desktop_title_bar.dart';
+import 'desktop/desktop_chat_list_title_bar_anchors.dart';
+import 'desktop/desktop_utility_window.dart';
+import 'desktop/desktop_window_controls.dart';
+import 'desktop/macos_desktop_title_bar.dart';
 import 'main_tab_view.dart';
 
 Key desktopPrimaryWindowIdentityKey(int accountSlot, int? accountUserId) =>
@@ -532,10 +531,6 @@ class _DesktopPrimaryWindowFrameState extends State<DesktopPrimaryWindowFrame> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              const VipBadge(
-                                key: ValueKey('desktop-title-bar-vip'),
-                              ),
                             ],
                           ],
                         ),
@@ -729,16 +724,7 @@ class _MacosTitleBarAvatar extends StatelessWidget {
   Widget _fallback(BuildContext context) {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty || trimmedName == 'Mithka X') {
-      // The mark is 1024x1024: 4 MB of RGBA for a 24 pt slot without a decode
-      // hint. Width only, so the square aspect survives.
-      return Image.asset(
-        brandMarkAsset,
-        width: size,
-        height: size,
-        cacheWidth: (size * 4).round(),
-        fit: BoxFit.cover,
-        color: context.colors.textPrimary,
-      );
+      return BrandMark(size: size);
     }
     return Container(
       width: size,
@@ -964,22 +950,19 @@ class SplashView extends StatelessWidget {
     if (chosen != null) return _chosenIconSplash(context, chosen);
     return DecoratedBox(
       decoration: BoxDecoration(gradient: AppTheme.brandGradient),
-      child: const Center(
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // The asset is 1024x1024 and would otherwise decode at full size
-            // (4 MB of RGBA) for a 192 pt slot. Width only keeps it square.
-            Image(
-              image: ResizeImage(AssetImage(brandMarkAsset), width: 576),
-              width: AppMetric.splashMarkSize,
-              height: AppMetric.splashMarkSize,
-              // White on the gradient, both appearances.
-              color: Colors.white,
-              filterQuality: FilterQuality.high,
+            // The mark sits on the brand gradient, so it keeps the pale end
+            // of the ladder in either appearance — a brand-coloured fill on a
+            // brand-coloured page would vanish.
+            BrandMark(
+              size: AppMetric.splashMarkSize,
+              colors: brandMarkColors(Brightness.dark),
             ),
-            SizedBox(height: AppSpacing.lg + AppSpacing.sm),
-            SizedBox(
+            const SizedBox(height: AppSpacing.lg + AppSpacing.sm),
+            const SizedBox(
               width: AppMetric.splashSpinnerSize,
               height: AppMetric.splashSpinnerSize,
               child: CircularProgressIndicator(

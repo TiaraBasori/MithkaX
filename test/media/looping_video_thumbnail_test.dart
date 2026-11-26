@@ -128,7 +128,7 @@ Future<_FramelessVideoPlatform> _pumpLoopingVideo(WidgetTester tester) async {
             // Both files exist in the worktree, so TdFileCenter resolves them
             // through the local-source path without TDLib waiters.
             file: TdFileRef(id: 4201, localPath: 'pubspec.yaml'),
-            fallback: TdFileRef(id: 9201, localPath: 'assets/brand_mark.png'),
+            fallback: TdFileRef(id: 9201, localPath: 'assets/app_icon.png'),
           ),
         ),
       ),

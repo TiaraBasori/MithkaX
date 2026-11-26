@@ -28,15 +28,14 @@ import '../components/desktop_row_actions.dart';
 import '../components/drawer_controller.dart' as dc;
 import '../components/photo_avatar.dart';
 import '../components/ui_components.dart';
-import '../components/vip_badge.dart';
 import '../config/build_flags.dart';
 import '../platform/adaptive_platform.dart';
-import '../settings/edit_profile_view.dart';
-import '../settings/ghost_mode_controller.dart';
-import '../settings/ghost_mode_settings_view.dart';
 import '../settings/local_premium.dart';
-import '../settings/proxy_status.dart';
-import '../settings/proxy_view.dart';
+import '../settings/network_proxy/proxy_status.dart';
+import '../settings/network_proxy/proxy_view.dart';
+import '../settings/privacy_security/ghost_mode_controller.dart';
+import '../settings/privacy_security/ghost_mode_settings_view.dart';
+import '../settings/profile_account/edit_profile_view.dart';
 import '../settings/settings_view.dart';
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_client.dart';
@@ -398,10 +397,6 @@ class _ProfileViewState extends State<ProfileView> {
                               ),
                             ),
                             _nameStatusIcon(user),
-                            if (_vm.isPremiumForView(user)) ...[
-                              const SizedBox(width: 6),
-                              const VipBadge(),
-                            ],
                           ],
                         ),
                         if (identities.isNotEmpty) ...[

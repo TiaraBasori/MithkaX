@@ -6,7 +6,7 @@ import 'package:mithka/chat/chat_view.dart'
     show ChatView, clearChatMemoryCaches;
 import 'package:mithka/chat/media/file_detail_view.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/tdlib/td_models.dart';
 import 'package:mithka/theme/app_theme.dart';

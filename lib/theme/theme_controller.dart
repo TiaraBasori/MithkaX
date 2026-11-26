@@ -9,6 +9,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui show PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -23,6 +24,7 @@ import 'custom_message_bubble_background.dart';
 import 'emoji_font_catalog.dart';
 import 'google_font_weights.dart';
 import 'message_bubble_background.dart';
+import 'platform_font_defaults.dart';
 import 'system_font_catalog.dart';
 import 'telegram_cloud_theme.dart';
 
@@ -191,12 +193,12 @@ enum MobileMessageActionMenuStyle {
 }
 
 /// What the bottom panel of a channel you subscribe to but cannot post in
-/// shows. Mirrors exteraless's channel-bottom trio: the stock mute bar, the
+/// shows. Mirrors the reference client's channel-bottom trio: the stock mute bar, the
 /// discussion / direct-message actions, or nothing at all.
 enum ChannelBottomBarMode {
-  mute(AppStringKeys.mithkaxChannelBottomBarMute, HeroAppIcons.bell),
-  actions(AppStringKeys.mithkaxChannelBottomBarActions, HeroAppIcons.message),
-  hidden(AppStringKeys.mithkaxChannelBottomBarHidden, HeroAppIcons.eyeSlash);
+  mute(AppStringKeys.channelBottomBarMute, HeroAppIcons.bell),
+  actions(AppStringKeys.channelBottomBarActions, HeroAppIcons.message),
+  hidden(AppStringKeys.channelBottomBarHidden, HeroAppIcons.eyeSlash);
 
   const ChannelBottomBarMode(this.label, this.icon);
 
@@ -776,33 +778,16 @@ enum AppFontChoice {
       ? '.AppleSystemUIFont'
       : family;
 
-  static String _platformFontFamily() {
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.iOS => '.AppleSystemUIFont',
-      TargetPlatform.macOS => '.AppleSystemUIFont',
-      TargetPlatform.android => 'Roboto',
-      _ => 'system-ui',
-    };
-  }
+  static String _platformFontFamily() =>
+      PlatformFontDefaults.primaryFontFamily();
 
-  static List<String> _platformFontFallback() {
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.iOS || TargetPlatform.macOS => const [
-        'PingFang SC',
-        'PingFang TC',
-        'Hiragino Sans',
-        'Helvetica Neue',
-        'Arial',
-      ],
-      TargetPlatform.android => const [
-        'Noto Sans CJK SC',
-        'Noto Sans CJK TC',
-        'Noto Sans',
-        'sans-serif',
-      ],
-      _ => const ['Noto Sans CJK SC', 'Noto Sans', 'Arial'],
-    };
-  }
+  static List<String> _platformFontFallback({
+    Locale? appLocale,
+    Locale? systemLocale,
+  }) => PlatformFontDefaults.fallbackFontChain(
+    appLocale: appLocale,
+    systemLocale: systemLocale,
+  );
 }
 
 List<String> dedupeFontFamilies(Iterable<String> values) {
@@ -912,30 +897,11 @@ enum AppMonospaceFontChoice {
     ];
   }
 
-  static String _platformMonospaceFontFamily() {
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.iOS || TargetPlatform.macOS => 'Menlo',
-      TargetPlatform.android => 'monospace',
-      _ => 'monospace',
-    };
-  }
+  static String _platformMonospaceFontFamily() =>
+      PlatformFontDefaults.monospaceFontFamily();
 
-  static List<String> _platformMonospaceFontFallback() {
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.iOS || TargetPlatform.macOS => const [
-        'SF Mono',
-        'Menlo',
-        'Monaco',
-        'Courier New',
-      ],
-      TargetPlatform.android => const [
-        'monospace',
-        'Roboto Mono',
-        'Noto Sans Mono',
-      ],
-      _ => const ['monospace', 'Courier New'],
-    };
-  }
+  static List<String> _platformMonospaceFontFallback() =>
+      PlatformFontDefaults.monospaceFontFallback();
 }
 
 enum MessageBubbleApplicationScope { ownMessages, allMessages }
@@ -946,9 +912,14 @@ class ThemeController extends ChangeNotifier {
     int initialAccountSlot = 0,
     int? initialAccountUserId,
     EmojiFontCatalog? emojiFontCatalog,
+    Locale? initialAppLocale,
+    Locale? initialSystemLocale,
   }) : _emojiFontCatalog = emojiFontCatalog ?? EmojiFontCatalog.shared,
        _activeAccountSlot = initialAccountSlot,
-       _activeAccountUserId = initialAccountUserId {
+       _activeAccountUserId = initialAccountUserId,
+       _appLocale = initialAppLocale,
+       _systemLocale =
+           initialSystemLocale ?? ui.PlatformDispatcher.instance.locale {
     GoogleFontWeightLoader.shared.addListener(_onGoogleFontWeightsLoaded);
     // Theming existed unconditionally before this preference was introduced,
     // so both new installs and migrated users retain the established behavior.
@@ -1028,7 +999,7 @@ class ThemeController extends ChangeNotifier {
         _prefs.getString(_customCjkFontFamilyKey)?.trim() ?? '';
     _monospaceFontChoice = AppMonospaceFontChoice.values.firstWhere(
       (m) => m.name == _prefs.getString(_monospaceFontChoiceKey),
-      orElse: () => AppMonospaceFontChoice.menlo,
+      orElse: () => AppMonospaceFontChoice.system,
     );
     _customMonospaceFontFamily =
         _prefs.getString(_customMonospaceFontFamilyKey)?.trim() ?? '';
@@ -1068,6 +1039,11 @@ class ThemeController extends ChangeNotifier {
     _fontFallbackChain = dedupeFontFamilies(
       _prefs.getStringList(_fontFallbackChainKey) ?? const <String>[],
     );
+    _localFontFamiliesLower = {
+      for (final family
+          in _prefs.getStringList(_localFontFamiliesKey) ?? const <String>[])
+        if (family.trim().isNotEmpty) family.trim().toLowerCase(),
+    };
     _invalidateFontCaches();
     unawaited(_normalizeStoredPlatformFontFamilies());
     _fontScale = _validStoredFontScale(_prefs.getDouble(_fontKey));
@@ -1246,6 +1222,9 @@ class ThemeController extends ChangeNotifier {
   }
 
   static const _modeKey = 'appearanceMode';
+  static const _mediaPanelSegmentKey = 'mediaPanelSegment';
+  static const _channelBottomBarModeKey = 'channelBottomBarMode.v1';
+  static const _showChannelPostStatsKey = 'showChannelPostStats.v1';
   static const _themingEnabledKey = 'appearanceThemingEnabled';
   static const _brandKey = 'brandColor';
   static const _cloudThemeKey = 'telegramCloudTheme';
@@ -1273,6 +1252,7 @@ class ThemeController extends ChangeNotifier {
   static const _emojiFontLicenseKey = 'emojiFontLicense';
   static const _emojiFontSchemaKey = 'emojiFontChoiceSchema';
   static const _fontFallbackChainKey = 'fontFallbackChain';
+  static const _localFontFamiliesKey = 'localFontFamilies';
   static const _fontKey = 'fontScale';
   static const _interfaceScaleKey = 'interfaceScale';
   static const _groupAvatarCircleKey = 'circularGroupAvatars';
@@ -1308,8 +1288,6 @@ class ThemeController extends ChangeNotifier {
   static const _alwaysShowMessageTimeKey = 'alwaysShowMessageTime';
   static const _mobileMessageActionMenuStyleKey =
       'mobileMessageActionMenuStyle.v1';
-  static const _channelBottomBarModeKey = 'channelBottomBarMode.v1';
-  static const _showChannelPostStatsKey = 'showChannelPostStats.v1';
   static const _enterToSendKey = 'enterToSend';
   static const _openChatsAtLatestKey = 'openChatsAtLatest';
   static const _hideChatContextPaneKey = 'hideChatContextPane';
@@ -1328,7 +1306,6 @@ class ThemeController extends ChangeNotifier {
   static const _autoRevealRestrictedMediaKey = 'autoRevealRestrictedMedia';
   static const _liquidGlassBottomBarKey = 'liquidGlassBottomBar';
   static const _simpleModeKey = 'simpleMode';
-  static const _mediaPanelSegmentKey = 'mediaPanelSegment';
   static const _showChannelsTabKey = 'showChannelsTab';
   static const _showContactsTabKey = 'showContactsTab';
   static const _showMomentsTabKey = 'showMomentsTab';
@@ -1355,6 +1332,8 @@ class ThemeController extends ChangeNotifier {
   int? _activeAccountUserId;
   late bool _usePerAccountTheming;
   late bool _themingEnabled;
+  late ChannelBottomBarMode _channelBottomBarMode;
+  bool _showChannelPostStats = true;
   late AppearanceMode _mode;
   late Color _brandColor;
   TelegramCloudTheme? _lightCloudTheme;
@@ -1374,11 +1353,15 @@ class ThemeController extends ChangeNotifier {
   late EmojiFontChoice _emojiFontChoice;
   int _emojiFontSelectionRevision = 0;
   late List<String> _fontFallbackChain;
+  late final Set<String> _localFontFamiliesLower;
+  int _fontCacheRevision = 0;
 
   // The font chain is rebuilt from scratch on every applyAppTextStyle call
   // (three dedupe passes each), and applyAppTextTheme runs 15 of those per
   // TextTheme. Nothing here changes between builds, so memoize until a font
   // preference actually moves — see _invalidateFontCaches.
+  Locale? _appLocale;
+  Locale? _systemLocale;
   List<String>? _normalFontFamilyChainCache;
   List<String>? _effectiveFontFamilyChainCache;
   final Map<(TextStyle, bool), TextStyle> _appTextStyleCache = {};
@@ -1409,8 +1392,6 @@ class ThemeController extends ChangeNotifier {
   bool _showMessageMetaIndicators = false;
   bool _alwaysShowMessageTime = false;
   late MobileMessageActionMenuStyle _mobileMessageActionMenuStyle;
-  late ChannelBottomBarMode _channelBottomBarMode;
-  bool _showChannelPostStats = true;
   bool _enterToSend = false;
   bool _openChatsAtLatest = false;
   bool _hideChatContextPane = false;
@@ -1828,7 +1809,28 @@ class ThemeController extends ChangeNotifier {
   String get customMonospaceFontFamily => _customMonospaceFontFamily;
   EmojiFontChoice get emojiFontChoice => _emojiFontChoice;
   List<String> get fontFallbackChain => List.unmodifiable(_fontFallbackChain);
+  int get fontCacheRevision => _fontCacheRevision;
   bool get usesCustomFontFallbackChain => _fontFallbackChain.isNotEmpty;
+
+  bool isLocalFontFamily(String family) {
+    final trimmed = family.trim();
+    if (trimmed.isEmpty || decodeGoogleFontFamily(trimmed) != null) {
+      return false;
+    }
+    return _localFontFamiliesLower.contains(trimmed.toLowerCase()) ||
+        SystemFontCatalog.isKnownLocalFamily(trimmed);
+  }
+
+  void markLocalFontFamily(String family) {
+    final trimmed = family.trim();
+    if (trimmed.isEmpty || decodeGoogleFontFamily(trimmed) != null) return;
+    if (_localFontFamiliesLower.add(trimmed.toLowerCase())) {
+      _invalidateFontCaches();
+      _persistLocalFontFamilies();
+      notifyListeners();
+    }
+  }
+
   String get effectivePrimaryFontLabel =>
       _fontChoice.isCustom && _customPrimaryFontFamily.isNotEmpty
       ? displayStoredFontFamily(_customPrimaryFontFamily)
@@ -1894,6 +1896,28 @@ class ThemeController extends ChangeNotifier {
   /// the chat header button opens it.
   bool get hideChatContextPane => _hideChatContextPane;
   LinkOpenMode get linkOpenMode => _linkOpenMode;
+  String get mediaPanelSegment =>
+      _prefs.getString(_mediaPanelSegmentKey) ?? 'emoji';
+
+  set mediaPanelSegment(String value) {
+    if (_prefs.getString(_mediaPanelSegmentKey) == value) return;
+    _prefs.setString(_mediaPanelSegmentKey, value);
+  }
+
+  set channelBottomBarMode(ChannelBottomBarMode value) {
+    if (_channelBottomBarMode == value) return;
+    _channelBottomBarMode = value;
+    _prefs.setString(_channelBottomBarModeKey, value.name);
+    notifyListeners();
+  }
+
+  set showChannelPostStats(bool value) {
+    if (_showChannelPostStats == value) return;
+    _showChannelPostStats = value;
+    _prefs.setBool(_showChannelPostStatsKey, value);
+    notifyListeners();
+  }
+
   bool get showSavedMessagesIdentity => _showSavedMessagesIdentity;
   bool get preserveSenderWhenRepeating => _preserveSenderWhenRepeating;
   bool get forwardRichMarkdown => _forwardRichMarkdown;
@@ -1929,11 +1953,6 @@ class ThemeController extends ChangeNotifier {
   /// More panel. Local presentation pref only; never rewrites other settings.
   bool get simpleMode => _simpleMode;
 
-  /// The composer media panel segment (emoji/sticker/gif) the user last used;
-  /// the panel reopens on it. Silent by design: nothing visual depends on it,
-  /// so a segment switch must not rebuild the app.
-  String get mediaPanelSegment =>
-      _prefs.getString(_mediaPanelSegmentKey) ?? 'emoji';
   bool get showChannelsTab => _showChannelsTab;
   bool get showContactsTab => _showContactsTab;
   bool get showMomentsTab => _showMomentsTab;
@@ -2021,10 +2040,41 @@ class ThemeController extends ChangeNotifier {
   double get navHeaderHeight => AppMetric.navHeaderHeight;
   double scaled(double base) => base;
 
+  Locale? get effectiveTypographyLocale =>
+      PlatformFontDefaults.effectiveTypographyLocale(
+        appLocale: _appLocale,
+        systemLocale: _systemLocale,
+      );
+
+  static bool _sameTypographyLocale(Locale? a, Locale? b) =>
+      a?.languageCode == b?.languageCode &&
+      a?.scriptCode == b?.scriptCode &&
+      a?.countryCode == b?.countryCode;
+
+  /// Updates the active app/system locale used to order CJK font fallbacks and
+  /// populate [TextStyle.locale]. Window builders pass `notify: false` to keep
+  /// the cached font chain aligned without scheduling a mid-build notification.
+  void syncTypographyLocale({
+    Locale? appLocale,
+    Locale? systemLocale,
+    bool notify = true,
+  }) {
+    final nextSystem = systemLocale ?? ui.PlatformDispatcher.instance.locale;
+    if (_sameTypographyLocale(_appLocale, appLocale) &&
+        _sameTypographyLocale(_systemLocale, nextSystem)) {
+      return;
+    }
+    _appLocale = appLocale;
+    _systemLocale = nextSystem;
+    _invalidateFontCaches();
+    if (notify) notifyListeners();
+  }
+
   /// Drops every derived font cache. Called from anywhere a font preference is
   /// assigned, including the preference reload — a setter-only sweep would
   /// serve a stale TextTheme after an account switch.
   void _invalidateFontCaches() {
+    _fontCacheRevision++;
     _normalFontFamilyChainCache = null;
     _effectiveFontFamilyChainCache = null;
     _appTextStyleCache.clear();
@@ -2036,7 +2086,10 @@ class ThemeController extends ChangeNotifier {
       ...(_fontFallbackChain.isNotEmpty
           ? _fontFallbackChain.map(AppFontChoice.resolvePlatformFontFamily)
           : [AppFontChoice._platformFontFamily()]),
-      ...AppFontChoice._platformFontFallback(),
+      ...AppFontChoice._platformFontFallback(
+        appLocale: _appLocale,
+        systemLocale: _systemLocale,
+      ),
       // Last resort. The platform's own UI face carries every weight and every
       // script the system can render, so a chain that misses a glyph lands
       // somewhere sane instead of on the engine's fallback of last resort.
@@ -2091,6 +2144,7 @@ class ThemeController extends ChangeNotifier {
   TextStyle _computeAppTextStyle(TextStyle base, {bool boldText = false}) {
     final families = effectiveFontFamilyChain(base);
     final weightedBase = base.copyWith(
+      locale: base.locale ?? effectiveTypographyLocale,
       // Explicit tracking belongs to the caller. Material theme tracking is
       // removed at the theme boundary below, not from arbitrary rich text.
       letterSpacing: usesIosSystemTypography
@@ -2109,7 +2163,9 @@ class ThemeController extends ChangeNotifier {
               ? 'CupertinoSystemDisplay'
               : '.AppleSystemUIFont')
         : families.first;
-    final googleFamily = _googleFamilyFor(first);
+    final googleFamily = _fontFallbackChain.isEmpty
+        ? null
+        : _googleFamilyFor(first);
     final withPrimary = googleFamily == null
         ? weightedBase.copyWith(fontFamily: first)
         : _googleTextStyle(googleFamily, weightedBase);
@@ -2179,6 +2235,7 @@ class ThemeController extends ChangeNotifier {
       customFamily: _customMonospaceFontFamily,
     );
     return code.copyWith(
+      locale: code.locale ?? effectiveTypographyLocale,
       fontFamilyFallback: dedupeFontFamilies([
         ...?code.fontFamilyFallback,
         ..._normalFontFamilyChain(base),
@@ -2207,9 +2264,10 @@ class ThemeController extends ChangeNotifier {
       },
   };
 
-  static String? _googleFamilyFor(String family) {
+  String? _googleFamilyFor(String family) {
     final storedGoogleFamily = decodeGoogleFontFamily(family);
     if (storedGoogleFamily != null) return storedGoogleFamily;
+    if (isLocalFontFamily(family)) return null;
     return _googleFamilyByFamilyName[family];
   }
 
@@ -2411,6 +2469,7 @@ class ThemeController extends ChangeNotifier {
 
   set customPrimaryFontFamily(String value) {
     _customPrimaryFontFamily = value.trim();
+    _pruneUnreferencedLocalFontFamilies();
     _invalidateFontCaches();
     _prefs.setString(_customPrimaryFontFamilyKey, _customPrimaryFontFamily);
     notifyListeners();
@@ -2418,6 +2477,7 @@ class ThemeController extends ChangeNotifier {
 
   set customCjkFontFamily(String value) {
     _customCjkFontFamily = value.trim();
+    _pruneUnreferencedLocalFontFamilies();
     _invalidateFontCaches();
     _prefs.setString(_customCjkFontFamilyKey, _customCjkFontFamily);
     notifyListeners();
@@ -2432,8 +2492,29 @@ class ThemeController extends ChangeNotifier {
 
   set customMonospaceFontFamily(String value) {
     _customMonospaceFontFamily = value.trim();
+    _pruneUnreferencedLocalFontFamilies();
     _invalidateFontCaches();
     _prefs.setString(_customMonospaceFontFamilyKey, _customMonospaceFontFamily);
+    notifyListeners();
+  }
+
+  void setCustomMonospaceFont(String value, {bool isLocal = false}) {
+    final trimmed = value.trim();
+    _customMonospaceFontFamily = trimmed;
+    if (isLocal &&
+        trimmed.isNotEmpty &&
+        decodeGoogleFontFamily(trimmed) == null) {
+      _localFontFamiliesLower.add(trimmed.toLowerCase());
+      _persistLocalFontFamilies();
+    }
+    _pruneUnreferencedLocalFontFamilies();
+    _monospaceFontChoice = AppMonospaceFontChoice.custom;
+    _invalidateFontCaches();
+    _prefs.setString(_customMonospaceFontFamilyKey, _customMonospaceFontFamily);
+    _prefs.setString(
+      _monospaceFontChoiceKey,
+      AppMonospaceFontChoice.custom.name,
+    );
     notifyListeners();
   }
 
@@ -2609,24 +2690,72 @@ class ThemeController extends ChangeNotifier {
     return migrated ? key : _legacyEmojiFontKeys[key] ?? key;
   }
 
+  void _persistLocalFontFamilies() {
+    if (_localFontFamiliesLower.isEmpty) {
+      unawaited(_prefs.remove(_localFontFamiliesKey));
+      return;
+    }
+    unawaited(
+      _prefs.setStringList(
+        _localFontFamiliesKey,
+        _localFontFamiliesLower.toList()..sort(),
+      ),
+    );
+  }
+
+  void _pruneUnreferencedLocalFontFamilies() {
+    if (_localFontFamiliesLower.isEmpty) return;
+    final activeLower = <String>{
+      if (_customPrimaryFontFamily.isNotEmpty &&
+          decodeGoogleFontFamily(_customPrimaryFontFamily) == null)
+        _customPrimaryFontFamily.toLowerCase(),
+      if (_customCjkFontFamily.isNotEmpty &&
+          decodeGoogleFontFamily(_customCjkFontFamily) == null)
+        _customCjkFontFamily.toLowerCase(),
+      if (_customMonospaceFontFamily.isNotEmpty &&
+          decodeGoogleFontFamily(_customMonospaceFontFamily) == null)
+        _customMonospaceFontFamily.toLowerCase(),
+      for (final family in _fontFallbackChain)
+        if (decodeGoogleFontFamily(family) == null) family.toLowerCase(),
+    };
+    final beforeLength = _localFontFamiliesLower.length;
+    _localFontFamiliesLower.retainWhere(activeLower.contains);
+    if (_localFontFamiliesLower.length != beforeLength) {
+      _persistLocalFontFamilies();
+    }
+  }
+
   void setFontFallbackChain(List<String> value) {
     _fontFallbackChain = dedupeFontFamilies(value);
+    _pruneUnreferencedLocalFontFamilies();
     _invalidateFontCaches();
     _prefs.setStringList(_fontFallbackChainKey, _fontFallbackChain);
     notifyListeners();
   }
 
   Future<void> _normalizeStoredPlatformFontFamilies() async {
-    if (defaultTargetPlatform != TargetPlatform.iOS &&
-        defaultTargetPlatform != TargetPlatform.macOS) {
-      return;
-    }
     final beforePrimary = _customPrimaryFontFamily;
     final beforeCjk = _customCjkFontFamily;
     final beforeMono = _customMonospaceFontFamily;
     final beforeChain = [..._fontFallbackChain];
     final values = [beforePrimary, beforeCjk, beforeMono, ...beforeChain];
-    final normalized = await SystemFontCatalog.normalizeFamilies(values);
+    if (values.every((value) => value.isEmpty)) return;
+
+    final beforeLocalStates = [
+      for (final value in values) isLocalFontFamily(value),
+    ];
+    if (!SystemFontCatalog.hasLoadedLocalFamilies) {
+      await SystemFontCatalog.loadFontEntries();
+      if (_scaleControllerDisposed) return;
+    }
+    final supportsNormalization =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
+    final normalized = supportsNormalization
+        ? await SystemFontCatalog.normalizeFamilies(values)
+        : values;
+    if (_scaleControllerDisposed) return;
     if (normalized.length != values.length) return;
     if (_customPrimaryFontFamily != beforePrimary ||
         _customCjkFontFamily != beforeCjk ||
@@ -2639,7 +2768,11 @@ class ThemeController extends ChangeNotifier {
     final nextCjk = normalized[1];
     final nextMono = normalized[2];
     final nextChain = dedupeFontFamilies(normalized.skip(3));
-    var changed = false;
+    final normalizedValues = [nextPrimary, nextCjk, nextMono, ...nextChain];
+    final afterLocalStates = [
+      for (final value in normalizedValues) isLocalFontFamily(value),
+    ];
+    var changed = !listEquals(beforeLocalStates, afterLocalStates);
     if (nextPrimary != _customPrimaryFontFamily) {
       _customPrimaryFontFamily = nextPrimary;
       unawaited(_prefs.setString(_customPrimaryFontFamilyKey, nextPrimary));
@@ -2660,13 +2793,21 @@ class ThemeController extends ChangeNotifier {
       unawaited(_prefs.setStringList(_fontFallbackChainKey, nextChain));
       changed = true;
     }
+    _pruneUnreferencedLocalFontFamilies();
     if (changed) {
       _invalidateFontCaches();
       notifyListeners();
     }
   }
 
-  void addFontToFallbackChain(String family) {
+  void addFontToFallbackChain(String family, {bool isLocal = false}) {
+    final trimmed = family.trim();
+    if (isLocal &&
+        trimmed.isNotEmpty &&
+        decodeGoogleFontFamily(trimmed) == null) {
+      _localFontFamiliesLower.add(trimmed.toLowerCase());
+      _persistLocalFontFamilies();
+    }
     setFontFallbackChain([..._fontFallbackChain, family]);
   }
 
@@ -2935,20 +3076,6 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  set channelBottomBarMode(ChannelBottomBarMode value) {
-    if (_channelBottomBarMode == value) return;
-    _channelBottomBarMode = value;
-    _prefs.setString(_channelBottomBarModeKey, value.name);
-    notifyListeners();
-  }
-
-  set showChannelPostStats(bool value) {
-    if (_showChannelPostStats == value) return;
-    _showChannelPostStats = value;
-    _prefs.setBool(_showChannelPostStatsKey, value);
-    notifyListeners();
-  }
-
   set enterToSend(bool value) {
     if (_enterToSend == value) return;
     _enterToSend = value;
@@ -3090,13 +3217,6 @@ class ThemeController extends ChangeNotifier {
     _simpleMode = value;
     _prefs.setBool(_simpleModeKey, value);
     notifyListeners();
-  }
-
-  /// Silent setter: no listener is notified because no widget rebuilds from
-  /// this value — it is read only when the composer cache is (re)built.
-  set mediaPanelSegment(String value) {
-    if (_prefs.getString(_mediaPanelSegmentKey) == value) return;
-    _prefs.setString(_mediaPanelSegmentKey, value);
   }
 
   set showChannelsTab(bool value) {

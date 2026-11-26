@@ -246,6 +246,15 @@ class AccountStore extends ChangeNotifier {
 
   int get activeSlot => _activeSlot;
   List<AccountSummary> get summaries => _summaries;
+
+  /// Signed-in accounts other than the active slot.
+  ///
+  /// The raw configured-slot list can still hold a half-created add-account
+  /// slot or one that is closing right after a logout, which made the login
+  /// surface offer "back" with nowhere to go; a summary only exists for an
+  /// account that actually signed in.
+  int get otherAccountCount =>
+      _summaries.where((summary) => summary.slot != _activeSlot).length;
   bool get activeIsBotApi => TdClient.shared.isBotApiSlot(_activeSlot);
 
   /// Test seam: flip the active slot the way [addAccount]/[switchTo] do,

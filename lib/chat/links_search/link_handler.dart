@@ -25,22 +25,22 @@ import '../../moments/story_viewer_view.dart';
 import '../../profile/profile_view.dart';
 import '../../profile/qr_code_view.dart';
 import '../../settings/appearance_view.dart';
-import '../../settings/auto_download_settings_view.dart';
-import '../../settings/business_settings_view.dart';
+import '../../settings/business/business_settings_view.dart';
 import '../../settings/chat_folder_management_view.dart';
-import '../../settings/edit_field_view.dart';
-import '../../settings/edit_profile_view.dart';
+import '../../settings/downloads_storage/auto_download_settings_view.dart';
+import '../../settings/downloads_storage/storage_usage_view.dart';
 import '../../settings/general_settings_view.dart';
 import '../../settings/language_settings_view.dart';
-import '../../settings/network_usage_view.dart';
+import '../../settings/network_proxy/network_usage_view.dart';
+import '../../settings/network_proxy/proxy_config.dart';
+import '../../settings/network_proxy/proxy_status.dart';
+import '../../settings/network_proxy/proxy_view.dart';
 import '../../settings/notification_settings_view.dart';
-import '../../settings/privacy_detail_views.dart';
-import '../../settings/privacy_security_view.dart';
-import '../../settings/proxy_config.dart';
-import '../../settings/proxy_status.dart';
-import '../../settings/proxy_view.dart';
+import '../../settings/privacy_security/privacy_detail_views.dart';
+import '../../settings/privacy_security/privacy_security_view.dart';
+import '../../settings/profile_account/edit_field_view.dart';
+import '../../settings/profile_account/edit_profile_view.dart';
 import '../../settings/settings_view.dart';
-import '../../settings/storage_usage_view.dart';
 import '../../tdlib/json_helpers.dart';
 import '../../tdlib/td_client.dart';
 import '../../tdlib/td_models.dart';
@@ -54,6 +54,9 @@ import '../ai_translation/telegram_ai_service.dart';
 import '../appearance/chat_appearance_message_preview.dart';
 import '../appearance/chat_wallpaper.dart';
 import '../chat_picker_view.dart';
+import '../instant_view/instant_view_loader.dart';
+import '../instant_view/instant_view_models.dart';
+import '../instant_view/instant_view_view.dart';
 import '../mini_apps/telegram_invoice_checkout_view.dart';
 import '../mini_apps/telegram_mini_app_view.dart';
 import '../mini_apps/telegram_payment_service.dart';
@@ -1564,23 +1567,162 @@ Future<void> _selectAndOpenChat(
   }
 }
 
+/// Opens Telegram's native Instant View for [url]. Returns false when
+/// Telegram has no page for it, leaving the caller to follow its normal
+/// browser route.
+///
+/// [fallbackUrl] is used by the reader's "Open in browser" action.
+Future<bool> openInstantViewPage(
+  BuildContext context,
+  String url, {
+  String? fallbackUrl,
+  int? accountSlot,
+  InstantViewLoader? loader,
+  bool waitForPage = true,
+  Duration? timeout,
+}) async {
+  final target = url.trim();
+  if (target.isEmpty) return false;
+  final resolvedLoader =
+      loader ??
+      InstantViewLoader.td(
+        accountSlot:
+            accountSlot ?? InternalChatLinkScope.targetOf(context)?.accountSlot,
+      );
+  InstantViewPage? page = resolvedLoader.cached(target);
+  if (page == null && !waitForPage) {
+    // The reader owns the loading state: pushing now beats a silent wait on a
+    // link tap, and a page Telegram cannot serve ends in the reader's own
+    // retry / open-in-browser state.
+    if (!context.mounted) return true;
+    await Navigator.of(context).push<void>(
+      AppPageRoute<void>(
+        pageBuilder: (_, _, _) => InstantViewView(
+          url: target,
+          accountSlot: accountSlot,
+          loader: resolvedLoader,
+          fallbackUrl: fallbackUrl,
+        ),
+      ),
+    );
+    return true;
+  }
+  if (page == null) {
+    final request = resolvedLoader.load(target);
+    try {
+      page = timeout == null ? await request : await request.timeout(timeout);
+    } on TimeoutException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+  if (!context.mounted) return true;
+  await Navigator.of(context).push<void>(
+    AppPageRoute<void>(
+      pageBuilder: (_, _, _) => InstantViewView(
+        url: target,
+        accountSlot: accountSlot,
+        loader: resolvedLoader,
+        initialPage: page,
+        fallbackUrl: fallbackUrl,
+      ),
+    ),
+  );
+  return true;
+}
+
+/// Opens [url] with the user's browser preference and never as an Instant
+/// View. Used by the reader's own "Open in browser" action, where trying
+/// the Instant View again would loop.
+Future<void> openLinkInBrowser(BuildContext context, String url) =>
+    _openBrowserLink(context, url, allowInstantView: false);
+
+/// Telegraph and Telegram articles are served as Instant Views without a
+/// preview lookup, matching exteraless's `tryTelegraph` shortcut: the link
+/// opens as an article even when the user prefers an external browser.
+bool instantViewTryFirst(String url) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null) return false;
+  final host = uri.host.toLowerCase();
+  if (host == 'telegra.ph' || host == 'te.legra.ph' || host == 'graph.org') {
+    return true;
+  }
+  if (host == 'telegram.org' || host == 'www.telegram.org') {
+    final path = uri.path.toLowerCase();
+    return path.startsWith('/blog') ||
+        path.startsWith('/faq') ||
+        path.startsWith('/privacy');
+  }
+  return host == 't.me' && uri.path.startsWith('/iv');
+}
+
+Future<bool> _tryOpenInstantView(
+  BuildContext context,
+  String url, {
+  InstantViewLoader? loader,
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+    return false;
+  }
+  return openInstantViewPage(
+    context,
+    url,
+    fallbackUrl: url,
+    accountSlot: InternalChatLinkScope.targetOf(context)?.accountSlot,
+    loader: loader,
+    timeout: timeout,
+  );
+}
+
 Future<void> _openInstantView(
   BuildContext context,
   Map<String, dynamic> type, {
   _TdLinkQuery? query,
 }) async {
-  final queryAccount = query ?? TdClient.shared.query;
   final url = type.str('url')?.trim() ?? '';
+  final fallbackUrl = type.str('fallback_url')?.trim() ?? '';
   if (url.isEmpty) return;
-  // Resolve the page through TDLib first so Telegram can warm/cache the
-  // canonical Instant View. Mithka doesn't yet include an owned rich-page
-  // renderer, so the canonical page then follows the user's browser choice.
-  await queryAccount({
-    '@type': 'getWebPageInstantView',
-    'url': url,
-    'only_local': false,
-  });
-  if (context.mounted) await _openBrowserLink(context, url);
+  final accountSlot = InternalChatLinkScope.targetOf(context)?.accountSlot;
+  final loader = query == null
+      ? InstantViewLoader.td(accountSlot: accountSlot)
+      : InstantViewLoader(source: _QueryInstantViewSource(query));
+  final opened = await openInstantViewPage(
+    context,
+    url,
+    fallbackUrl: fallbackUrl,
+    accountSlot: accountSlot,
+    loader: loader,
+    timeout: const Duration(seconds: 15),
+  );
+  if (opened || !context.mounted) return;
+  // TDLib's contract for internalLinkTypeInstantView: no page, so open the
+  // link's own fallback in the browser.
+  if (fallbackUrl.isNotEmpty) {
+    await _openBrowserLink(context, fallbackUrl, allowInstantView: false);
+  }
+}
+
+/// Adapter for a slot-scoped query (the link may belong to a chat whose
+/// account is not the active one).
+class _QueryInstantViewSource implements InstantViewSource {
+  const _QueryInstantViewSource(this.query);
+
+  final _TdLinkQuery query;
+
+  @override
+  Future<InstantViewPage> fetch(String url, {required bool onlyLocal}) async {
+    final response = await query({
+      '@type': 'getWebPageInstantView',
+      'url': url,
+      'only_local': onlyLocal,
+    });
+    final page = InstantViewPage.parse(response);
+    if (page.isEmpty) throw InstantViewUnavailable(url);
+    return page;
+  }
 }
 
 Future<void> _processOauthLink(
@@ -2818,11 +2960,18 @@ Future<void> _openBrowserLink(
   BuildContext context,
   String url, {
   LinkOpenTarget? target,
+  bool allowInstantView = true,
 }) async {
   final uri = parseLinkUri(url);
   if (uri == null) return;
   final platform = Theme.of(context).platform;
   final theme = Provider.of<ThemeController?>(context, listen: false);
+  // Telegraph/Telegram articles are native Telegram content: try their
+  // Instant View before any browser choice, like exteraless does.
+  if (allowInstantView && instantViewTryFirst(url)) {
+    final opened = await _tryOpenInstantView(context, url);
+    if (opened || !context.mounted) return;
+  }
   target ??= linkOpenTargetFor(
     mode: theme?.linkOpenMode ?? LinkOpenMode.defaultBrowser,
     uri: uri,
@@ -2833,6 +2982,21 @@ Future<void> _openBrowserLink(
     target = await showLinkBrowserChooser(context);
   }
   if (target == null || !context.mounted) return;
+
+  // The in-app browser doubles as Telegram's article reader: a page with an
+  // Instant View opens natively, anything else keeps the WebView.
+  if (allowInstantView &&
+      target == LinkOpenTarget.internalBrowser &&
+      uri.scheme == 'https') {
+    // The in-app browser waits only briefly: a page with no Instant View
+    // must still reach its WebView without a network round trip's delay.
+    final opened = await _tryOpenInstantView(
+      context,
+      url,
+      timeout: const Duration(seconds: 2),
+    );
+    if (opened || !context.mounted) return;
+  }
 
   switch (target) {
     case LinkOpenTarget.internalBrowser:

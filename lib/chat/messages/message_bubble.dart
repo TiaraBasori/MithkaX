@@ -14,7 +14,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderProxyBox, SelectedContent;
+import 'package:flutter/rendering.dart'
+    show RenderParagraph, RenderProxyBox, SelectedContent;
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:mithka/l10n/app_localizations.dart';
@@ -33,8 +34,8 @@ import '../../history/message_media_snapshot_view.dart';
 import '../../media/media_metadata.dart';
 import '../../platform/adaptive_platform.dart';
 import '../../profile/profile_detail_view.dart';
-import '../../settings/sensitive_content_controller.dart';
-import '../../settings/translation_controller.dart';
+import '../../settings/ai_translation/translation_controller.dart';
+import '../../settings/privacy_security/sensitive_content_controller.dart';
 import '../../tdlib/json_helpers.dart';
 import '../../tdlib/td_client.dart';
 import '../../tdlib/td_models.dart';
@@ -47,6 +48,7 @@ import '../../theme/telegram_cloud_theme.dart';
 import '../../theme/theme_controller.dart';
 import '../appearance/chat_appearance_preview.dart';
 import '../links_search/link_handler.dart';
+import '../links_search/link_preview_fixer.dart';
 import '../media/file_detail_view.dart';
 import '../media/file_opener.dart';
 import '../media/inline_video_autoplay.dart';
@@ -69,6 +71,7 @@ import 'message_channel_stats.dart';
 import 'message_direction.dart';
 import 'message_gift_card.dart';
 import 'message_gram_envelope.dart';
+import 'message_link_menu.dart';
 import 'message_reaction_chips.dart';
 import 'message_reply_count_badge.dart';
 import 'message_special_content.dart';
@@ -79,18 +82,20 @@ import 'pangu_spacing.dart';
 import 'sensitive_content_reveal_prompt.dart';
 import 'stretchable_message_bubble_background.dart';
 
-part 'message_bubble_widgets.dart';
+part 'message_bubble_media_cards.dart';
 part 'message_bubble_rich_blocks.dart';
 part 'message_bubble_text_entities.dart';
-part 'message_bubble_media_cards.dart';
+part 'message_bubble_widgets.dart';
 
 typedef ImageGalleryOpenCallback =
     void Function({required List<TdFileRef> items, required int startIndex});
 
 /// Inner padding of an ordinary text message bubble.
+/// exteraless lays text out at 11dp from the bubble's edge and 8dp from its
+/// top (`ChatMessageCell.layoutTextXY`); the old 12/9 read slightly larger.
 const EdgeInsets messageTextBubblePadding = EdgeInsets.symmetric(
-  horizontal: 12,
-  vertical: 9,
+  horizontal: 11,
+  vertical: 8,
 );
 
 /// Corner radius of an ordinary text message bubble.
@@ -106,6 +111,33 @@ double messageBubbleMaxWidth(double layoutWidth, [TargetPlatform? platform]) {
   return isDesktopTargetPlatform(platform)
       ? math.min(proportional, 720)
       : proportional;
+}
+
+/// A link run's tap recogniser, carrying what the long-press menu needs.
+///
+/// Flutter gives a [TextSpan] exactly one recogniser, so tap and long press
+/// cannot each own the run. The tap stays here — it wins the gesture arena the
+/// way it always has — and the bubble resolves the link under the finger at
+/// `onLongPressStart` through `RenderParagraph.getSpanForPosition`, the same
+/// order exteraless uses (`pressedLink` before `didLongPressLink`).
+class _MessageLinkRecognizer extends TapGestureRecognizer {
+  _MessageLinkRecognizer({
+    required this.kind,
+    required this.copyValue,
+    required this.onOpen,
+    this.qrValue,
+  });
+
+  final MessageLinkKind kind;
+
+  /// What 复制 writes: the target URL for a link, the visible run otherwise.
+  final String copyValue;
+
+  /// The route a tap already takes.
+  final VoidCallback onOpen;
+
+  /// Non-null only for links a QR code can carry.
+  final String? qrValue;
 }
 
 class MessageBubble extends StatelessWidget {
@@ -267,10 +299,27 @@ class _ScopedMessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<_ScopedMessageBubble>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   void _updateState(VoidCallback fn) => setState(fn);
 
   final VoicePlayer _voice = VoicePlayer();
+
+  /// The edit blink: when a bot (or another device) rewrites a message in
+  /// place, the bubble's body fades back in once, the way exteraless
+  /// cross-fades the changed text. Renders that change no content never run
+  /// it — [ChatMessage.contentFlashToken] only moves on a real body change.
+  late final AnimationController _contentFlash = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: 1,
+  );
+
+  late final Animation<double> _contentFlashOpacity = Tween<double>(
+    begin: 0.45,
+    end: 1,
+  ).animate(CurvedAnimation(parent: _contentFlash, curve: Curves.easeOut));
+
+  int _paintedContentFlashToken = 0;
 
   final GlobalKey _bubbleKey = GlobalKey();
 
@@ -287,6 +336,13 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   bool _musicPressed = false;
 
   bool _showTappedTimestamp = false;
+
+  /// The detail timestamp a banded outgoing bubble wants to draw as the
+  /// leading item of its band. Set per build of [_row]; [_withFloatingBand]
+  /// consumes it and reports back through [_bandTimestampShown] so the
+  /// floating overlay never draws the same timestamp twice.
+  Widget? _pendingBandTimestamp;
+  bool _bandTimestampShown = false;
 
   // Hover feeds nothing but the 10px detail timestamp, so it rides a notifier:
   // a setState here rebuilt the entire bubble on every pointer crossing, and on
@@ -404,6 +460,119 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       },
       child: selectable,
     );
+  }
+
+  void _handleLongPressStart(LongPressStartDetails details) {
+    final hit = _linkHitAt(details.globalPosition);
+    if (hit != null) {
+      unawaited(_showLinkMenu(hit));
+      return;
+    }
+    _handleLongPress();
+  }
+
+  /// The link under the open link menu, painted with a select tint for as long
+  /// as the menu is up (exteraless's `chat_linkSelectBackground` behind a
+  /// pressed link). Null when no link menu is showing.
+  String? _pressedLinkValue;
+
+  void _setPressedLink(String? value) {
+    if (!mounted || _pressedLinkValue == value) return;
+    setState(() => _pressedLinkValue = value);
+  }
+
+  /// The pressed-link tint for a run whose copy target is [copyValue].
+  TextStyle _pressedLinkStyle(TextStyle style, String copyValue, Color link) {
+    if (_pressedLinkValue == null || _pressedLinkValue != copyValue) {
+      return style;
+    }
+    return style.copyWith(backgroundColor: link.withValues(alpha: 0.22));
+  }
+
+  /// Resolves the link under [globalPosition], if the press landed on one.
+  ///
+  /// Every message run is painted by some [RenderParagraph]; the pressed point
+  /// names one character, and that character's span tells whether the reader
+  /// held a link. The paragraph's own box for that character anchors the menu.
+  ({_MessageLinkRecognizer link, Rect rect})? _linkHitAt(
+    Offset globalPosition,
+  ) {
+    final root = context.findRenderObject();
+    if (root is! RenderObject || !root.attached) return null;
+    ({_MessageLinkRecognizer link, Rect rect})? found;
+    void visit(RenderObject node) {
+      if (found != null) return;
+      if (node is RenderParagraph && node.attached) {
+        final local = node.globalToLocal(globalPosition);
+        if (local.dx >= 0 &&
+            local.dy >= 0 &&
+            local.dx <= node.size.width &&
+            local.dy <= node.size.height) {
+          final position = node.getPositionForOffset(local);
+          final span = node.text.getSpanForPosition(position);
+          final recognizer = span is TextSpan ? span.recognizer : null;
+          if (recognizer is _MessageLinkRecognizer) {
+            final length = node.text.toPlainText().length;
+            final start = position.offset
+                .clamp(0, math.max(0, length - 1))
+                .toInt();
+            final boxes = node.getBoxesForSelection(
+              TextSelection(baseOffset: start, extentOffset: start + 1),
+              boxHeightStyle: ui.BoxHeightStyle.max,
+            );
+            final origin = node.localToGlobal(Offset.zero);
+            final rect = boxes.isEmpty
+                ? origin & node.size
+                : Rect.fromLTRB(
+                    origin.dx + boxes.first.left,
+                    origin.dy + boxes.first.top,
+                    origin.dx + boxes.first.right,
+                    origin.dy + boxes.first.bottom,
+                  );
+            found = (link: recognizer, rect: rect);
+          }
+        }
+      }
+      node.visitChildren(visit);
+    }
+
+    visit(root);
+    return found;
+  }
+
+  Future<void> _showLinkMenu(
+    ({_MessageLinkRecognizer link, Rect rect}) hit,
+  ) async {
+    final link = hit.link;
+    // The pressed link keeps a select tint while its menu is open, so the
+    // reader can see which run the menu belongs to.
+    _setPressedLink(link.copyValue);
+    final MessageLinkMenuAction? action;
+    try {
+      action = await showMessageLinkMenu(
+        context,
+        MessageLinkHit(
+          kind: link.kind,
+          anchor: hit.rect,
+          qrValue: link.qrValue,
+        ),
+      );
+    } finally {
+      _setPressedLink(null);
+    }
+    if (!mounted || action == null) return;
+    switch (action) {
+      case MessageLinkMenuAction.open:
+        link.onOpen();
+      case MessageLinkMenuAction.copy:
+        await Clipboard.setData(ClipboardData(text: link.copyValue));
+        if (mounted) {
+          showToast(context, AppStrings.t(AppStringKeys.messageLinkCopied));
+        }
+      case MessageLinkMenuAction.showQr:
+        final value = link.qrValue;
+        if (value != null) await showMessageLinkQr(context, value);
+    }
   }
 
   void _handleLongPress([
@@ -943,6 +1112,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     super.initState();
     _sensitiveContentController.addListener(_handleSensitiveContentChange);
     _swipe = MessageSwipeReplyController(vsync: this);
+    _paintedContentFlashToken = message.contentFlashToken;
   }
 
   @override
@@ -955,6 +1125,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     if (oldWidget.bubble.message.id != widget.bubble.message.id ||
         oldWidget.bubble.message.chatId != widget.bubble.message.chatId) {
       _showRestrictedContent = false;
+      // The slot was rebound to another message: the token of the message
+      // that used to live here says nothing about this one, so adopting it
+      // silently also disarms a queued flash from the old occupancy.
+      _paintedContentFlashToken = message.contentFlashToken;
+      _contentFlash.value = 1;
     }
     final oldController =
         oldWidget.bubble.sensitiveContentController ??
@@ -973,6 +1148,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     _desktopTouchLongPressTimer?.cancel();
     _sensitiveContentController.removeListener(_handleSensitiveContentChange);
     _swipe.dispose();
+    _contentFlash.dispose();
     _hoveringTimestamp.dispose();
     _voice.dispose();
     for (final r in _linkRecognizers) {
@@ -985,6 +1161,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   Widget build(BuildContext context) {
     if (message.isService) return const SizedBox.shrink();
     _resolveTheme();
+    _noteContentUpdate();
     final outgoing = isOutgoingTranscriptMessage(message, widget.bubble.meId);
     final mobileSelectionArmed =
         widget.bubble.mobileTextSelectionAreaKey != null;
@@ -1010,6 +1187,24 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   void _replyToThisMessage() => widget.bubble.onReply?.call(message);
 
+  /// Plays the update blink when the body changed since the last paint.
+  /// Deferred to a post-frame callback: starting an AnimationController
+  /// inside build notifies its listeners while the tree is still building.
+  void _noteContentUpdate() {
+    final token = message.contentFlashToken;
+    if (token == _paintedContentFlashToken) return;
+    _paintedContentFlashToken = token;
+    final age =
+        DateTime.now().millisecondsSinceEpoch - message.contentFlashAtMillis;
+    // A message edited while it was off-screen is mounted without a blink:
+    // the reader never watched that text change, and a flash on scroll-in
+    // would claim fresh news.
+    if (message.contentFlashAtMillis <= 0 || age > 2000) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _contentFlash.forward(from: 0);
+    });
+  }
+
   bool _supportsDesktopTouchGestures(TargetPlatform platform) =>
       platform == TargetPlatform.windows || platform == TargetPlatform.linux;
 
@@ -1022,37 +1217,52 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final platform = Theme.of(context).platform;
     final desktopInteraction = isDesktopTargetPlatform(platform);
     final desktopTouchInteraction = _supportsDesktopTouchGestures(platform);
+    // Own messages read their meta on one line: the send time leads the band
+    // of outside chips. Only a visible timestamp is armed — hover keeps its
+    // floating overlay, and a bubble without a band keeps it too.
+    _bandTimestampShown = false;
+    _pendingBandTimestamp = outgoing && showDetailTime
+        ? IgnorePointer(child: _messageDetailTimestamp())
+        : null;
     final contentBody = _contentBody(outgoing);
-    final body = GestureDetector(
-      key: _bubbleKey,
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _handleTap(alwaysShowTime),
-      onLongPress:
-          !desktopTouchInteraction &&
-              widget.bubble.mobileTextSelectionAreaKey == null
-          ? _handleLongPress
-          : null,
-      onSecondaryTapUp: desktopInteraction ? null : _handleSecondaryTapUp,
-      child: KeyedSubtree(
-        key: ValueKey('messageTapTarget-${message.id}'),
-        child: desktopInteraction
-            ? Listener(
-                onPointerDown: (event) => _handleDesktopPointerDown(
-                  event,
-                  touchGesturesEnabled: desktopTouchInteraction,
-                ),
-                onPointerMove: _handleDesktopPointerMove,
-                onPointerUp: _handleDesktopPointerUp,
-                onPointerCancel: _handleDesktopPointerCancel,
-                child: KeyedSubtree(
-                  key: ValueKey('messageTextSelectionArea-${message.id}'),
-                  child: DesktopMessageTextSelectionArea(
-                    selectionAreaKey: _desktopSelectionAreaKey,
-                    child: contentBody,
+    // The update blink wraps only the bubble's body: reaction chips, buttons
+    // and the avatar keep their ink while a bot-edited body flashes.
+    final body = FadeTransition(
+      key: ValueKey('messageUpdateFlash-${message.id}'),
+      opacity: _contentFlashOpacity,
+      child: GestureDetector(
+        key: _bubbleKey,
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _handleTap(alwaysShowTime),
+        // A long press on a link opens the link's own menu; everywhere else it
+        // is the message's menu (exteraless checks the pressed span first).
+        onLongPressStart:
+            !desktopTouchInteraction &&
+                widget.bubble.mobileTextSelectionAreaKey == null
+            ? _handleLongPressStart
+            : null,
+        onSecondaryTapUp: desktopInteraction ? null : _handleSecondaryTapUp,
+        child: KeyedSubtree(
+          key: ValueKey('messageTapTarget-${message.id}'),
+          child: desktopInteraction
+              ? Listener(
+                  onPointerDown: (event) => _handleDesktopPointerDown(
+                    event,
+                    touchGesturesEnabled: desktopTouchInteraction,
                   ),
-                ),
-              )
-            : contentBody,
+                  onPointerMove: _handleDesktopPointerMove,
+                  onPointerUp: _handleDesktopPointerUp,
+                  onPointerCancel: _handleDesktopPointerCancel,
+                  child: KeyedSubtree(
+                    key: ValueKey('messageTextSelectionArea-${message.id}'),
+                    child: DesktopMessageTextSelectionArea(
+                      selectionAreaKey: _desktopSelectionAreaKey,
+                      child: contentBody,
+                    ),
+                  ),
+                )
+              : contentBody,
+        ),
       ),
     );
     final contentWidget = ConstrainedBox(
@@ -1181,7 +1391,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         clipBehavior: Clip.none,
         children: [
           messageRow,
-          if (!timeInSenderHeader)
+          if (!timeInSenderHeader && !_bandTimestampShown)
             _detailTimestampOverlay(
               outgoing,
               showDetailTime
@@ -1255,7 +1465,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               textColor: _incomingTextColor,
               name: message.senderName!,
               nameStyle: TextStyle(
-                fontSize: 12,
+                fontSize: AppTextSize.chatSecondary(AppTextSize.messageBody()),
                 color: senderNameColor,
                 fontWeight: FontWeight.w500,
               ),
@@ -1319,7 +1529,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     key: const ValueKey('messageTappedTimestamp'),
     maxLines: 1,
     textScaler: TextScaler.noScaling,
-    style: TextStyle(fontSize: 10, height: 1.2, color: _colors.textTertiary),
+    style: TextStyle(
+      fontSize: AppTextSize.chatTime,
+      height: 1.2,
+      color: _colors.textTertiary,
+    ),
   );
 
   Widget _repeatBadge() => GestureDetector(
@@ -1504,7 +1718,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           ],
         ),
       );
-      return _withFloatingMeta(_stickerTap(body), outgoing);
+      return _withFloatingMeta(
+        _withReplyAboveContent(_stickerTap(body), outgoing, s.width),
+        outgoing,
+      );
     }
     if (message.videoSticker != null) {
       final s = _stickerSize();
@@ -1529,7 +1746,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           ],
         ),
       );
-      return _withFloatingMeta(_stickerTap(body), outgoing);
+      return _withFloatingMeta(
+        _withReplyAboveContent(_stickerTap(body), outgoing, s.width),
+        outgoing,
+      );
     }
     if (message.isDice) {
       body = _diceBubble(outgoing);
@@ -1540,7 +1760,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         _ => _videoContent(outgoing),
       };
     } else if (message.stickerFileId != null && message.image != null) {
-      body = _staticStickerContent(message.image!);
+      body = _withReplyAboveContent(
+        _staticStickerContent(message.image!),
+        outgoing,
+        _stickerSize().width,
+      );
     } else if (message.image != null) {
       body = _imageContent(message.image!, outgoing);
     } else if (message.music != null) {
@@ -1591,6 +1815,12 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // A round video has no bubble either; its reply quote rides above the
+        // circle, the way exteraless draws the reply panel for TYPE_ROUND_VIDEO.
+        if (message.replyPreviewText != null) ...[
+          SizedBox(width: size, child: _replyQuote(message.isOutgoing)),
+          const SizedBox(height: 4),
+        ],
         GestureDetector(
           key: const ValueKey('messageVideoNote'),
           behavior: HitTestBehavior.opaque,
@@ -1820,7 +2050,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
             count: message.viewCount,
             foreground: chipForeground,
             background: chipBackground,
-            semanticLabel: AppStrings.t(AppStringKeys.mithkaxChannelPostViews, {
+            semanticLabel: AppStrings.t(AppStringKeys.channelPostViews, {
               'value1': formatChannelStatCount(message.viewCount),
             }),
           )
@@ -1832,19 +2062,22 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
             count: message.forwardCount,
             foreground: chipForeground,
             background: chipBackground,
-            semanticLabel: AppStrings.t(
-              AppStringKeys.mithkaxChannelPostForwards,
-              {'value1': formatChannelStatCount(message.forwardCount)},
-            ),
+            semanticLabel: AppStrings.t(AppStringKeys.channelPostForwards, {
+              'value1': formatChannelStatCount(message.forwardCount),
+            }),
           )
         : null;
-    final showBand =
+    final hasChips =
         showReplies ||
         ghostMarker != null ||
         showEditedChip ||
         viewsChip != null ||
         forwardsChip != null;
-    if (!showBand) return child;
+    // The send time only joins a band that is already there: a bubble without
+    // chips keeps the floating timestamp and its zero-height geometry.
+    final bandTimestamp = outgoing && hasChips ? _pendingBandTimestamp : null;
+    if (!hasChips) return child;
+    _bandTimestampShown = bandTimestamp != null;
     // The edited mark rides the band's chip language like its siblings.
     final editedChip = showEditedChip
         ? IgnorePointer(
@@ -1901,6 +2134,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (bandTimestamp != null) ...[
+                    bandTimestamp,
+                    if (bandChips.isNotEmpty) const SizedBox(width: 8),
+                  ],
                   for (var i = 0; i < bandChips.length; i++) ...[
                     if (i > 0) const SizedBox(width: 4),
                     bandChips[i],
@@ -2577,7 +2814,8 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         _ => 15.0,
       },
       RichMessageBlockKind.footer => 13.0,
-      _ => 15.0,
+      // A rich paragraph is a message body: same size as any other body run.
+      _ => AppTextSize.messageBody(),
     };
     if (block.text.isNotEmpty && block.kind == RichMessageBlockKind.heading) {
       entities.add(
@@ -3781,7 +4019,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: preview.url.isEmpty ? null : () => openLink(context, preview.url),
+      onTap: preview.url.isEmpty
+          ? null
+          : () {
+              if (preview.hasInstantView ||
+                  LinkPreviewFixer.isTwitterUrl(preview.url)) {
+                unawaited(
+                  openInstantViewPage(context, preview.url, waitForPage: false),
+                );
+                return;
+              }
+              unawaited(openLink(context, preview.url));
+            },
       child: Container(
         key: ValueKey('messageLinkPreviewCard-${message.id}'),
         width: maxWidth,
@@ -3815,6 +4064,36 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               ),
             if (media != null && !preview.showMediaAboveDescription)
               mobileSelectionDisabled(media),
+            if (preview.hasInstantView)
+              Container(
+                key: ValueKey('messageInstantViewBadge-${message.id}'),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: link.withValues(alpha: 0.10),
+                  border: Border(
+                    top: BorderSide(
+                      color: previewLine.withValues(alpha: 0.18),
+                      width: 0.67,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon(HeroAppIcons.flash, size: 13, color: link),
+                    const SizedBox(width: 4),
+                    Text(
+                      AppStrings.t(AppStringKeys.instantViewTitle),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: link,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -4206,7 +4485,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: AppTextSize.chatSecondary(AppTextSize.messageBody()),
                 fontWeight: FontWeight.w500,
                 color: textColor,
               ),
@@ -4237,7 +4516,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: AppTextSize.chatSecondary(AppTextSize.messageBody()),
                 fontWeight: FontWeight.w500,
                 color: textColor,
               ),
@@ -4245,6 +4524,31 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           ),
         ],
       ),
+    );
+  }
+
+  /// A background-less message (sticker, round video) that answers another
+  /// message carries its reply quote ABOVE the content, where exteraless
+  /// draws the reply panel over the sticker's empty bubble. The quote gets a
+  /// floor width so a small sticker's quote is still readable, and never
+  /// grows past the bubble lane.
+  Widget _withReplyAboveContent(
+    Widget content,
+    bool outgoing,
+    double contentWidth,
+  ) {
+    if (message.replyPreviewText == null) return content;
+    final width = math.min(_bubbleMaxWidth(), math.max(contentWidth, 168.0));
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: outgoing
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: width, child: _replyQuote(outgoing)),
+        const SizedBox(height: 4),
+        content,
+      ],
     );
   }
 
@@ -4498,7 +4802,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border(left: BorderSide(color: quoteColor, width: 3)),
         ),
-        padding: const EdgeInsets.fromLTRB(9, 7, 8, 7),
+        padding: const EdgeInsets.fromLTRB(9, 6, 8, 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -4551,11 +4855,17 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   ) {
     final c = _colors;
     final language = (pre.language ?? '').trim();
+    final code = text.substring(start, end);
+    // exteraless shrinks a preformatted run with its own length
+    // (chat_msgTextCode{,2,3}Paint) and draws the language label one step under
+    // the body size, so a long shell block stops towering over the message.
+    final codeSize = AppTextSize.messageCode(fontSize, code.length);
+    final languageSize = AppTextSize.messageCodeLanguage(fontSize, code.length);
     final codeBackground = _codeBackgroundColor;
     return GestureDetector(
       key: ValueKey('message-code-block-${message.id}-$start-$end'),
       behavior: HitTestBehavior.opaque,
-      onTap: () => _copyMonospaceText(text.substring(start, end)),
+      onTap: () => _copyMonospaceText(code),
       child: Container(
         width: _bubbleMaxWidth(),
         decoration: BoxDecoration(
@@ -4583,7 +4893,8 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: languageSize,
+                      height: 1.2,
                       color: c.textSecondary,
                       fontWeight: FontWeight.w600,
                     ),
@@ -4592,7 +4903,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               ),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
               child: _richText(
                 text,
                 base,
@@ -4602,7 +4913,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                 false,
                 false,
                 entities: entities,
-                fontSize: math.max(13.0, fontSize - 1),
+                fontSize: codeSize,
               ),
             ),
           ],

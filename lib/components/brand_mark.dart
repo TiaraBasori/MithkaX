@@ -1,23 +1,46 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/material.dart';
 
-/// The app mark: one flat glyph on transparency.
+import '../theme/app_theme.dart';
+
+/// The app mark: one flat glyph, filled at paint time with a gradient built
+/// from the theme's brand colour.
 ///
-/// The artwork carries a single colour, so every surface tints it to its own
-/// ink instead of shipping a copy per theme: pass the ink to `Image.color`
-/// (its blend mode is [BlendMode.srcIn], so only the mark's alpha survives).
-/// The theme's primary text colour already follows the light/dark appearance,
-/// and the splash passes white because it sits on the brand gradient.
-const String brandMarkAsset = 'assets/brand_mark.png';
-
-/// The same glyph with its transparent canvas trimmed away, for layouts that
-/// space the mark by its ink rather than by a square box.
-const String brandMarkInkAsset = 'assets/brand_mark_ink.png';
-
-/// The mark as vector geometry on a 24 × 24 grid, vertically filling it.
+/// Nothing is baked into an asset, so the mark follows 外观 → 主题颜色 and the
+/// light/dark appearance together:
 ///
-/// The raster asset covers every ordinary surface; this copy exists for
-/// painters that fill the glyph themselves (the gold VIP badge) and must stay
-/// crisp at 18 pt.
+///  * Light surfaces get the brand's own ladder — lighter, base, deep — the
+///    same shading [AppTheme.applyBrand] derives for the outgoing bubble.
+///  * Dark surfaces get that ladder lifted toward white, because a saturated
+///    fill on a near-black page reads as a hole. The launcher icon's day body
+///    does the same thing.
+List<Color> brandMarkColors(Brightness brightness) {
+  final base = AppTheme.brand;
+  if (brightness == Brightness.dark) {
+    return [
+      Color.lerp(base, const Color(0xFFFFFFFF), 0.88)!,
+      Color.lerp(base, const Color(0xFFFFFFFF), 0.62)!,
+    ];
+  }
+  final hsl = HSLColor.fromColor(base);
+  return [
+    hsl.withLightness((hsl.lightness + 0.13).clamp(0.0, 1.0)).toColor(),
+    base,
+    hsl.withLightness((hsl.lightness - 0.09).clamp(0.0, 1.0)).toColor(),
+  ];
+}
+
+/// The share of a [BrandMark]'s box the glyph's ink fills, so a mark sitting
+/// in a row keeps the weight the shipped rasters had.
+const double _inkShare = 0.72;
+
+/// Ink width over height: the glyph is 23 units wide on the 24 unit grid.
+const double _aspect = 23 / 24;
+
+/// The glyph on a 24 × 24 grid, vertically filling it and 23 units wide.
+///
+/// Traced from `tool/app_icons/mithkax_mark.svg`, the canonical geometry; a
+/// change to either has to land in both.
 final Path brandMarkGlyph = Path()
   ..moveTo(0.5, 9.354)
   ..cubicTo(0.5, 8.933, 0.5, 8.512, 0.67, 8.071)
@@ -60,3 +83,82 @@ final Path brandMarkGlyph = Path()
   ..cubicTo(1.479, 15.05, 1.203, 14.891, 0.994, 14.659)
   ..cubicTo(0.5, 14.111, 0.5, 13.283, 0.5, 12.455)
   ..close();
+
+/// Paints [brandMarkGlyph] filled from the theme's brand colour.
+///
+/// The fill is derived from `AppTheme.brand` while building. A `const`
+/// instance would be canonicalised, and the element would be skipped whenever
+/// an ancestor rebuilt, so a theme-colour change would leave the old fill on
+/// screen — both constructors stay non-const on purpose.
+// ignore_for_file: prefer_const_constructors_in_immutables
+class BrandMark extends StatelessWidget {
+  /// A square [size] box whose ink fills [_inkShare] of it — the spacing the
+  /// 1024 px rasters were drawn with, so existing layouts keep their weight.
+  BrandMark({super.key, required double size, this.opacity = 1, this.colors})
+    : box = size,
+      ink = null;
+
+  /// The ink exactly [ink] tall, with the box hugging it. For layouts that
+  /// space the mark by its geometry rather than by a square slot.
+  BrandMark.ink({super.key, required this.ink, this.opacity = 1, this.colors})
+    : box = null;
+
+  /// Square slot; the ink fills [_inkShare] of it. Null on [BrandMark.ink].
+  final double? box;
+
+  /// Ink height; the box hugs it. Null on the square constructor.
+  final double? ink;
+
+  /// Multiplies the fill's alpha, for watermarks.
+  final double opacity;
+
+  /// Overrides the theme-derived gradient (the splash keeps the pale one).
+  final List<Color>? colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = ink ?? box! * _inkShare;
+    final fill = colors ?? brandMarkColors(Theme.of(context).brightness);
+    return SizedBox(
+      width: box ?? height * _aspect,
+      height: box ?? height,
+      child: Center(
+        child: SizedBox(
+          width: height * _aspect,
+          height: height,
+          child: CustomPaint(painter: _BrandMarkPainter(fill, opacity)),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandMarkPainter extends CustomPainter {
+  _BrandMarkPainter(this.colors, this.opacity);
+
+  final List<Color> colors;
+  final double opacity;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    canvas.save();
+    canvas.scale(size.height / 24);
+    final paint = Paint()
+      ..isAntiAlias = true
+      ..shader = LinearGradient(
+        colors: [
+          for (final color in colors)
+            color.withValues(alpha: color.a * opacity),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(const Rect.fromLTWH(0, 0, 24, 24));
+    canvas.drawPath(brandMarkGlyph, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BrandMarkPainter old) =>
+      old.opacity != opacity || !listEquals(old.colors, colors);
+}

@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/platform/system_ui.dart';
 import 'package:mithka/theme/app_theme.dart';
 
+const _markSource = 'tool/app_icons/mithkax_mark.svg';
 const _androidRes = 'android/app/src/main/res';
 const _iosAssets = 'ios/Runner/Assets.xcassets';
 const _launchColorName = 'launch_background';
@@ -87,6 +88,8 @@ class _MarkInk {
     required this.rightMargin,
     required this.heightShare,
     required this.luminance,
+    required this.meanRed,
+    required this.meanBlue,
   });
 
   final int width;
@@ -97,6 +100,10 @@ class _MarkInk {
 
   /// Mean luminance of the opaque pixels, 0..255.
   final double luminance;
+
+  /// Mean red and blue channels of the opaque pixels, 0..255.
+  final double meanRed;
+  final double meanBlue;
 }
 
 /// Decodes [path] and measures its opaque ink.
@@ -107,6 +114,8 @@ Future<_MarkInk> _markInk(String path) async {
   final bytes = (await image.toByteData())!.buffer.asUint8List();
   var minX = image.width, maxX = -1, minY = image.height, maxY = -1;
   var total = 0.0;
+  var red = 0.0;
+  var blue = 0.0;
   var count = 0;
   for (var y = 0; y < image.height; y++) {
     for (var x = 0; x < image.width; x++) {
@@ -121,6 +130,8 @@ Future<_MarkInk> _markInk(String path) async {
           0.2126 * bytes[offset] +
           0.7152 * bytes[offset + 1] +
           0.0722 * bytes[offset + 2];
+      red += bytes[offset];
+      blue += bytes[offset + 2];
       count++;
     }
   }
@@ -136,6 +147,8 @@ Future<_MarkInk> _markInk(String path) async {
     rightMargin: width - 1 - maxX,
     heightShare: (maxY - minY + 1) / height,
     luminance: total / count,
+    meanRed: red / count,
+    meanBlue: blue / count,
   );
 }
 
@@ -284,15 +297,16 @@ void main() {
           reason: 'drawable-$bucket/penguin_splash.png must exist',
         );
       }
-      // The source asset is the same mark the login page shows.
-      expect(File('assets/brand_mark.png').existsSync(), isTrue);
+      // The in-app mark is painted from the same geometry these drawables
+      // were rendered from.
+      expect(File(_markSource).existsSync(), isTrue, reason: _markSource);
     });
 
     test('the cold-start mark is baked once per appearance', () async {
-      // A bitmap cannot be tinted by the launch colour, so the drawable ships
-      // twice: ink for values/colors.xml, white for values-night/colors.xml.
-      // A missing night copy would leave a black mark on the near-black
-      // starting window.
+      // The launch window is native, so the mark ships baked twice: the
+      // azure fill for values/colors.xml, the frost fill for
+      // values-night/colors.xml. A missing night copy would leave the blue
+      // mark on the near-black starting window.
       for (final bucket in ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
         for (final name in ['penguin_launch', 'penguin_splash']) {
           for (final qualifier in ['drawable', 'drawable-night']) {
@@ -331,11 +345,28 @@ void main() {
               reason: '$bucket/$name must be centred',
             );
           }
-          expect(day.luminance, lessThan(40), reason: '$bucket/$name day ink');
+          // The day mark is the launcher icon's azure body: it must stay
+          // blue-dominant, not drift back to a flat black silhouette.
+          expect(
+            day.meanBlue,
+            greaterThan(day.meanRed + 100),
+            reason: '$bucket/$name day ink must be azure',
+          );
+          expect(
+            day.luminance,
+            inInclusiveRange(90, 200),
+            reason: '$bucket/$name day ink luminance',
+          );
+          // The night mark is its frost body: near-white but still blue.
           expect(
             night.luminance,
-            greaterThan(215),
+            greaterThan(200),
             reason: '$bucket/$name night ink',
+          );
+          expect(
+            night.meanBlue,
+            greaterThan(night.meanRed),
+            reason: '$bucket/$name night ink must stay cool',
           );
         }
       }

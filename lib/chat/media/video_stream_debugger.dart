@@ -59,13 +59,17 @@ const int videoDownloadMinimumBlockBytes = 1024 * 1024;
 const int videoDownloadMaximumBlocks = 4096;
 const double _videoDownloadMinimumCellSize = 12;
 const double _videoDownloadCellGap = 4;
-const String _inspectorFontFamily = '.AppleSystemUIFont';
+const String _inspectorFontFamily = 'Segoe UI';
 const List<String> _inspectorFontFamilyFallback = <String>[
+  '.AppleSystemUIFont',
   'Roboto',
-  'Segoe UI',
   'Ubuntu',
   'Noto Sans',
   'Arial',
+  'Microsoft YaHei UI',
+  'Microsoft YaHei',
+  'PingFang SC',
+  'Noto Sans CJK SC',
 ];
 const TextStyle _inspectorDefaultTextStyle = TextStyle(
   color: Colors.white,

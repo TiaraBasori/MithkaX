@@ -44,8 +44,9 @@ extension ChatViewModelUpdates on ChatViewModel {
         final canAppendToTranscript = shouldMergeLiveMessageIntoChatWindow(
           historyReachesLatest: _historyReachesLatest,
         );
-        if (!message.isOutgoing && !message.isService) {
-          _liveIncomingMessages.add(message.id);
+        if (!message.isService) {
+          (message.isOutgoing ? _liveOutgoingMessages : _liveIncomingMessages)
+              .add(message.id);
         }
         if (!isPendingChatMessage(message)) {
           _knownLatestMessageId = math.max(_knownLatestMessageId, message.id);
@@ -702,6 +703,12 @@ extension ChatViewModelUpdates on ChatViewModel {
         }
         continue;
       }
+      // Reply-to-deleted fill: when the target is not in
+      // the transcript, the local mirror may still hold a kept copy of the
+      // deleted original; its text fills the reply anchor like a quote.
+      if (_applyMirrorReply(m, rid, rChatId)) {
+        continue;
+      }
       final unresolved = unresolvedByChat.putIfAbsent(
         rChatId,
         () => <int, List<ChatMessage>>{},
@@ -875,14 +882,22 @@ extension ChatViewModelUpdates on ChatViewModel {
     if (q.animatedSticker != null) {
       return AppStrings.t(AppStringKeys.composerAnimatedEmojiPreview);
     }
+    if (q.stickerFileId != null) {
+      // A quoted sticker has no text of its own. Returning '' left the reply
+      // panel blank — Telegram names the kind instead ("Sticker").
+      return AppStrings.t(AppStringKeys.tdMessageSticker);
+    }
     if (q.image != null) {
-      final placeholder = switch (q.contentType) {
+      if (q.text.trim().isNotEmpty) return q.text;
+      // A captionless photo/video/GIF quote needs a label too; the old ''
+      // collapsed the panel to its bare frame.
+      return switch (q.contentType) {
         'messagePhoto' => AppStrings.t(AppStringKeys.composerImagePreview),
         'messageVideo' => AppStrings.t(AppStringKeys.chatVideoPlaceholder),
+        'messageVideoNote' => AppStrings.t(AppStringKeys.tdMessageVideoMessage),
         'messageAnimation' => AppStrings.t(AppStringKeys.tdMessageGif),
-        _ => null,
+        _ => q.text,
       };
-      return q.text == placeholder ? '' : q.text;
     }
     return q.text;
   }
@@ -897,6 +912,10 @@ extension ChatViewModelUpdates on ChatViewModel {
     if (HiddenSenderStore.shared.hides(senderId, chatId)) return true;
     return KeywordBlocker.shared.matches(message.text);
   }
+
+  // ---------------------------------------------------------------------------
+  // Ghost transcript (Telegram §1.4 mirror, self-build gated)
+  // ---------------------------------------------------------------------------
 
   /// Rebuilds `messages` from `_allMessages` and refreshes the lookup indexes.
   ///
@@ -943,6 +962,7 @@ extension ChatViewModelUpdates on ChatViewModel {
     // is not a total order, so only the pure-id case can be checked.
     assert(_pendingMessageCount > 0 || _isSortedById(_allMessages));
     messages = visible;
+    _foldGhostsIntoTranscript();
     _blockedMessageIds = blockedIds;
     _markBlockedMessagesReadThroughVisibleBoundary(blockedIds);
     notifyListeners();
@@ -966,6 +986,25 @@ extension ChatViewModelUpdates on ChatViewModel {
     }
     // Guaranteed by _appendIfStrictlyNewest, so the pending count cannot move.
     assert(!isPendingChatMessage(message));
+    // A revived message (the same id as a folded ghost re-entering the
+    // transcript) must retire its ghost through the full rebuild — the fast
+    // path would leave both the ghost and the live copy on screen.
+    if (_ghostsEnabled) {
+      final accountUserId = _accountUserId;
+      final revivedGhost =
+          accountUserId != null &&
+          (historyStoreOverride ?? MessageHistoryStore.shared)
+              .deletedEntriesFor(
+                accountUserId,
+                chatId,
+                topicId: forumTopicId ?? 0,
+              )
+              .any((entry) => entry.messageId == message.id);
+      if (revivedGhost) {
+        _applyKeywordFilter();
+        return;
+      }
+    }
     _allMessagesById[message.id] = message;
     if (_isBlockedMessage(message)) {
       _blockedMessageIds.add(message.id);
@@ -1184,6 +1223,15 @@ extension ChatViewModelUpdates on ChatViewModel {
     final targets = _messageRefs(messageId);
     if (targets.isEmpty) return;
     for (final target in targets) {
+      // The update flash belongs to a body that really changed. Content
+      // updates that repaint the same text (a media refresh, our own echo)
+      // must not blink the bubble.
+      // A pending send's body is still the composer's business — the edit
+      // blink belongs to messages the reader was already looking at.
+      if (target.text != text && !target.isSending) {
+        ++target.contentFlashToken;
+        target.contentFlashAtMillis = DateTime.now().millisecondsSinceEpoch;
+      }
       target.text = text;
       target.textQuoteSource = text;
       target.textQuoteSourceEntities = entities ?? target.textEntities;
@@ -1259,6 +1307,7 @@ extension ChatViewModelUpdates on ChatViewModel {
       _applyKeywordFilter();
       return;
     }
+    sentMessage.localEchoId = pendingMessageId;
     if (pendingMessage != null) {
       sentMessage.inheritLocalMediaFrom(pendingMessage);
     }
@@ -1572,8 +1621,6 @@ extension ChatViewModelUpdates on ChatViewModel {
     _handle(update);
   }
 
-  /// Marks the read-state gates satisfied so read-marking paths can be
-  /// exercised without replaying the whole history bootstrap.
   @visibleForTesting
   void markChatReadStateReadyForTesting() {
     _chatReadStateLoaded = true;
@@ -2065,4 +2112,107 @@ extension ChatViewModelUpdates on ChatViewModel {
     final title = raw?.trim();
     return title == null || title.isEmpty ? null : title;
   }
+
+  /// Parses one TDLib message with this chat's group/channel label context.
+  ChatMessage? _parseMessage(Map<String, dynamic> raw) =>
+      TDParse.message(raw, isChannel: isChannel);
+
+  /// Fills a reply anchor from the mirror when the quoted message was
+  /// deleted (Telegram §1.4, self-build gated): the kept copy's text,
+  /// sender and date become the quote-style preview. Only used when the
+  /// live transcript does not have the target — a live message always wins.
+  bool _applyMirrorReply(ChatMessage m, int replyId, int replyChatId) {
+    if (!allowTelegramTosViolations) return false;
+    final store = historyStoreOverride ?? MessageHistoryStore.shared;
+    final accountUserId = _accountUserId;
+    if (accountUserId == null) return false;
+    final entry = store.entryFor(accountUserId, replyChatId, replyId);
+    if (entry == null) return false;
+    // Only the plain fallback preview takes the mirror text — a real quote
+    // (replyToQuote, an explicit quote of part of the original) keeps its
+    // own stored excerpt, which stays more truthful than the whole copy.
+    if (m.replyToQuote != null) return true;
+    final body = entry.text.trim().isNotEmpty
+        ? entry.text.trim()
+        : ChatViewModel.localizedHistoryKindLabelStub(entry.kindKey);
+    m.replyToPreview = body;
+    m.replyToDate = entry.date;
+    if (entry.senderId != 0) {
+      m.replyToSender = _senderCache[entry.senderId]?.name ?? '';
+      if ((m.replyToSender ?? '').isEmpty && entry.senderId > 0) {
+        unawaited(_resolveQuotedSender(m, entry.senderId));
+      }
+    } else {
+      m.replyToSender = isGroup ? '' : peerTitle;
+    }
+    return true;
+  }
+
+  /// Deleted mirror entries of this chat become in-place ghost bubbles; the
+  /// ids not present in the transcript are the ghosts to fold in. A topic
+  /// transcript folds only its own topic's ghosts.
+  List<MessageHistoryEntry> _ghostEntriesForTranscript() {
+    if (!_ghostsEnabled) return const [];
+    final accountUserId = _accountUserId;
+    if (accountUserId == null) return const [];
+    return (historyStoreOverride ?? MessageHistoryStore.shared)
+        .deletedEntriesFor(accountUserId, chatId, topicId: forumTopicId ?? 0);
+  }
+
+  /// Folds ghost bubbles into the published transcript after every rebuild.
+  /// Ghosts are render-only: they join `messages` (sorted by their original
+  /// message id, so they sit where the message used to be) but never enter
+  /// `_allMessages` or any id index — the id no longer exists on Telegram's
+  /// side, so read states, mentions and merges must not see it.
+  void _foldGhostsIntoTranscript() {
+    if (!_ghostsEnabled) return;
+    final entries = _ghostEntriesForTranscript();
+    final inTranscript = _allMessages.map((m) => m.id).toSet();
+    final accountUserId = _accountUserId;
+    final ghosts = <ChatMessage>[];
+    for (final entry in entries) {
+      if (inTranscript.contains(entry.messageId)) continue;
+      ghosts.add(_ghostChatMessageFor(entry, accountUserId));
+    }
+    if (ghosts.isEmpty) return;
+    messages = mergeChatMessages(messages, ghosts);
+  }
+
+  /// One ghost as a transcript [ChatMessage]. `contentType` marks the ghost
+  /// for the bubble layer; media ghosts carry their snapshot through
+  /// [ChatMessage.mirrorEntry].
+  ChatMessage _ghostChatMessageFor(
+    MessageHistoryEntry entry,
+    int? accountUserId,
+  ) {
+    final senderId = entry.senderId == 0 ? null : entry.senderId;
+    final isOutgoing = accountUserId != null && entry.senderId == accountUserId;
+    return ChatMessage(
+      id: entry.messageId,
+      isOutgoing: isOutgoing,
+      // Media-only kept copies have no text; the localized kind label keeps
+      // the ghost bubble from rendering as an empty shell.
+      text: entry.text.trim().isNotEmpty
+          ? entry.text
+          : ChatViewModel.localizedHistoryKindLabelStub(entry.kindKey),
+      date: entry.date,
+      chatId: chatId,
+      senderId: senderId,
+      contentType: 'mithkaGhost',
+      // Attribution: a group ghost renders the sender header like any kept
+      // message would; the fold re-runs on every rebuild, so a cached name
+      // lands without waiting for another pass.
+      senderName: isOutgoing
+          ? (meName.trim().isNotEmpty ? meName : null)
+          : _senderCache[senderId]?.name,
+    )..mirrorEntry = entry;
+  }
+
+  void debugRebuildTranscriptForTesting() => _applyKeywordFilter();
+  void debugMergeMessagesForTesting(List<ChatMessage> incoming) {
+    _merge(incoming);
+    _resolveRepliesIfNeeded(incoming);
+  }
+
+  Iterable<int> debugAllMessageIdsForTesting() => _allMessages.map((m) => m.id);
 }

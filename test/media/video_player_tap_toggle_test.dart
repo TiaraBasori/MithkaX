@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:f_videoplayer/f_videoplayer.dart';
+import 'package:cineplay/cineplay.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chat/media/video_playback_queue.dart';
-import 'package:mithka/chat/video_player_view.dart';
+import 'package:mithka/chat/media/video_player_view.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/tdlib/td_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -48,7 +48,9 @@ void main() {
   });
 
   group('the player wires those rules into its gestures', () {
-    final source = File('lib/chat/video_player_view.dart').readAsStringSync();
+    final source = File(
+      'lib/chat/media/video_player_view.dart',
+    ).readAsStringSync();
 
     String bodyOf(String signature) {
       final start = source.indexOf(signature);

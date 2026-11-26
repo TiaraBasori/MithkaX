@@ -1,8 +1,6 @@
 part of 'chat_view_model.dart';
 
 extension ChatViewModelHeaderTopics on ChatViewModel {
-  // MARK: - Header
-
   Future<void> _loadChatHeader() async {
     final readStateRevisionAtRequestStart = _chatReadStateRevision;
     final readInboxRevisionAtRequestStart = _chatReadInboxRevision;
@@ -282,6 +280,8 @@ extension ChatViewModelHeaderTopics on ChatViewModel {
         chatLanguageDetectedAt: existing?.chatLanguageDetectedAt,
         chatLanguageDetectionNewestMessageId:
             existing?.chatLanguageDetectionNewestMessageId,
+        chatTranslatable: existing?.chatTranslatable ?? false,
+        translationSettingsKey: existing?.translationSettingsKey ?? '',
       ),
     );
   }
@@ -862,6 +862,45 @@ extension ChatViewModelHeaderTopics on ChatViewModel {
       ),
     );
     await loadForumTopics();
+  }
+
+  /// Persists a new pinned-topic order, the way exteraless's FilterReorder
+  /// does (`setPinnedForumTopics`). The strip, the rail and the topic list are
+  /// reordered optimistically; a rejected request reloads the server's order
+  /// and returns the error text for the caller's toast.
+  Future<String?> reorderPinnedForumTopics(List<int> pinnedTopicIds) async {
+    if (!canReorderPinnedTopics || pinnedTopicIds.length < 2) return null;
+    final byId = {for (final topic in forumTopics) topic.id: topic};
+    final ordered = <ForumTopicOption>[];
+    for (final id in pinnedTopicIds) {
+      final topic = byId[id];
+      if (topic != null && topic.isPinned) ordered.add(topic);
+    }
+    if (ordered.length < 2) return null;
+    final orderedIds = {for (final topic in ordered) topic.id};
+    final rest = [
+      for (final topic in forumTopics)
+        if (!orderedIds.contains(topic.id)) topic,
+    ];
+    final previous = forumTopics;
+    forumTopics = [...ordered, ...rest];
+    ForumTopicIndex.shared.reorderPinned(_accountSlot, chatId, [
+      for (final topic in ordered) topic.id,
+    ]);
+    notifyListeners();
+    try {
+      await _topicAccountQuery({
+        '@type': 'setPinnedForumTopics',
+        'chat_id': chatId,
+        'forum_topic_ids': [for (final topic in ordered) topic.id],
+      });
+      await loadForumTopics();
+      return null;
+    } catch (error) {
+      forumTopics = previous;
+      await loadForumTopics();
+      return '$error';
+    }
   }
 
   Future<void> setForumTopicMuted(

@@ -3,7 +3,7 @@
 //
 //  A bot topic chat has no General topic, so the "All" view has nowhere to
 //  put a new message: the send must start a topic named after the message,
-//  land inside it and hand the id to the transcript host (exteraless
+//  land inside it and hand the id to the transcript host (the reference client
 //  `BotForumHelper.beforeSendingFinalRequest` does the same). Topics the
 //  loaded page predates must also join the tab strip and topic list live.
 //

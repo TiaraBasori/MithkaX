@@ -394,7 +394,7 @@ extension ChatViewModelSending on ChatViewModel {
   }
 
   /// A bot topic chat has no General topic, so its "All" view has nowhere to
-  /// put a new message. Mirror exteraless: the send starts a topic named after
+  /// put a new message. Mirror the reference client: the send starts a topic named after
   /// the message and is retargeted into it. Returns the new topic id, or null
   /// when the request is not a bot-topic "All" send (or topic creation failed,
   /// in which case the request is sent unscoped and the server's error stands).
@@ -468,7 +468,7 @@ extension ChatViewModelSending on ChatViewModel {
   /// view, i.e. one that must start its own topic.
   ///
   /// A reply is left alone: its `inputMessageReplyToMessage` already resolves
-  /// the topic of the message it answers, exactly like exteraless's interceptor
+  /// the topic of the message it answers, exactly like the reference client's interceptor
   /// skipping reply sends.
   bool _startsBotTopicFor(Map<String, dynamic> request) {
     if (!_canStartBotTopic) return false;
@@ -549,7 +549,7 @@ extension ChatViewModelSending on ChatViewModel {
       final topicId = created.integer('forum_topic_id');
       return topicId == null || topicId == 0 ? null : topicId;
     } catch (_) {
-      // exteraless sends the message unscoped when the topic cannot be
+      // the reference client sends the message unscoped when the topic cannot be
       // created; the send then fails on its own terms instead of vanishing.
       return null;
     }
@@ -1186,38 +1186,50 @@ extension ChatViewModelSending on ChatViewModel {
     );
     final music = message.music;
     final fileId = music?.file?.id;
+    Map<String, dynamic>? topicRef;
+    int? startedTopicId;
     if (music != null && fileId != null && fileId > 0) {
-      try {
-        await _client.query(
-          _withPaidMessageOptions({
-            '@type': 'sendMessage',
-            'chat_id': chatId,
-            'input_message_content': {
-              '@type': 'inputMessageAudio',
-              'audio': {
-                '@type': 'inputAudio',
-                'audio': {'@type': 'inputFileId', 'id': fileId},
-                'duration': music.duration,
-                'title': music.title,
-                'performer': music.performer ?? '',
-              },
-            },
-          }),
-        );
-        return;
-      } catch (_) {}
-    }
-    await _client.query(
-      _withPaidMessageOptions({
-        '@type': 'forwardMessages',
+      final audioRequest = <String, dynamic>{
+        '@type': 'sendMessage',
         'chat_id': chatId,
-        'from_chat_id': sourceChatId,
-        'message_ids': [message.id],
-        'options': {'@type': 'messageSendOptions'},
-        'send_copy': true,
-        'remove_caption': false,
-      }),
-    );
+        'input_message_content': {
+          '@type': 'inputMessageAudio',
+          'audio': {
+            '@type': 'inputAudio',
+            'audio': {'@type': 'inputFileId', 'id': fileId},
+            'duration': music.duration,
+            'title': music.title,
+            'performer': music.performer ?? '',
+          },
+        },
+      };
+      startedTopicId = await _scopeSendToNewBotTopic(audioRequest);
+      topicRef = audioRequest.obj('topic_id');
+      try {
+        await _client.query(_withPaidMessageOptions(audioRequest));
+        _announceStartedBotTopic(startedTopicId);
+        return;
+      } catch (_) {
+        // Fall back to a copy of the original message below; the topic this
+        // attempt started (if any) is reused so the copy lands inside it.
+      }
+    }
+    final forwardRequest = <String, dynamic>{
+      '@type': 'forwardMessages',
+      'chat_id': chatId,
+      'topic_id': ?topicRef,
+      'from_chat_id': sourceChatId,
+      'message_ids': [message.id],
+      'options': {'@type': 'messageSendOptions'},
+      'send_copy': true,
+      'remove_caption': false,
+    };
+    final startedForwardTopicId = await _scopeSendToNewBotTopic(forwardRequest);
+    try {
+      await _client.query(_withPaidMessageOptions(forwardRequest));
+    } finally {
+      _announceStartedBotTopic(startedTopicId ?? startedForwardTopicId);
+    }
   }
 
   /// 清单: send a checklist (to-do list). Creating checklists needs Premium.
@@ -1680,4 +1692,6 @@ extension ChatViewModelSending on ChatViewModel {
       rethrow;
     }
   }
+
+  // MARK: - Message actions (long-press menu)
 }

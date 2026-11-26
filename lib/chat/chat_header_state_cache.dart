@@ -36,6 +36,8 @@ class ChatHeaderStateCache {
     required bool complete,
     required DateTime? detectedAt,
     required int? newestMessageId,
+    required bool translatable,
+    required String translationSettingsKey,
   }) {
     final key = (accountSlot: accountSlot, chatId: chatId);
     final existing =
@@ -58,12 +60,16 @@ class ChatHeaderStateCache {
           chatLanguageDetectionComplete: false,
           chatLanguageDetectedAt: null,
           chatLanguageDetectionNewestMessageId: null,
+          chatTranslatable: false,
+          translationSettingsKey: '',
         );
     _byChat[key] = existing.copyWith(
       detectedChatLanguage: detectedChatLanguage,
       chatLanguageDetectionComplete: complete,
       chatLanguageDetectedAt: detectedAt,
       chatLanguageDetectionNewestMessageId: newestMessageId,
+      chatTranslatable: translatable,
+      translationSettingsKey: translationSettingsKey,
     );
   }
 }
@@ -90,6 +96,8 @@ class ChatHeaderSnapshot {
     required this.chatLanguageDetectionComplete,
     required this.chatLanguageDetectedAt,
     required this.chatLanguageDetectionNewestMessageId,
+    required this.chatTranslatable,
+    required this.translationSettingsKey,
   });
 
   final int accountSlot;
@@ -110,11 +118,24 @@ class ChatHeaderSnapshot {
   final DateTime? chatLanguageDetectedAt;
   final int? chatLanguageDetectionNewestMessageId;
 
+  /// Whether the chat's messages are in a language the user translates.
+  /// Produced by the chat translatability classifier; see
+  /// `decideChatTranslation`.
+  final bool chatTranslatable;
+
+  /// Target language plus the "do not translate" list when
+  /// [chatTranslatable] was computed. A different key means the verdict is
+  /// stale (the classifier's `shouldTranslate` input changed) and must be
+  /// recomputed even when the sample set did not move.
+  final String translationSettingsKey;
+
   ChatHeaderSnapshot copyWith({
     String? detectedChatLanguage,
     bool? chatLanguageDetectionComplete,
     DateTime? chatLanguageDetectedAt,
     int? chatLanguageDetectionNewestMessageId,
+    bool? chatTranslatable,
+    String? translationSettingsKey,
   }) {
     return ChatHeaderSnapshot(
       accountSlot: accountSlot,
@@ -138,6 +159,9 @@ class ChatHeaderSnapshot {
       chatLanguageDetectionNewestMessageId:
           chatLanguageDetectionNewestMessageId ??
           this.chatLanguageDetectionNewestMessageId,
+      chatTranslatable: chatTranslatable ?? this.chatTranslatable,
+      translationSettingsKey:
+          translationSettingsKey ?? this.translationSettingsKey,
     );
   }
 }

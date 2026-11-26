@@ -14,7 +14,7 @@ import 'package:provider/provider.dart';
 import '../../components/app_icons.dart';
 import '../../components/app_press_ripple.dart';
 import '../../platform/adaptive_platform.dart';
-import '../../settings/translation_controller.dart';
+import '../../settings/ai_translation/translation_controller.dart';
 import '../../tdlib/td_models.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_theme.dart';
@@ -517,7 +517,7 @@ class MessageActionMenu extends StatelessWidget {
   static const desktopPreferredWidth = 220.0;
   static const _desktopActionHeight = 36.0;
 
-  /// Touch dropdown geometry, at exteraless's popup scale: a full-height row
+  /// Touch dropdown geometry, at the reference client's popup scale: a full-height row
   /// per option, the menu's own text size, and a column that hugs its widest
   /// label between a comfortable minimum and a cap — instead of the desktop's
   /// pointer-sized rows squeezed into a fixed 220px column.
@@ -574,7 +574,6 @@ class MessageActionMenu extends StatelessWidget {
   /// Width of the touch dropdown: its widest label plus the glyph column and
   /// the row insets, between [mobileDropdownMinWidth] and
   /// [mobileDropdownMaxWidth], never wider than [availableWidth].
-  @visibleForTesting
   static double mobileDropdownWidthFor({
     required double longestLabelWidth,
     double availableWidth = double.infinity,
@@ -798,7 +797,7 @@ class MessageActionMenu extends StatelessWidget {
       result.add(MessageAction.suggestOffer);
     }
     if (allowReply) {
-      // exteraless parity: quote lives in the text-selection flow (the
+      // the reference client parity: quote lives in the text-selection flow (the
       // reply panel here), not as a separate long-press menu entry — a
       // desktop transcript selection becomes Quote directly; everywhere else
       // the single Reply action opens the banner whose panel quotes.

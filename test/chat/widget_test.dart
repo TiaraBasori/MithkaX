@@ -7,16 +7,16 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chat/ai_translation/ai_reply_service.dart';
 import 'package:mithka/chat/ai_translation/telegram_ai_service.dart';
-import 'package:mithka/chat/chat_input_bar.dart';
 import 'package:mithka/chat/chat_view_model.dart';
+import 'package:mithka/chat/composer/chat_input_bar.dart';
 import 'package:mithka/chat/secret_chat_service.dart';
 import 'package:mithka/chat/stickers/emoji_text_controller.dart';
 import 'package:mithka/components/keyboard_dismiss_on_tap.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/ai_settings_controller.dart';
-import 'package:mithka/settings/apple_pcc_api.dart';
-import 'package:mithka/settings/keyword_blocker.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/ai_settings_controller.dart';
+import 'package:mithka/settings/ai_translation/apple_pcc_api.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
+import 'package:mithka/settings/privacy_security/keyword_blocker.dart';
 import 'package:mithka/tdlib/td_models.dart';
 import 'package:mithka/theme/theme_controller.dart';
 import 'package:provider/provider.dart';
@@ -190,7 +190,7 @@ void main() {
         secureWrite: (_, _) async {},
       );
       await settings.initialize();
-      await settings.setReplyButtonEnabled(showReplyButton);
+      await settings.setShowComposerAiButton(showReplyButton);
       if (aiReplyPrompt != null) {
         await settings.setAiReplyPrompt(aiReplyPrompt);
       }
@@ -429,13 +429,13 @@ void main() {
         tester.element(find.byType(ChatInputBar)),
         listen: false,
       );
-      expect(settings.replyButtonEnabled, isFalse);
+      expect(settings.showComposerAiButton, isFalse);
 
-      await settings.setReplyButtonEnabled(true);
+      await settings.setShowComposerAiButton(true);
       await tester.pump();
       expect(action, findsOneWidget);
 
-      await settings.setReplyButtonEnabled(false);
+      await settings.setShowComposerAiButton(false);
       await tester.pump();
       expect(action, findsNothing);
     });

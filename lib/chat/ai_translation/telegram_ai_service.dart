@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import '../../settings/ai_stdout_logger.dart';
+
+import '../../settings/ai_translation/ai_stdout_logger.dart';
 import '../../tdlib/json_helpers.dart';
 import '../../tdlib/td_client.dart';
 import '../../tdlib/td_models.dart';

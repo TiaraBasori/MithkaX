@@ -31,9 +31,9 @@ import '../../moments/story_management_view.dart';
 import '../../notifications/notification_settings_payload.dart';
 import '../../profile/qr_code_view.dart';
 import '../../settings/chat_folder_service.dart';
-import '../../settings/edit_field_view.dart';
-import '../../settings/hidden_sender_store.dart';
-import '../../settings/hidden_senders_view.dart';
+import '../../settings/privacy_security/hidden_sender_store.dart';
+import '../../settings/privacy_security/hidden_senders_view.dart';
+import '../../settings/profile_account/edit_field_view.dart';
 import '../../tdlib/json_helpers.dart';
 import '../../tdlib/td_client.dart';
 import '../../tdlib/td_models.dart';
@@ -731,19 +731,25 @@ class _ChatInfoViewState extends State<ChatInfoView> {
             onTap: _openMembers,
             child: Row(
               children: [
-                Text(
-                  AppStrings.t(
-                    _vm.isChannel
-                        ? AppStringKeys.topicChatChannelMembers
-                        : AppStringKeys.chatInfoGroupMembers,
-                  ),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: c.textPrimary,
+                // The label flexes: with a subtitle count beside it, a long
+                // localized label ("Subscribers") overflowed the card on a
+                // phone-width page instead of ellipsizing.
+                Expanded(
+                  child: Text(
+                    AppStrings.t(
+                      _vm.isChannel
+                          ? AppStringKeys.topicChatChannelMembers
+                          : AppStringKeys.chatInfoGroupMembers,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: c.textPrimary,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 if (_vm.memberCount > 0)
                   Text(
                     AppStrings.plural(

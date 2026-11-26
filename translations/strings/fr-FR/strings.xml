@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MithkaX's string catalogue. Edit translations here; run tools/gen_assets.py to push them into the app. -->
+<!-- Mithka's string catalogue. Edit translations here; run translations/tools/gen_assets.py to push them into the app. -->
 <resources>
     <string name="aboutCheckForUpdates">Rechercher des mises à jour</string>
     <string name="aboutCheckingForUpdates">Recherche…</string>
@@ -7,6 +7,7 @@
     <string name="aboutReportProblem">Signaler un problème</string>
     <string name="aboutReportProblemDetail">Inclut des diagnostics sans données privées</string>
     <string name="aboutTelegramChannel">Chaîne Telegram</string>
+    <string name="aboutCommunityChat">Discussion communautaire</string>
     <string name="aboutTitle">À propos</string>
     <string name="aboutUpToDate">Mithka X est à jour</string>
     <string name="aboutUpdateAvailable">La version {value1} est disponible</string>
@@ -234,6 +235,8 @@
     <string name="aiServerModelHint">Nom du modèle</string>
     <string name="aiServerPrivacy">Le texte utilisé par les fonctions IA activées est envoyé à ce point de terminaison. Votre clé API reste dans le stockage sécurisé de cet appareil.</string>
     <string name="aiSettingsTitle">Réglages IA</string>
+    <string name="aiShowComposerButton">Afficher le bouton IA dans la zone de message</string>
+    <string name="aiShowComposerButtonDescription">Désactivez pour retirer le bouton étincelles à côté du champ de message.</string>
     <string name="aiSummarizePrompts">Prompts de résumé</string>
     <string name="aiSummarizeUsing">Résumer avec</string>
     <string name="aiSummaryActions">Actions à mener</string>
@@ -390,6 +393,7 @@
     <string name="appLockAutoLockDisabled">Désactivé</string>
     <string name="appLockAutoLockFiveHours">Après 5 heures</string>
     <string name="appLockAutoLockFiveMinutes">Après 5 minutes</string>
+    <string name="appLockAutoLockImmediately">Immédiatement</string>
     <string name="appLockAutoLockOneHour">Après 1 heure</string>
     <string name="appLockAutoLockOneMinute">Après 1 minute</string>
     <string name="appLockBiometricDescription">Lorsque le verrou s’affiche, utilisez {value1} pour déverrouiller Mithka X.</string>
@@ -433,6 +437,7 @@
     <string name="appLockTryBiometric">Utiliser {value1}</string>
     <string name="appLockUnlockMethod">Méthode de déverrouillage</string>
     <string name="appLockUnlockTitle">Déverrouiller Mithka X</string>
+    <string name="appLockUnlocked">Déverrouillé</string>
     <string name="appLockUseBiometric">Déverrouiller avec {value1}</string>
     <string name="appLockVerifyTitle">Vérifier le verrouillage</string>
     <string name="appLockWrongGesture">Ce geste est incorrect.</string>
@@ -486,6 +491,8 @@
     <string name="appearanceInUseSize">En cours d’utilisation</string>
     <string name="appearanceInterfaceSize">Taille de l’interface</string>
     <string name="appearanceLivePreviewUnavailable">Aperçu en direct indisponible</string>
+    <string name="appearanceLocalFonts">Polices locales</string>
+    <string name="appearanceLocalFontsDescription">Les polices installées sur cet appareil s'affichent immédiatement sans téléchargement.</string>
     <string name="appearanceManage">Gérer</string>
     <string name="appearanceMergeConsecutiveImages">Regrouper les albums multimédias</string>
     <string name="appearanceMessageActionMenu">Menu d’actions des messages</string>
@@ -500,6 +507,9 @@
     <string name="appearanceNameColorPremium">Utilisateurs Premium</string>
     <string name="appearanceNoCleanableFonts">Rien à nettoyer</string>
     <string name="appearanceNoDownloadedFontCache">Aucun cache de police téléchargé.</string>
+    <string name="appearanceNoLocalFonts">Aucune police locale installée détectée.</string>
+    <string name="appearanceOnlineFonts">Google Fonts (En ligne)</string>
+    <string name="appearanceOnlineFontsDescription">Les polices Google Fonts sont téléchargées à la demande et mises en cache.</string>
     <string name="appearanceNoMatchingFonts">Aucune police correspondante</string>
     <string name="appearancePerAccountTheming">Utiliser un thème par compte</string>
     <string name="appearancePreviewAlbumCaption">Deux moments de l'album du groupe.</string>
@@ -510,6 +520,7 @@
     <string name="appearancePreviewMessageSample">Jennie : À tout de suite dans la discussion</string>
     <string name="appearancePreviewUsersSample">Utilisateurs Mithka X</string>
     <string name="appearanceRefreshCacheList">Actualiser la liste du cache</string>
+    <string name="appearanceReloadFonts">Actualiser les polices locales</string>
     <string name="appearanceRoundGroupAvatars">Afficher les avatars de groupe en cercle</string>
     <string name="appearanceSearchFont">Rechercher une police</string>
     <string name="appearanceSectionChat">Discussion</string>
@@ -874,6 +885,8 @@
     <string name="chatCannotSendMessages">Vous ne pouvez pas envoyer de messages dans cette discussion</string>
     <string name="chatConnectedBusinessBot">Bot professionnel connecté</string>
     <string name="chatContactCallsOnly">Appels disponibles uniquement avec les contacts</string>
+    <string name="chatContextPaneHide">Masquer les infos du groupe</string>
+    <string name="chatContextPaneShow">Afficher les infos du groupe</string>
     <string name="chatDelete">Supprimer</string>
     <string name="chatDeleteActionsDone">Terminé</string>
     <string name="chatDeleteActionsFailed">Impossible d’appliquer l’action : {value1}</string>
@@ -2096,6 +2109,18 @@
     <string name="imageEditTextTool">Texte</string>
     <string name="imageEditTitle">Modifier l’image</string>
     <string name="imagePreviewTitle">Aperçu de l’image</string>
+    <string name="instantViewTextSize">Taille du texte</string>
+    <string name="instantViewExtracting">Extraction de l’article…</string>
+    <string name="instantViewOpenLocal">Ouvrir la vue instantanée</string>
+    <string name="instantViewSearch">Rechercher</string>
+    <string name="instantViewPreviousMatch">Correspondance précédente</string>
+    <string name="instantViewNextMatch">Correspondance suivante</string>
+    <string name="instantViewTitle">Aperçu instantané</string>
+    <string name="instantViewOpenInBrowser">Ouvrir dans le navigateur</string>
+    <string name="instantViewLoadFailed">Impossible de charger cette page</string>
+    <string name="instantViewShowMore">Afficher plus</string>
+    <string name="instantViewShowLess">Afficher moins</string>
+    <string name="instantViewRetry">Réessayer</string>
     <string name="keywordBlockerAddFromMessageTitle">Bloquer un mot-clé</string>
     <string name="keywordBlockerDescription">Après ajout de mots-clés, les messages correspondants ne s’afficheront pas dans le chat et ne déclencheront pas de notifications locales. Sont pris en charge les mots-clés simples, re:regex, regex:regex et /regex/i. Dans les listes distantes, chaque ligne contient une règle ; les lignes commençant par # ou // sont des commentaires.</string>
     <string name="keywordBlockerDownload">Télécharger</string>
@@ -2414,6 +2439,10 @@
     <string name="messageChecklistTaskHint">Task description</string>
     <string name="messageLeaveAComment">Laisser un commentaire</string>
     <string name="messageLinkCopied">Lien copié</string>
+    <string name="messageLinkCopyEmail">Copier l'e-mail</string>
+    <string name="messageLinkCopyHashtag">Copier le hashtag</string>
+    <string name="messageLinkCopyUsername">Copier le nom d'utilisateur</string>
+    <string name="messageLinkShareQr">Partager le QR code</string>
     <string name="messagePollClosed">Closed</string>
     <string name="messagePollStop">Close poll</string>
     <string name="messagePollStopConfirm">Voting cannot continue after this poll is closed.</string>
@@ -4020,7 +4049,6 @@
     <string name="videoPlayerUseSystemOrientation">Utiliser l’orientation du système</string>
     <string name="videoPlayerWaitingForFile">En attente du fichier vidéo</string>
     <string name="videoTrimFailed">La vidéo découpée n'a pas été créée.</string>
-    <string name="vipBadgeLabel">VIP</string>
     <string name="voiceNotePreviewVoiceMessage">Message vocal</string>
     <string name="mediaSpoilerReveal">Spoiler. Touchez pour afficher</string>
     <string name="downloadsTasks">Téléchargements</string>
@@ -4151,4 +4179,22 @@
     <string name="mithkaxScheduledDeleteThreeDays">3 jours</string>
     <string name="mithkaxScheduledDeleteOneWeek">1 semaine</string>
     <string name="mithkaxScheduledDeleteOneMonth">1 mois</string>
+
+    <string name="channelBottomBar">Barre inférieure du canal</string>
+    <string name="channelBottomBarHidden">Masquer complètement</string>
+    <string name="channelBottomBarMute">Par défaut (muet / rétablir)</string>
+    <string name="channelBottomBarNote">Ne concerne que les canaux auxquels tu es abonné sans pouvoir publier. Avec « Discussion et messages directs », un canal qui n'a ni l'un ni l'autre masque entièrement la barre.</string>
+    <string name="channelDeleteTopic">Supprimer le sujet</string>
+    <string name="channelMarkAllReadFailed">Impossible de marquer comme lu</string>
+    <string name="channelPanelDirect">Messages directs</string>
+    <string name="channelPanelDiscussion">Discuter</string>
+    <string name="channelPostForwards">{value1} transferts</string>
+    <string name="channelPostStats">Afficher les vues et les transferts sur les publications de canal</string>
+    <string name="channelPostViews">{value1} vues</string>
+    <string name="channelBottomBarActions">Discussion et messages directs</string>
+    <string name="mithkaxTopicTabsDone">Terminé</string>
+    <string name="mithkaxTopicTabsReorder">Réorganiser les onglets</string>
+    <string name="mithkaxTopicTabsMoveToBottom">Déplacer la barre d’onglets en bas</string>
+    <string name="mithkaxTopicTabsMoveToSide">Déplacer la barre d’onglets sur le côté</string>
+    <string name="mithkaxTopicTabsMoveToTop">Déplacer la barre d’onglets en haut</string>
 </resources>

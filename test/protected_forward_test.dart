@@ -4,7 +4,7 @@ import 'package:mithka/config/build_flags.dart';
 import 'package:mithka/history/message_history_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Forward-from-protected-chats (exteraless ForwardProtectedAsCopy parity):
+/// Forward-from-protected-chats (the reference client ForwardProtectedAsCopy parity):
 /// the copy path re-sends text/media instead of calling forwardMessages,
 /// skips uncopiable kinds, and defers media whose file has not finished
 /// downloading. The server's can_be_copied probe is NOT consulted — inside a
@@ -247,10 +247,12 @@ void main() {
       previous.initialize(prefs);
       expect(previous.forwardProtectedAsCopy, allowTelegramTosViolations);
       previous.setForwardProtectedAsCopy(false);
+      // The setter is a no-op while the self-build gate is off, so the stored
+      // preference only changes in a gated build.
       expect(previous.forwardProtectedAsCopy, isFalse);
       expect(
         prefs.getBool('message_history.forward_protected_as_copy'),
-        isFalse,
+        allowTelegramTosViolations ? isFalse : isNull,
       );
     });
   });

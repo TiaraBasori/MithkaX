@@ -2,9 +2,9 @@
 //  channel_bottom_panel.dart
 //
 //  The bottom panel of a channel you subscribe to but cannot post in. The
-//  stock client only offers mute/unmute there; MithkaX lets the panel carry
+//  stock client only offers mute/unmute there; Mithka lets the panel carry
 //  the channel's discussion group and direct messages instead, or stay
-//  hidden entirely — exteraless's "channel bottom button" trio.
+//  hidden entirely — the reference client's "channel bottom button" trio.
 //
 
 import 'package:flutter/material.dart';
@@ -102,18 +102,14 @@ class ChannelBottomPanel extends StatelessWidget {
                       context,
                       key: discussionKey,
                       icon: HeroAppIcons.comments,
-                      label: AppStringKeys.mithkaxChannelPanelDiscussion.l10n(
-                        context,
-                      ),
+                      label: AppStringKeys.channelPanelDiscussion.l10n(context),
                       onTap: onOpenDiscussion,
                     ),
                     ChannelBottomPanelAction.directMessages => _button(
                       context,
                       key: directMessagesKey,
                       icon: HeroAppIcons.paperPlane,
-                      label: AppStringKeys.mithkaxChannelPanelDirect.l10n(
-                        context,
-                      ),
+                      label: AppStringKeys.channelPanelDirect.l10n(context),
                       onTap: onOpenDirectMessages,
                     ),
                   },

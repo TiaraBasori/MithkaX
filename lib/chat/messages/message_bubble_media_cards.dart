@@ -50,7 +50,10 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
     );
     // Caption padding is 6 on each side; headers are padded 10.
     var width = math.max(mediaWidth, measure(spaced.text, bodyStyle) + 12);
-    const headerStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w500);
+    final headerStyle = TextStyle(
+      fontSize: AppTextSize.chatSecondary(AppTextSize.messageBody()),
+      fontWeight: FontWeight.w500,
+    );
     if (message.hasForwardAttribution) {
       final label = AppStrings.t(AppStringKeys.messageBubbleForwardedFrom, {
         'value1': message.forwardDisplayName,

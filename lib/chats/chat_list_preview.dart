@@ -55,13 +55,13 @@ class ChatListPreviewGeometry {
   final double actionHeight;
 }
 
-/// The compact action menu's row height, matching exteraless's
+/// The compact action menu's row height, matching the reference client's
 /// ActionBarPopupWindowLayout rows (44dp) so a long command list reads as a
 /// popup column, not a settings sheet.
 const double chatListPreviewMenuRowHeight = 44;
 
 /// The menu's content width hugs its longest label between these bounds —
-/// exteraless sets a 160dp minimum on every item; the cap keeps a long
+/// the reference client sets a 160dp minimum on every item; the cap keeps a long
 /// localized label from spanning the whole preview card.
 const double chatListPreviewMenuMinWidth = 196;
 const double chatListPreviewMenuMaxWidth = 300;
@@ -534,7 +534,7 @@ final class _ChatListPreviewSurfaceState extends State<ChatListPreviewSurface> {
             child: _previewCard(context),
           );
           // The command column reads as a popup hanging off the preview, not
-          // a settings sheet: it hugs its content (exteraless's
+          // a settings sheet: it hugs its content (the reference client's
           // ActionBarPopupWindowLayout) and, on a phone, starts at the
           // preview's left edge instead of stretching to the dialog margins.
           final actions = _actionMenu(context);
@@ -733,7 +733,7 @@ final class _ChatListPreviewSurfaceState extends State<ChatListPreviewSurface> {
   Widget _actionMenu(BuildContext context) {
     final c = context.colors;
     // Measure the widest localized label so the menu hugs its content like
-    // exteraless's popup instead of stretching to a fixed sheet width.
+    // the reference client's popup instead of stretching to a fixed sheet width.
     const labelStyle = TextStyle(
       fontSize: AppTextSize.body,
       fontWeight: FontWeight.w500,

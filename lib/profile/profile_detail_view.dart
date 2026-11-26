@@ -16,7 +16,8 @@ import 'package:intl/intl.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/platform/app_haptics.dart';
 import 'package:provider/provider.dart';
-import '../app/desktop_image_preview_window.dart';
+
+import '../app/desktop/desktop_image_preview_window.dart';
 import '../app/ipad_window_chrome.dart';
 import '../app/primary_chat_launcher.dart';
 import '../call/call_manager.dart';
@@ -38,13 +39,12 @@ import '../components/confirm_dialog.dart';
 import '../components/photo_avatar.dart';
 import '../components/toast.dart';
 import '../components/ui_components.dart';
-import '../components/vip_badge.dart';
 import '../moments/story_management_view.dart';
 import '../moments/story_viewer_view.dart';
 import '../platform/adaptive_platform.dart';
-import '../settings/blocked_user_service.dart';
-import '../settings/edit_profile_view.dart';
 import '../settings/local_premium.dart';
+import '../settings/privacy_security/blocked_user_service.dart';
+import '../settings/profile_account/edit_profile_view.dart';
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_client.dart';
 import '../tdlib/td_models.dart';
@@ -1193,7 +1193,6 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
           const SizedBox(width: 6),
           StatusEmojiView(id: _emojiStatusId, size: 24),
         ],
-        if (_isPremium) ...[const SizedBox(width: 6), const VipBadge()],
       ],
     );
   }

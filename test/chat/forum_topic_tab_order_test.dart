@@ -1,7 +1,7 @@
 //
 //  forum_topic_tab_order_test.dart
 //
-//  The topic tabs must keep the order exteraless keeps: pinned topics first
+//  The topic tabs must keep the order the reference client keeps: pinned topics first
 //  in their pin order, everything else by the newest message — live, as
 //  traffic lands, not only after a getForumTopics round-trip. The shared
 //  index owns that order so the strip, the rail and the topic list all read

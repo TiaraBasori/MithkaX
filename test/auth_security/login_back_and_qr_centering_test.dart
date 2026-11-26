@@ -13,7 +13,7 @@ void main() {
         loginHasDistinctBackDestination(
           showBotLogin: false,
           backToPhoneOnly: true,
-          configuredAccountCount: 1,
+          otherAccountCount: 0,
         ),
         isFalse,
       );
@@ -22,7 +22,7 @@ void main() {
         loginHasDistinctBackDestination(
           showBotLogin: true,
           backToPhoneOnly: true,
-          configuredAccountCount: 1,
+          otherAccountCount: 0,
         ),
         isFalse,
       );
@@ -31,7 +31,7 @@ void main() {
         loginHasDistinctBackDestination(
           showBotLogin: false,
           backToPhoneOnly: true,
-          configuredAccountCount: 2,
+          otherAccountCount: 1,
         ),
         isTrue,
       );
@@ -39,7 +39,7 @@ void main() {
         loginHasDistinctBackDestination(
           showBotLogin: true,
           backToPhoneOnly: true,
-          configuredAccountCount: 2,
+          otherAccountCount: 1,
         ),
         isTrue,
       );
@@ -49,7 +49,7 @@ void main() {
         loginHasDistinctBackDestination(
           showBotLogin: false,
           backToPhoneOnly: false,
-          configuredAccountCount: 1,
+          otherAccountCount: 1,
         ),
         isTrue,
       );

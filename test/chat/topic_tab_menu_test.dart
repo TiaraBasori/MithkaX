@@ -13,10 +13,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/auth/account_store.dart';
 import 'package:mithka/auth/auth_manager.dart';
+import 'package:mithka/channels/topic_navigation.dart';
+import 'package:mithka/channels/topic_tabs_placement.dart';
 import 'package:mithka/chat/chat_view.dart';
 import 'package:mithka/chats/chat_list_view.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
@@ -175,12 +177,16 @@ void main() {
     required int chatId,
     required String title,
     bool isForum = false,
+    Map<String, Object> extraPrefs = const {},
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    SharedPreferences.setMockInitialValues({'communitiesEnabled': false});
+    SharedPreferences.setMockInitialValues({
+      'communitiesEnabled': false,
+      ...extraPrefs,
+    });
     final prefs = await SharedPreferences.getInstance();
     final theme = ThemeController(prefs);
     final accounts = AccountStore(prefs);
@@ -244,6 +250,14 @@ void main() {
     expect(find.byType(ChatView), findsOneWidget);
   }
 
+  /// The strip is horizontally scrollable and now carries the tabs-position
+  /// control at its leading edge: on a 390pt phone the last tab starts just
+  /// past the viewport, so bring it into view before pressing it.
+  Future<void> revealTopicTab(WidgetTester tester, int topicId) async {
+    await tester.ensureVisible(find.byKey(ValueKey('topic-tab-$topicId')));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('long press opens an anchored pin/edit/close/delete menu', (
     tester,
   ) async {
@@ -254,6 +268,7 @@ void main() {
       isForum: true,
     );
 
+    await revealTopicTab(tester, 50);
     await tester.longPress(find.byKey(const ValueKey('topic-tab-50')));
     await tester.pumpAndSettle();
 
@@ -292,6 +307,7 @@ void main() {
     expect(pin['is_pinned'], true);
 
     // Closing a topic is the other management verb other clients offer here.
+    await revealTopicTab(tester, 50);
     await tester.longPress(find.byKey(const ValueKey('topic-tab-50')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('app-anchored-menu-close')));
@@ -302,6 +318,78 @@ void main() {
     expect(close['chat_id'], _forumChatId);
     expect(close['forum_topic_id'], 50);
     expect(close['is_closed'], true);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('the bot topic tab menu moves the tabs to the side', (
+    tester,
+  ) async {
+    TopicTabsPlacementStore.shared.resetForTesting();
+    await openChat(tester, chatId: _botChatId, title: 'Topics Bot');
+
+    final strip = find.byType(TopicTabStrip);
+    final headerSide = tester.getRect(strip);
+    await tester.longPress(find.byKey(const ValueKey('topic-tab-900')));
+    await tester.pumpAndSettle();
+
+    final move = find.byKey(const ValueKey('app-anchored-menu-tabs-position'));
+    expect(move, findsOneWidget);
+    // The first step of exteraless's cycle is the side dock.
+    expect(find.text('Move tab bar to the side'), findsOneWidget);
+    await tester.tap(move);
+    await tester.pumpAndSettle();
+
+    // The horizontal bar became the 64dp side column at the transcript's
+    // left edge, and the choice stuck.
+    expect(find.byType(TopicTabStrip), findsNothing);
+    final sideBar = tester.getRect(find.byType(TopicTabsSideBar));
+    expect(sideBar.width, 64);
+    expect(sideBar.left, 0);
+    expect(sideBar.top, greaterThanOrEqualTo(headerSide.top));
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getString('mithka.topicTabsPlacement.v1.0.$_botChatId'),
+      'side',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 6));
+  });
+
+  // Only a bot topic chat offers the position control; a normal forum keeps
+  // its server-defined top bar, even with a placement an older build stored.
+  testWidgets('a forum chat keeps the tabs fixed at the top', (tester) async {
+    TopicTabsPlacementStore.shared.resetForTesting();
+    await openChat(
+      tester,
+      chatId: _forumChatId,
+      title: 'Forum Group',
+      isForum: true,
+      extraPrefs: {'mithka.topicTabsPlacement.v1.0.$_forumChatId': 'bottom'},
+    );
+
+    final strip = find.byType(TopicTabStrip);
+    expect(strip, findsOneWidget);
+    expect(
+      tester.getRect(strip).top,
+      lessThan(200),
+      reason: 'a stored side/bottom placement must not move a forum\'s tabs',
+    );
+    expect(
+      find.byKey(const ValueKey('topic-tabs-placement-toggle')),
+      findsNothing,
+    );
+
+    await revealTopicTab(tester, 50);
+    await tester.longPress(find.byKey(const ValueKey('topic-tab-50')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app-anchored-menu')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('app-anchored-menu-tabs-position')),
+      findsNothing,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 6));
@@ -349,7 +437,7 @@ void main() {
       isForum: true,
     );
 
-    await tester.tap(find.byKey(const ValueKey('chatHeaderTitle')));
+    await tester.tap(find.byKey(const ValueKey('chatHeaderTopics')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('topic-selector-list')), findsOneWidget);
 
@@ -402,6 +490,7 @@ void main() {
     );
 
     final tab = find.byKey(const ValueKey('topic-tab-50'));
+    await revealTopicTab(tester, 50);
     final tabRect = tester.getRect(tab);
     await tester.longPress(tab);
     await tester.pumpAndSettle();
@@ -433,7 +522,7 @@ void main() {
       isForum: true,
     );
 
-    await tester.tap(find.byKey(const ValueKey('chatHeaderTitle')));
+    await tester.tap(find.byKey(const ValueKey('chatHeaderTopics')));
     await tester.pumpAndSettle();
 
     final row = find.byKey(const ValueKey('topic-selector-row-50'));

@@ -10,11 +10,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/auth/account_store.dart';
 import 'package:mithka/auth/auth_manager.dart';
+import 'package:mithka/chat/ai_translation/chat_translation_language_cache.dart';
 import 'package:mithka/chat/chat_view.dart';
+import 'package:mithka/chat/chat_view_model.dart';
 import 'package:mithka/components/drawer_controller.dart' as dc;
 import 'package:mithka/l10n/app_locale_controller.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
@@ -23,6 +25,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const privateChatId = 4242;
 const peerUserId = 7001;
+const _meUserId = 7002;
 
 const _translationChannel = MethodChannel('mithka/native_translation');
 
@@ -47,16 +50,26 @@ void main() {
             },
             'last_read_inbox_message_id': 1,
           },
-          'getUser' || 'getMe' => {
+          'getUser' => {
             '@type': 'user',
             'id': request['user_id'] ?? peerUserId,
             'first_name': 'Ann',
             'type': {'@type': 'userTypeRegular'},
           },
+          'getMe' => {
+            '@type': 'user',
+            'id': _meUserId,
+            'first_name': 'Me',
+            'type': {'@type': 'userTypeRegular'},
+          },
           'getChatHistory' => {
             '@type': 'messages',
-            'total_count': 1,
-            'messages': [_incomingMessage()],
+            'total_count': 3,
+            'messages': [
+              _incomingMessage(1),
+              _incomingMessage(2),
+              _incomingMessage(3),
+            ],
           },
           'getOption' => {'@type': 'optionValueInteger', 'value': '1024'},
           'getCountries' => {'@type': 'countries', 'countries': const []},
@@ -79,6 +92,8 @@ void main() {
   });
 
   setUp(() {
+    ChatHeaderStateCache.resetForTesting();
+    ChatTranslationLanguageCache.shared.resetForTesting();
     // Native language identification answers off the platform thread in
     // production; a mock handler is what makes that round-trip resolve inside
     // a widget test. 'en' is what turns the suggestion into a visible bar.
@@ -161,17 +176,17 @@ void main() {
   });
 }
 
-Map<String, dynamic> _incomingMessage() => {
+Map<String, dynamic> _incomingMessage(int id) => {
   '@type': 'message',
-  'id': 1,
+  'id': id,
   'chat_id': privateChatId,
-  'date': 1785862260,
+  'date': 1785862260 + id,
   'sender_id': {'@type': 'messageSenderUser', 'user_id': peerUserId},
   'content': {
     '@type': 'messageText',
     'text': {
       '@type': 'formattedText',
-      'text': 'Good morning, how are you doing today?',
+      'text': 'Good morning number $id, how are you doing today?',
       'entities': <Object>[],
     },
   },

@@ -21,8 +21,8 @@ import 'package:provider/provider.dart';
 import '../app/adaptive_split_layout.dart';
 import '../app/app_navigator.dart';
 import '../app/bottom_bar_layout.dart';
-import '../app/desktop_chat_list_title_bar_anchors.dart';
-import '../app/desktop_chat_window.dart';
+import '../app/desktop/desktop_chat_list_title_bar_anchors.dart';
+import '../app/desktop/desktop_chat_window.dart';
 import '../app/horizontal_safe_viewport.dart';
 import '../app/ipad_window_chrome.dart';
 import '../auth/account_store.dart';
@@ -52,8 +52,8 @@ import '../profile/emoji_status_picker.dart';
 import '../security/local_app_lock_controller.dart';
 import '../settings/chat_folder_management_view.dart';
 import '../settings/chat_folder_service.dart';
-import '../settings/edit_field_view.dart';
 import '../settings/local_premium.dart';
+import '../settings/profile_account/edit_field_view.dart';
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_client.dart';
 import '../tdlib/td_models.dart';
@@ -1466,7 +1466,9 @@ class _ChatListViewState extends State<ChatListView>
   static const _searchPillExtent =
       AppSpacing.md + AppMetric.searchHeight + AppSpacing.sm;
 
-  final ChatListViewModel _model = ChatListViewModel();
+  final ChatListViewModel _model = ChatListViewModel(
+    selectFirstFilterOnLoad: true,
+  );
   late final ScrollController _scrollController = _newScrollController();
 
   /// Drives the folder swipe. [_folderDrag] is the live horizontal travel of
@@ -1497,6 +1499,10 @@ class _ChatListViewState extends State<ChatListView>
       ChatListConnectionStatus.connecting;
   int? _openSwipeChat;
   bool _showPlusMenu = false;
+  final GlobalKey _addButtonKey = GlobalKey();
+
+  /// Where the + menu hangs from, below whichever row holds the +.
+  double? _plusMenuTop;
   bool _showFilterMenu = false;
   int? _pendingScrollToFirstUnreadRequest;
   bool _pendingScrollShouldToggle = false;
@@ -1546,7 +1552,7 @@ class _ChatListViewState extends State<ChatListView>
   OverlayEntry? _desktopChatMenuEntry;
   OverlayEntry? _desktopPlusMenuEntry;
 
-  // Multi-select edit mode (exteraless's dialog action mode): a long press on
+  // Multi-select edit mode (the reference client's dialog action mode): a long press on
   // a row's body enters selection instead of opening the peek; a long press on
   // the avatar still peeks. Rows toggle membership, and the header becomes a
   // command bar over the selected set.
@@ -1557,7 +1563,7 @@ class _ChatListViewState extends State<ChatListView>
   /// from that same gesture, before the mode flag rebuilds the list.
   int? _pendingSelectionModeChatId;
 
-  /// True while the gesture that opened edit mode is still down — exteraless's
+  /// True while the gesture that opened edit mode is still down — the reference client's
   /// allowMoving: lifting it must neither toggle membership nor drag.
   bool _selectionEntryGestureDown = false;
 
@@ -1573,7 +1579,7 @@ class _ChatListViewState extends State<ChatListView>
   /// Coordinate space for the drag proxy — the list area below the header.
   final GlobalKey _dragProxyScopeKey = GlobalKey();
 
-  /// Overlay drag proxy (exteraless's ItemTouchHelper overdraw child): the
+  /// Overlay drag proxy (the reference client's ItemTouchHelper overdraw child): the
   /// dragged row's pixels render above the whole list while the row itself
   /// stays in its slot holding the gesture. [_dragProxyTop] is the proxy's
   /// current top edge in the list coordinate space; on drop the proxy glides
@@ -2066,6 +2072,7 @@ class _ChatListViewState extends State<ChatListView>
     _dismissDesktopPlusMenu();
     if (!widget.desktopSidebar) {
       setState(() {
+        _plusMenuTop = _plusMenuTopBelowButton();
         _showPlusMenu = true;
         _showFilterMenu = false;
       });
@@ -2164,7 +2171,7 @@ class _ChatListViewState extends State<ChatListView>
   ///
   /// The "All chats" tab has no folder to edit, extend or delete, so it
   /// offers only the list-wide read and order commands. Every real folder
-  /// gains the destructive delete row exteraless shows at the bottom of the
+  /// gains the destructive delete row the reference client shows at the bottom of the
   /// same popup.
   Future<void> _showFolderMenu(ChatFilterOption filter, Rect anchor) async {
     final folderId = filter.folderId;
@@ -2910,7 +2917,7 @@ class _ChatListViewState extends State<ChatListView>
                   onPointerUp: _handleGesturePointerUp,
                   onPointerCancel: _handleGesturePointerCancel,
                   // The reorder drag proxy paints above the list, inside the
-                  // list's coordinate space (exteraless's ItemTouchHelper
+                  // list's coordinate space (the reference client's ItemTouchHelper
                   // overdraw child). IgnorePointer keeps the pointer with
                   // the real row below, which owns the live gesture.
                   child: Stack(
@@ -4305,7 +4312,7 @@ class _ChatListViewState extends State<ChatListView>
           : () {
               if (_selectionMode) {
                 // Pinned rows in edit mode: drag-only gesture (no toggle on
-                // lift) — mirrors _handleRowLongPress and exteraless.
+                // lift) — mirrors _handleRowLongPress and the reference client.
                 if (!_model.isPinnedInSelectedList(chat)) {
                   _toggleSelected(chat);
                 }
@@ -4391,7 +4398,7 @@ class _ChatListViewState extends State<ChatListView>
   /// One crossed row of an edit-mode drag. The list does not reorder yet:
   /// the dragged row's own translate shows the motion, its neighbours slide
   /// aside through [_dragShiftWrapper], and the whole move lands on the model
-  /// in one piece when the finger lifts. (exteraless's ItemTouchHelper swaps
+  /// in one piece when the finger lifts. (the reference client's ItemTouchHelper swaps
   /// pairs live, but its RecyclerView never rebuilds the recognizer mid-drag;
   //  deferring the reorder keeps this list's gesture alive.)
   void _handleDragReorderSlot(ChatSummary chat, int slots) {
@@ -4421,7 +4428,7 @@ class _ChatListViewState extends State<ChatListView>
     _draggedChatId = null;
     // The reorder lands in the same build that clears the neighbour shifts;
     // that frame must not animate the clear (the slot change already carries
-    // the motion — exteraless's animator never sees this pass because its
+    // the motion — the reference client's animator never sees this pass because its
     // adapter already held the final order during the drag).
     _shiftsClearInstantly = willReorder;
     if (_dragProxyChatId != null) {
@@ -4439,7 +4446,7 @@ class _ChatListViewState extends State<ChatListView>
     _model.reorderPinnedChat(chatId: id, targetChatId: band[target].id);
   }
 
-  /// The lifted row's pixels, following the finger above the list. exteraless
+  /// The lifted row's pixels, following the finger above the list. the reference client
   /// renders this through ItemTouchHelper: elevation raises the dragged cell
   /// over its siblings and its translation tracks the finger — Flutter's
   /// ListView has no child Z order, so the proxy draws in this Stack above
@@ -4487,7 +4494,7 @@ class _ChatListViewState extends State<ChatListView>
   /// During an edit-mode pinned drag, the neighbours the dragged row has
   /// passed slide one row extent in the opposite direction, so the band reads
   /// reordered without any list mutation until the drop. The slide is
-  /// animated — exteraless's DialogsItemAnimator runs a move animation for
+  /// animated — the reference client's DialogsItemAnimator runs a move animation for
   /// exactly these neighbours — so rows glide aside instead of teleporting.
   ///
   /// Always wraps, even at offset zero: a wrapper that appears only mid-drag
@@ -4513,7 +4520,7 @@ class _ChatListViewState extends State<ChatListView>
             // height, and the band's rows share one extent — one row aside
             // is exactly 1.0. (Passing the pixel extent here multiplied the
             // painted shift by the row height: neighbours flew ~extent² off
-            // the viewport instead of gliding one row, the way exteraless's
+            // the viewport instead of gliding one row, the way the reference client's
             // DialogsItemAnimator.animateMove moves them 180ms old→new.)
             shift = slots > 0 ? -1.0 : 1.0;
           }
@@ -4545,7 +4552,7 @@ class _ChatListViewState extends State<ChatListView>
         .toList();
   }
 
-  /// exteraless's hit split: a long press inside the avatar column peeks the
+  /// the reference client's hit split: a long press inside the avatar column peeks the
   /// conversation; anywhere else on the row enters the multi-select edit mode.
   ///
   /// The avatar column spans the leading inset plus the avatar (49pt on
@@ -4553,7 +4560,7 @@ class _ChatListViewState extends State<ChatListView>
   void _handleRowLongPress(ChatSummary chat, Offset localPosition) {
     if (_selectionMode) {
       // In edit mode a pinned row's long-press belongs to the drag alone:
-      // exteraless's onItemLongClick returns early (no toggle) when the
+      // the reference client's onItemLongClick returns early (no toggle) when the
       // action mode is showing AND the dialog is pinned — the gesture can
       // only reorder, so lifting it without crossing rows changes nothing.
       if (!_model.isPinnedInSelectedList(chat)) {
@@ -4938,10 +4945,30 @@ class _ChatListViewState extends State<ChatListView>
 
   // MARK: - "+" dropdown
 
+  /// The menu's top just under the + artwork, in this view's coordinates:
+  /// the + moves between the profile row and the folder tabs, and the row
+  /// itself moves up beside a corner status cluster.
+  double? _plusMenuTopBelowButton() {
+    final button = _addButtonKey.currentContext?.findRenderObject();
+    final view = context.findRenderObject();
+    if (button is! RenderBox ||
+        view is! RenderBox ||
+        !button.attached ||
+        !button.hasSize) {
+      return null;
+    }
+    // Same overlap as the original anchor: 6pt into the 44pt target, which
+    // leaves the menu 1.5pt under the 29pt artwork.
+    return button
+            .localToGlobal(Offset(0, button.size.height), ancestor: view)
+            .dy -
+        6;
+  }
+
   Widget _plusMenuOverlay({required bool visible}) {
     return AnchoredMenuOverlay(
       visible: visible,
-      top: MediaQuery.paddingOf(context).top + 48,
+      top: _plusMenuTop ?? MediaQuery.paddingOf(context).top + 48,
       onDismiss: () => setState(() => _showPlusMenu = false),
       child: PlusMenu(
         onSelect: _selectPlusMenuItem,
@@ -5639,15 +5666,15 @@ class ChatSwipeRow extends StatefulWidget {
   final VoidCallback? onLongPress;
 
   /// Long-press with the press coordinates, so the host can split the gesture
-  /// by hit region (exteraless peeks only from the avatar).
+  /// by hit region (the reference client peeks only from the avatar).
   final void Function(Offset localPosition)? onLongPressAt;
 
-  /// Edit-mode pinned reorder (exteraless's action-mode ItemTouchHelper drag):
+  /// Edit-mode pinned reorder (the reference client's action-mode ItemTouchHelper drag):
   /// when enabled, a long press that moves vertically drags the row over its
   /// pinned neighbours, reporting each crossed slot so the host can swap.
   final bool dragReorderEnabled;
 
-  /// The drag lifted: the host raises an overlay proxy of the row (exteraless
+  /// The drag lifted: the host raises an overlay proxy of the row (the reference client
   /// draws the dragged cell above the list through ItemTouchHelper's overdraw
   /// child + elevation) and hides this row's content.
   final void Function(Offset globalTopLeft, Size size)? onDragReorderStart;
@@ -5662,7 +5689,7 @@ class ChatSwipeRow extends StatefulWidget {
   final void Function(int slots)? onDragReorderSlot;
 
   /// The finger came up: the host commits the accumulated swaps here (one
-  /// setPinnedChats per drag, like exteraless commits reorderPinnedDialogs on
+  /// setPinnedChats per drag, like the reference client commits reorderPinnedDialogs on
   /// drop — never per crossed slot).
   final VoidCallback? onDragReorderEnd;
 
@@ -5674,7 +5701,7 @@ class ChatSwipeRow extends StatefulWidget {
   final bool horizontalSwipeEnabled;
   final bool pressRippleEnabled;
 
-  /// exteraless's allowMoving split: the long press that OPENS edit mode must
+  /// the reference client's allowMoving split: the long press that OPENS edit mode must
   /// do nothing when the finger lifts (the mode stays); only later presses
   /// toggle membership or drag. The host sets this on the row whose press
   /// opened the mode, for the lifetime of that one gesture.
@@ -5982,7 +6009,7 @@ class _ChatSwipeRowState extends State<ChatSwipeRow>
       onLongPressStart: (details) {
         _stopAnimation();
         _longPressStartOffset = _offset;
-        // exteraless splits the row's long press by hit region: the avatar
+        // the reference client splits the row's long press by hit region: the avatar
         // peeks, the body selects. The plain onLongPress callback stays for
         // hosts that did not opt into the split.
         if (!desktopTouchGestures &&
@@ -6089,7 +6116,7 @@ class _ChatSwipeRowState extends State<ChatSwipeRow>
           ),
           // The row, sliding left to uncover the blocks. While an edit-mode
           // reorder drag is live the row's CONTENT moves to the host's
-          // overlay proxy (drawn above the whole list, exteraless's
+          // overlay proxy (drawn above the whole list, the reference client's
           // ItemTouchHelper overdraw child + elevation); the row keeps its
           // slot, size and gesture here, so the subtree shape never changes
           // mid-drag and the recognizer survives.

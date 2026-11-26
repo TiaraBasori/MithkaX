@@ -94,6 +94,7 @@ void main() {
         '@type': 'linkPreviewOptions',
         'is_disabled': false,
         'url': 'https://fixupx.com/user/status/1',
+        'show_above_text': true,
       });
     },
   );
@@ -117,14 +118,132 @@ void main() {
       '@type': 'linkPreviewOptions',
       'is_disabled': false,
       'url': 'https://fxtwitter.com/user/status/2',
+      'show_above_text': true,
     });
   });
 
-  test('the override stays off until the reader opts in', () async {
+  group('mirror table matches the exteraless page-preview rules', () {
+    const rules = {
+      'https://x.com/user/status/1': 'https://fixupx.com/user/status/1',
+      'https://twitter.com/user/status/1':
+          'https://fxtwitter.com/user/status/1',
+      'https://coolapk.com/feed/1': 'https://coolapk1s.com/feed/1',
+      'https://www.instagram.com/p/abc/': 'https://kkinstagram.com/p/abc/',
+      'https://vm.tiktok.com/ZMabc/': 'https://vm.kktiktok.com/ZMabc/',
+      'https://vt.tiktok.com/ZSabc/': 'https://vt.kktiktok.com/ZSabc/',
+      'https://www.tiktok.com/@user/video/1':
+          'https://www.kktiktok.com/@user/video/1',
+      'https://www.reddit.com/r/aww/comments/1/title/':
+          'https://www.rxddit.com/r/aww/comments/1/title/',
+      'https://bsky.app/profile/user/post/1':
+          'https://fxbsky.app/profile/user/post/1',
+      'https://www.pixiv.net/artworks/1': 'https://www.phixiv.net/artworks/1',
+    };
+
+    for (final rule in rules.entries) {
+      test(rule.key, () {
+        expect(LinkPreviewFixer.fixedUrl(rule.key), rule.value);
+        // The send path and the host table agree on the same rewrite.
+        expect(
+          LinkPreviewFixer.previewHosts[Uri.parse(rule.key).host],
+          isNotNull,
+        );
+      });
+    }
+
+    test('a site without a rule is left alone', () {
+      expect(LinkPreviewFixer.fixedUrl('https://example.com/post/1'), isNull);
+    });
+  });
+
+  test('the fix is on out of the box, like exteraless', () async {
     final vm = model()..setDraft('https://x.com/user/status/1');
 
+    expect(LinkPreviewFixer.shared.enabled, isTrue);
     expect(await vm.send(), isTrue);
 
-    expect(sentContent().containsKey('link_preview_options'), isFalse);
+    expect(sentContent()['link_preview_options'], {
+      '@type': 'linkPreviewOptions',
+      'is_disabled': false,
+      'url': 'https://fixupx.com/user/status/1',
+      'show_above_text': true,
+    });
+  });
+
+  group('Telegraph and Tweet links are always previewed', () {
+    test('a Tweet keeps its mirror when the switch is off', () async {
+      await LinkPreviewFixer.shared.setEnabled(false);
+      final vm = model()..setDraft('https://x.com/user/status/1');
+
+      expect(await vm.send(), isTrue);
+
+      expect(sentContent()['link_preview_options'], {
+        '@type': 'linkPreviewOptions',
+        'is_disabled': false,
+        'url': 'https://fixupx.com/user/status/1',
+        'show_above_text': true,
+      });
+    });
+
+    test('a Telegraph article is requested as itself', () async {
+      await LinkPreviewFixer.shared.setEnabled(false);
+      final vm = model()
+        ..setDraft('读 https://telegra.ph/Why-Instant-View-11-25 这篇');
+
+      expect(await vm.send(), isTrue);
+
+      expect(sentContent()['link_preview_options'], {
+        '@type': 'linkPreviewOptions',
+        'is_disabled': false,
+        'url': 'https://telegra.ph/Why-Instant-View-11-25',
+        'show_above_text': true,
+      });
+    });
+
+    test('a t.me/iv link keeps the query it needs', () async {
+      final vm = model()
+        ..setDraft(
+          'https://t.me/iv?url=https%3A%2F%2Ftelegra.ph%2FNote-11-25&rhash=abc',
+        );
+
+      expect(await vm.send(), isTrue);
+
+      expect(
+        sentContent()['link_preview_options']?['url'],
+        'https://t.me/iv?url=https%3A%2F%2Ftelegra.ph%2FNote-11-25&rhash=abc',
+      );
+    });
+
+    test('the switch still turns off the other mirrors', () async {
+      await LinkPreviewFixer.shared.setEnabled(false);
+      final vm = model()..setDraft('https://www.instagram.com/p/C2QhXyYabc/');
+
+      expect(await vm.send(), isTrue);
+
+      expect(sentContent().containsKey('link_preview_options'), isFalse);
+    });
+
+    test('an explicit preview choice is overridden for a Tweet', () {
+      final request = LinkPreviewFixer.shared.applyTo({
+        '@type': 'sendMessage',
+        'input_message_content': {
+          '@type': 'inputMessageText',
+          'text': {
+            '@type': 'formattedText',
+            'text': 'https://x.com/a/status/1',
+          },
+          'link_preview_options': {
+            '@type': 'linkPreviewOptions',
+            'is_disabled': true,
+          },
+        },
+      });
+
+      expect(
+        (request['input_message_content']
+            as Map<String, dynamic>)['link_preview_options']?['url'],
+        'https://fixupx.com/a/status/1',
+      );
+    });
   });
 }

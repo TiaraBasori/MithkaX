@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../components/app_icons.dart';
 import '../components/app_interactive_surface.dart';
 import '../l10n/app_localizations.dart';

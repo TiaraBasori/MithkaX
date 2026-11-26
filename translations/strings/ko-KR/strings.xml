@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MithkaX's string catalogue. Edit translations here; run tools/gen_assets.py to push them into the app. -->
+<!-- Mithka's string catalogue. Edit translations here; run translations/tools/gen_assets.py to push them into the app. -->
 <resources>
     <string name="aboutCheckForUpdates">업데이트 확인</string>
     <string name="aboutCheckingForUpdates">확인 중…</string>
@@ -7,6 +7,7 @@
     <string name="aboutReportProblem">문제 신고</string>
     <string name="aboutReportProblemDetail">개인정보를 제외한 진단 정보 포함</string>
     <string name="aboutTelegramChannel">Telegram 채널</string>
+    <string name="aboutCommunityChat">커뮤니티 채팅</string>
     <string name="aboutTitle">정보</string>
     <string name="aboutUpToDate">최신 버전입니다</string>
     <string name="aboutUpdateAvailable">버전 {value1}을(를) 사용할 수 있습니다</string>
@@ -234,6 +235,8 @@
     <string name="aiServerModelHint">모델 이름</string>
     <string name="aiServerPrivacy">활성화된 AI 기능에서 사용하는 텍스트가 이 엔드포인트로 전송됩니다. API 키는 이 기기의 보안 저장소에만 보관됩니다.</string>
     <string name="aiSettingsTitle">AI 설정</string>
+    <string name="aiShowComposerButton">메시지 입력란에 AI 버튼 표시</string>
+    <string name="aiShowComposerButtonDescription">끄면 메시지 입력란 옆의 반짝이 버튼이 사라집니다.</string>
     <string name="aiSummarizePrompts">요약 프롬프트</string>
     <string name="aiSummarizeUsing">요약에 사용할 모델</string>
     <string name="aiSummaryActions">할 일</string>
@@ -390,6 +393,7 @@
     <string name="appLockAutoLockDisabled">사용 안 함</string>
     <string name="appLockAutoLockFiveHours">5시간 후</string>
     <string name="appLockAutoLockFiveMinutes">5분 후</string>
+    <string name="appLockAutoLockImmediately">즉시</string>
     <string name="appLockAutoLockOneHour">1시간 후</string>
     <string name="appLockAutoLockOneMinute">1분 후</string>
     <string name="appLockBiometricDescription">앱 잠금 화면이 나타나면 {value1}(으)로 Mithka X를 잠금 해제할 수 있습니다.</string>
@@ -433,6 +437,7 @@
     <string name="appLockTryBiometric">{value1} 사용</string>
     <string name="appLockUnlockMethod">잠금 해제 방법</string>
     <string name="appLockUnlockTitle">Mithka X 잠금 해제</string>
+    <string name="appLockUnlocked">잠금 해제됨</string>
     <string name="appLockUseBiometric">{value1}(으)로 잠금 해제</string>
     <string name="appLockVerifyTitle">앱 잠금 확인</string>
     <string name="appLockWrongGesture">제스처가 올바르지 않습니다.</string>
@@ -486,6 +491,8 @@
     <string name="appearanceInUseSize">사용 중</string>
     <string name="appearanceInterfaceSize">인터페이스 크기</string>
     <string name="appearanceLivePreviewUnavailable">실시간 미리보기를 사용할 수 없음</string>
+    <string name="appearanceLocalFonts">로컬 글꼴</string>
+    <string name="appearanceLocalFontsDescription">이 기기에 설치된 글꼴로 다운로드 없이 바로 렌더링됩니다.</string>
     <string name="appearanceManage">관리</string>
     <string name="appearanceMergeConsecutiveImages">미디어 앨범 묶어 보기</string>
     <string name="appearanceMessageActionMenu">메시지 작업 메뉴</string>
@@ -500,6 +507,9 @@
     <string name="appearanceNameColorPremium">Premium 사용자</string>
     <string name="appearanceNoCleanableFonts">정리할 항목 없음</string>
     <string name="appearanceNoDownloadedFontCache">다운로드된 글꼴 캐시가 없습니다.</string>
+    <string name="appearanceNoLocalFonts">설치된 로컬 글꼴을 찾을 수 없습니다.</string>
+    <string name="appearanceOnlineFonts">Google Fonts (온라인)</string>
+    <string name="appearanceOnlineFontsDescription">Google Fonts 온라인 글꼴로 선택 시 다운로드하여 로컬에 캐시합니다.</string>
     <string name="appearanceNoMatchingFonts">일치하는 글꼴이 없습니다</string>
     <string name="appearancePerAccountTheming">계정별 테마 사용</string>
     <string name="appearancePreviewAlbumCaption">그룹 앨범 속 두 순간.</string>
@@ -510,6 +520,7 @@
     <string name="appearancePreviewMessageSample">Jennie: 채팅에서 봐요</string>
     <string name="appearancePreviewUsersSample">Mithka X 사용자</string>
     <string name="appearanceRefreshCacheList">캐시 목록 새로 고침</string>
+    <string name="appearanceReloadFonts">로컬 글꼴 새로고침</string>
     <string name="appearanceRoundGroupAvatars">그룹 채팅 프로필을 원형으로 표시</string>
     <string name="appearanceSearchFont">글꼴 검색</string>
     <string name="appearanceSectionChat">채팅</string>
@@ -874,6 +885,8 @@
     <string name="chatCannotSendMessages">이 채팅에서는 메시지를 보낼 수 없습니다</string>
     <string name="chatConnectedBusinessBot">연결된 비즈니스 봇</string>
     <string name="chatContactCallsOnly">연락처와의 통화만 지원됩니다</string>
+    <string name="chatContextPaneHide">그룹 정보 숨기기</string>
+    <string name="chatContextPaneShow">그룹 정보 보기</string>
     <string name="chatDelete">삭제</string>
     <string name="chatDeleteActionsDone">완료되었습니다</string>
     <string name="chatDeleteActionsFailed">작업을 적용할 수 없음: {value1}</string>
@@ -2089,6 +2102,18 @@
     <string name="imageEditTextTool">텍스트</string>
     <string name="imageEditTitle">이미지 편집</string>
     <string name="imagePreviewTitle">이미지 미리보기</string>
+    <string name="instantViewTextSize">글자 크기</string>
+    <string name="instantViewExtracting">기사를 추출하는 중…</string>
+    <string name="instantViewOpenLocal">인스턴트 뷰로 열기</string>
+    <string name="instantViewSearch">검색</string>
+    <string name="instantViewPreviousMatch">이전 일치 항목</string>
+    <string name="instantViewNextMatch">다음 일치 항목</string>
+    <string name="instantViewTitle">인스턴트 뷰</string>
+    <string name="instantViewOpenInBrowser">브라우저에서 열기</string>
+    <string name="instantViewLoadFailed">페이지를 불러올 수 없습니다</string>
+    <string name="instantViewShowMore">더 보기</string>
+    <string name="instantViewShowLess">접기</string>
+    <string name="instantViewRetry">다시 시도</string>
     <string name="keywordBlockerAddFromMessageTitle">키워드 차단</string>
     <string name="keywordBlockerDescription">키워드를 추가하면 일치하는 메시지가 채팅에 표시되지 않고 로컬 알림도 울리지 않습니다. 일반 키워드, re:정규식, regex:정규식, /정규식/i를 지원합니다. 원격 목록은 한 줄에 규칙 하나씩 입력하며, # 또는 //로 시작하는 줄은 주석입니다.</string>
     <string name="keywordBlockerDownload">다운로드</string>
@@ -2407,6 +2432,10 @@
     <string name="messageChecklistTaskHint">Task description</string>
     <string name="messageLeaveAComment">댓글 남기기</string>
     <string name="messageLinkCopied">링크 복사됨</string>
+    <string name="messageLinkCopyEmail">이메일 복사</string>
+    <string name="messageLinkCopyHashtag">해시태그 복사</string>
+    <string name="messageLinkCopyUsername">사용자 이름 복사</string>
+    <string name="messageLinkShareQr">QR 코드 공유</string>
     <string name="messagePollClosed">Closed</string>
     <string name="messagePollStop">Close poll</string>
     <string name="messagePollStopConfirm">Voting cannot continue after this poll is closed.</string>
@@ -4008,7 +4037,6 @@
     <string name="videoPlayerUseSystemOrientation">시스템 방향 사용</string>
     <string name="videoPlayerWaitingForFile">동영상 파일 대기 중</string>
     <string name="videoTrimFailed">잘라낸 동영상을 만들지 못했습니다.</string>
-    <string name="vipBadgeLabel">VIP</string>
     <string name="voiceNotePreviewVoiceMessage">음성 메시지</string>
     <string name="mediaSpoilerReveal">스포일러. 탭하여 표시</string>
     <string name="downloadsTasks">다운로드 작업</string>
@@ -4134,4 +4162,22 @@
     <string name="mithkaxScheduledDeleteThreeDays">3일</string>
     <string name="mithkaxScheduledDeleteOneWeek">1주</string>
     <string name="mithkaxScheduledDeleteOneMonth">1개월</string>
+
+    <string name="channelBottomBar">채널 하단 표시줄</string>
+    <string name="channelBottomBarHidden">완전히 숨기기</string>
+    <string name="channelBottomBarMute">기본 (음소거 / 해제)</string>
+    <string name="channelBottomBarNote">게시할 수 없는 구독 중인 채널에만 적용됩니다. '토론 및 다이렉트 메시지'를 선택하면 둘 다 없는 채널은 하단 표시줄을 완전히 숨깁니다.</string>
+    <string name="channelDeleteTopic">주제 삭제</string>
+    <string name="channelMarkAllReadFailed">읽음으로 표시하지 못했습니다</string>
+    <string name="channelPanelDirect">다이렉트 메시지</string>
+    <string name="channelPanelDiscussion">토론</string>
+    <string name="channelPostForwards">{value1}회 전달</string>
+    <string name="channelPostStats">채널 게시물에 조회수와 전달 수 표시</string>
+    <string name="channelPostViews">{value1}회 조회</string>
+    <string name="channelBottomBarActions">토론 및 다이렉트 메시지</string>
+    <string name="mithkaxTopicTabsDone">완료</string>
+    <string name="mithkaxTopicTabsReorder">탭 순서 변경</string>
+    <string name="mithkaxTopicTabsMoveToBottom">탭 표시줄을 아래로 이동</string>
+    <string name="mithkaxTopicTabsMoveToSide">탭 표시줄을 측면으로 이동</string>
+    <string name="mithkaxTopicTabsMoveToTop">탭 표시줄을 위로 이동</string>
 </resources>

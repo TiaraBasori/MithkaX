@@ -7,7 +7,7 @@
 //  caption→copy forcing rule), render-markdown, change recipient, apply,
 //  cancel.
 //
-//  The toggles are action-labeled rows (exteraless ToggleButton): the label
+//  The toggles are action-labeled rows (the reference client ToggleButton): the label
 //  names the action tapping performs — “Hide sender” while the sender is
 //  shown, “Show sender” once hidden — and every tap re-renders both rows
 //  immediately, so the coupled caption→sender rule is visible the moment it
@@ -15,6 +15,7 @@
 //
 
 import 'package:flutter/material.dart';
+
 import '../components/app_icons.dart';
 import '../components/app_interactive_surface.dart';
 import '../l10n/app_localizations.dart';

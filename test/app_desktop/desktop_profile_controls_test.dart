@@ -7,7 +7,6 @@ import 'package:mithka/app/app_navigator.dart';
 import 'package:mithka/app/content_view.dart';
 import 'package:mithka/auth/account_store.dart';
 import 'package:mithka/auth/auth_manager.dart';
-import 'package:mithka/components/vip_badge.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
@@ -26,19 +25,15 @@ class _Accounts extends AccountStore {
 void main() {
   final desktop = TargetPlatformVariant.only(TargetPlatform.macOS);
 
-  testWidgets('Premium mark follows the desktop status control', (
+  testWidgets('the desktop account row carries no Premium mark', (
     tester,
   ) async {
+    // A Premium account still shows the emoji status control; the gold badge
+    // that used to sit beside it was removed from the sidebar outright.
     await _pump(tester);
     final status = find.byKey(const ValueKey('desktop-title-bar-status'));
-    final badge = find.byKey(const ValueKey('desktop-title-bar-vip'));
     expect(status, findsOneWidget);
-    expect(badge, findsOneWidget);
-    expect(tester.getSize(badge), const Size.square(18));
-    expect(
-      tester.getRect(badge).left,
-      greaterThan(tester.getRect(status).right),
-    );
+    expect(find.byKey(const ValueKey('desktop-title-bar-vip')), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: desktop);
 
@@ -46,10 +41,8 @@ void main() {
     tester,
   ) async {
     await _pump(tester, premium: false);
-    expect(find.byType(VipBadge), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await _pump(tester, ready: false);
-    expect(find.byType(VipBadge), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: desktop);
 

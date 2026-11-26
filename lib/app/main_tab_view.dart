@@ -46,10 +46,10 @@ import '../platform/android_share_intent.dart';
 import '../profile/profile_proxy_button.dart';
 import '../profile/profile_view.dart';
 import '../settings/desktop_hotkey_controller.dart';
-import '../settings/ghost_mode_controller.dart';
-import '../settings/ghost_mode_settings_view.dart';
-import '../settings/proxy_status.dart';
-import '../settings/proxy_view.dart';
+import '../settings/network_proxy/proxy_status.dart';
+import '../settings/network_proxy/proxy_view.dart';
+import '../settings/privacy_security/ghost_mode_controller.dart';
+import '../settings/privacy_security/ghost_mode_settings_view.dart';
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_client.dart';
 import '../tdlib/td_models.dart';
@@ -66,9 +66,9 @@ import 'app_navigator.dart';
 import 'bottom_bar_layout.dart';
 import 'chat_deep_link_controller.dart';
 import 'chat_pane.dart';
-import 'desktop_chat_window.dart';
-import 'desktop_navigation_rail.dart';
-import 'desktop_utility_window.dart';
+import 'desktop/desktop_chat_window.dart';
+import 'desktop/desktop_navigation_rail.dart';
+import 'desktop/desktop_utility_window.dart';
 import 'detail_content_reveal.dart';
 import 'horizontal_safe_viewport.dart';
 import 'liquid_glass_bottom_bar.dart' show LiquidGlassBottomBar;
@@ -1760,6 +1760,9 @@ abstract class _MainRootViewState<T extends StatefulWidget> extends State<T>
         showHeaderDivider: false,
         trailingPane: trailingPane,
         trailingPaneWidth: trailingPaneWidth,
+        // Every shell passes the context-pane toggle here, and only while the
+        // pane fits, so the edge tab shares the header button's state.
+        onTrailingPaneToggle: onInfoPressed,
         requestComposerFocusOnReady: selected.composerFocusRequestId != 0,
         forwardHandoff: selected.pendingForwardHandoff,
         exitController: _messageChatExitController,
@@ -2082,13 +2085,7 @@ class _MessageEmptyPane extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset(
-                brandMarkAsset,
-                width: 92,
-                height: 92,
-                color: c.textTertiary,
-                filterQuality: FilterQuality.high,
-              ),
+              BrandMark(size: 92),
               const SizedBox(width: 18),
               // The 64 pt wordmark plus the mark overflows narrow panes; scale
               // the pair down as one unit instead of clipping the text.

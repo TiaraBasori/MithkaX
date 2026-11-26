@@ -9,8 +9,9 @@
 
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'package:f_videoplayer/f_videoplayer.dart';
-import 'package:f_videoplayer_fvp/f_videoplayer_fvp.dart';
+
+import 'package:cineplay/cineplay.dart';
+import 'package:cineplay_fvp/cineplay_fvp.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
@@ -23,20 +24,21 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'app/app_navigator.dart';
 import 'app/app_performance_controller.dart';
 import 'app/app_version.dart';
 import 'app/chat_deep_link_controller.dart';
 import 'app/content_view.dart';
 import 'app/deep_link_service.dart';
-import 'app/desktop_chat_window.dart';
-import 'app/desktop_hotkey_host.dart';
-import 'app/desktop_image_preview_window.dart';
-import 'app/desktop_mini_app_window.dart';
-import 'app/desktop_mini_app_window_app.dart';
-import 'app/desktop_utility_window.dart';
-import 'app/desktop_video_window.dart';
-import 'app/desktop_window_controls.dart';
+import 'app/desktop/desktop_chat_window.dart';
+import 'app/desktop/desktop_hotkey_host.dart';
+import 'app/desktop/desktop_image_preview_window.dart';
+import 'app/desktop/desktop_mini_app_window.dart';
+import 'app/desktop/desktop_mini_app_window_app.dart';
+import 'app/desktop/desktop_utility_window.dart';
+import 'app/desktop/desktop_video_window.dart';
+import 'app/desktop/desktop_window_controls.dart';
 import 'app/global_video_split_host.dart';
 import 'app/handoff_service.dart';
 import 'app/horizontal_safe_viewport.dart';
@@ -76,27 +78,28 @@ import 'notifications/push_device_registrar.dart';
 import 'platform/app_haptics.dart';
 import 'platform/application_exit_coordinator.dart';
 import 'platform/firebase_configuration.dart';
+import 'platform/network_change_monitor.dart';
 import 'platform/ohos_support.dart';
 import 'platform/process_engine.dart';
 import 'platform/system_ui.dart';
 import 'pro/mithka_pro_service.dart';
 import 'security/local_app_lock_controller.dart';
 import 'security/local_app_lock_views.dart';
-import 'settings/ai_settings_controller.dart';
-import 'settings/app_icon_controller.dart';
-import 'settings/auto_download_media_controller.dart';
-import 'settings/blocked_user_service.dart';
-import 'settings/business_service.dart';
-import 'settings/country_message_filter.dart';
+import 'settings/ai_translation/ai_settings_controller.dart';
+import 'settings/ai_translation/translation_controller.dart';
+import 'settings/appearance/app_icon_controller.dart';
+import 'settings/business/business_service.dart';
 import 'settings/desktop_hotkey_controller.dart';
 import 'settings/developer_mode_controller.dart';
-import 'settings/ghost_mode_controller.dart';
-import 'settings/hidden_sender_store.dart';
-import 'settings/keyword_blocker.dart';
+import 'settings/downloads_storage/auto_download_media_controller.dart';
 import 'settings/local_premium.dart';
-import 'settings/safety_notice_controller.dart';
-import 'settings/sensitive_content_controller.dart';
-import 'settings/translation_controller.dart';
+import 'settings/privacy_security/blocked_user_service.dart';
+import 'settings/privacy_security/country_message_filter.dart';
+import 'settings/privacy_security/ghost_mode_controller.dart';
+import 'settings/privacy_security/hidden_sender_store.dart';
+import 'settings/privacy_security/keyword_blocker.dart';
+import 'settings/privacy_security/safety_notice_controller.dart';
+import 'settings/privacy_security/sensitive_content_controller.dart';
 import 'tdlib/td_client.dart';
 import 'theme/app_motion.dart';
 import 'theme/app_theme.dart';
@@ -329,6 +332,10 @@ Future<void> _bootstrapAndRunApp() async {
   GroupScheduledDeletionController.shared.initialize(prefs);
   // Preload Telegram blocked-user list so chat filters have data right away.
   unawaited(BlockedUserService.shared.loadBlockedUsers());
+  // A dropped Wi-Fi or VPN leaves TDLib holding a dead socket; the monitor
+  // re-asserts its network type on every interface change so the client dials
+  // again instead of sitting "connecting" until the next launch.
+  NetworkChangeMonitor.shared.start();
   // Firebase + analytics + Sentry tags are several platform-channel round
   // trips that nothing in the widget tree depends on. Firebase's own init runs
   // on the calling platform thread, so hold it until the scheduler is idle
@@ -510,6 +517,7 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
   );
   late TranslationController _translation = TranslationController(widget.prefs);
   late AiSettingsController _ai = AiSettingsController(widget.prefs);
+  late bool _lastShowComposerAiButton;
   late AppLocaleController _locale = AppLocaleController(widget.prefs);
   late final dc.DrawerController _drawer = dc.DrawerController();
   late final ChatDeepLinkController _chatDeepLinks =
@@ -559,6 +567,8 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
     _performance.start();
     _accounts.addListener(_handleActiveAccountChange);
     _theme.addListener(_handleThemePreferencesChange);
+    _lastShowComposerAiButton = _ai.showComposerAiButton;
+    _ai.addListener(_handleAiPreferencesChange);
     HiddenSenderStore.shared.addListener(_handleHiddenSendersChange);
     BusinessQuickReplyService.shared.startPreloading(
       enabled: _theme.quickRepliesEnabled,
@@ -623,6 +633,7 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
     _performance.dispose();
     _accounts.removeListener(_handleActiveAccountChange);
     _theme.removeListener(_handleThemePreferencesChange);
+    _ai.removeListener(_handleAiPreferencesChange);
     HiddenSenderStore.shared.removeListener(_handleHiddenSendersChange);
     _groupRemarks.dispose();
     _folderTags.dispose();
@@ -658,6 +669,13 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
   /// Hidden members changed here, or a child window asked this one to
   /// re-read them: every other window re-reads them too.
   void _handleHiddenSendersChange() {
+    unawaited(DesktopChatWindowService.instance.notifyPresentationChanged());
+  }
+
+  void _handleAiPreferencesChange() {
+    final showButton = _ai.showComposerAiButton;
+    if (_lastShowComposerAiButton == showButton) return;
+    _lastShowComposerAiButton = showButton;
     unawaited(DesktopChatWindowService.instance.notifyPresentationChanged());
   }
 
@@ -726,6 +744,9 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
         )..start();
         final nextSafetyNotice = SafetyNoticeController(widget.prefs);
 
+        previousAi.removeListener(_handleAiPreferencesChange);
+        _lastShowComposerAiButton = nextAi.showComposerAiButton;
+        nextAi.addListener(_handleAiPreferencesChange);
         previousTheme.removeListener(_handleThemePreferencesChange);
         nextTheme.addListener(_handleThemePreferencesChange);
         BusinessQuickReplyService.shared.setPreloadingEnabled(
@@ -793,6 +814,17 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeLocales(List<Locale>? locales) {
+    super.didChangeLocales(locales);
+    _theme.syncTypographyLocale(
+      appLocale: _locale.locale,
+      systemLocale: locales?.isNotEmpty == true
+          ? locales!.first
+          : ui.PlatformDispatcher.instance.locale,
+    );
+  }
+
+  @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
     if (_theme.mode != AppearanceMode.system) return;
@@ -836,6 +868,8 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
   ThemeData _themeData(Brightness brightness, ThemeController theme) {
     final colors = theme.uiColorsFor(brightness);
     final families = theme.effectiveFontFamilyChain();
+    final typographyLocale = theme.effectiveTypographyLocale;
+    final fontCacheRevision = theme.fontCacheRevision;
     final seedColor = theme.usesCloudThemeForUi(brightness)
         ? colors.linkBlue
         : theme.brandColor;
@@ -843,6 +877,8 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
     if (memo != null &&
         memo.colors == colors &&
         memo.seedColor == seedColor &&
+        memo.typographyLocale == typographyLocale &&
+        memo.fontCacheRevision == fontCacheRevision &&
         listEquals(memo.families, families)) {
       return memo.data;
     }
@@ -880,6 +916,8 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
       colors: colors,
       families: families,
       seedColor: seedColor,
+      typographyLocale: typographyLocale,
+      fontCacheRevision: fontCacheRevision,
       data: data,
     );
     return data;
@@ -911,6 +949,11 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
       ],
       child: _MithkaAppConsumer(
         builder: (context, theme, accounts, locale, _) {
+          theme.syncTypographyLocale(
+            appLocale: locale.locale,
+            systemLocale: ui.PlatformDispatcher.instance.locale,
+            notify: false,
+          );
           return MaterialApp(
             navigatorKey: appNavigatorKey,
             title: 'Mithka X',
@@ -1017,7 +1060,15 @@ class _MithkaAppState extends State<MithkaApp> with WidgetsBindingObserver {
                   Positioned.fill(
                     child: ExcludeSemantics(
                       excluding: appLock.locked,
-                      child: framedUnlockedApp,
+                      // The gate fades away over the app; settling the app
+                      // from a hair of over-scale gives the hand-off depth.
+                      // It never scales below 1, so no edge is ever exposed.
+                      child: AnimatedScale(
+                        scale: appLock.locked ? 1.012 : 1,
+                        duration: const Duration(milliseconds: 340),
+                        curve: Curves.easeOutCubic,
+                        child: framedUnlockedApp,
+                      ),
                     ),
                   ),
                   const Positioned.fill(child: LocalAppLockGate()),
@@ -1070,12 +1121,16 @@ class _ThemeDataMemo {
     required this.colors,
     required this.families,
     required this.seedColor,
+    required this.typographyLocale,
+    required this.fontCacheRevision,
     required this.data,
   });
 
   final AppColors colors;
   final List<String> families;
   final Color seedColor;
+  final Locale? typographyLocale;
+  final int fontCacheRevision;
   final ThemeData data;
 }
 

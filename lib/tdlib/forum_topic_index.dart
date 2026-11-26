@@ -31,7 +31,7 @@ class ForumTopicIndexEntry {
   final bool isMuted;
 
   /// Pinned topics lead the tab strip in their pin order (the page's own
-  /// order), the way exteraless keeps them in `TopicsController.sortTopics`.
+  /// order), the way the reference client keeps them in `TopicsController.sortTopics`.
   final bool isPinned;
 
   /// The newest message id this entry has accounted for, so an observed read
@@ -145,7 +145,7 @@ int _nonNegative(int? value) {
 /// Sorts the topics of one chat into display order without disturbing the
 /// map's own order, which is the server's order (pinned topics in pin order).
 ///
-/// Mirrors exteraless `TopicsController.sortTopics`: pinned first in pin
+/// Mirrors the reference client `TopicsController.sortTopics`: pinned first in pin
 /// order, everything else by the newest activity. See [orderForumTopics].
 List<ForumTopicIndexEntry> _inDisplayOrder(
   Map<int, ForumTopicIndexEntry> entries,
@@ -306,6 +306,30 @@ class ForumTopicIndex extends ChangeNotifier {
       _loadedChats.remove(_loadedChats.first);
     }
     if (displayChanged) notifyListeners();
+  }
+
+  /// Re-inserts the pinned entries in [pinnedIds] order after the reader
+  /// dragged the tab strip. The server owns the final order; this keeps the
+  /// strip, the rail and the topic list from snapping back while the request
+  /// is in flight.
+  void reorderPinned(int slot, int chatId, List<int> pinnedIds) {
+    final topics = _topics[(slot, chatId)];
+    if (topics == null || pinnedIds.length < 2) return;
+    final pinned = <ForumTopicIndexEntry>[];
+    final pinnedIdSet = pinnedIds.toSet();
+    for (final id in pinnedIds) {
+      final entry = topics[id];
+      if (entry != null && entry.isPinned) pinned.add(entry);
+    }
+    if (pinned.length < 2) return;
+    final rest = [
+      for (final entry in topics.values)
+        if (!pinnedIdSet.contains(entry.id)) entry,
+    ];
+    _topics[(slot, chatId)] = {
+      for (final entry in [...pinned, ...rest]) entry.id: entry,
+    };
+    notifyListeners();
   }
 
   void _evictStaleChats() {

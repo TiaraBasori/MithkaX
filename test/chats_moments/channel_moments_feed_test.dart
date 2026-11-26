@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chat/stickers/custom_emoji.dart';
-import 'package:mithka/components/vip_badge.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/moments/moments_view.dart';
 import 'package:mithka/profile/profile_header_background.dart';
@@ -259,7 +258,6 @@ void main() {
     );
     expect(header.colors, [const Color(0xFFA34F74), const Color(0xFF874060)]);
     expect(header.patternEmojiId, 812);
-    expect(find.byType(VipBadge), findsOneWidget);
     expect(
       tester.widget<StatusEmojiView>(find.byType(StatusEmojiView)).id,
       813,

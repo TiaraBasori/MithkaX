@@ -7,7 +7,7 @@ import '../../components/app_icons.dart';
 import '../../components/photo_avatar.dart';
 import '../../l10n/app_localizations.dart';
 import '../../platform/adaptive_platform.dart';
-import '../../settings/translation_controller.dart';
+import '../../settings/ai_translation/translation_controller.dart';
 import '../../tdlib/td_models.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/content_size.dart';
@@ -610,7 +610,7 @@ class ImageMediaAlbumBubble extends StatelessWidget {
           count: interactionOwner.viewCount,
           foreground: bandForeground,
           background: bandBackground,
-          semanticLabel: AppStrings.t(AppStringKeys.mithkaxChannelPostViews, {
+          semanticLabel: AppStrings.t(AppStringKeys.channelPostViews, {
             'value1': formatChannelStatCount(interactionOwner.viewCount),
           }),
         ),
@@ -621,10 +621,9 @@ class ImageMediaAlbumBubble extends StatelessWidget {
           count: interactionOwner.forwardCount,
           foreground: bandForeground,
           background: bandBackground,
-          semanticLabel: AppStrings.t(
-            AppStringKeys.mithkaxChannelPostForwards,
-            {'value1': formatChannelStatCount(interactionOwner.forwardCount)},
-          ),
+          semanticLabel: AppStrings.t(AppStringKeys.channelPostForwards, {
+            'value1': formatChannelStatCount(interactionOwner.forwardCount),
+          }),
         ),
       if (showCompactReplies)
         MessageReplyCountBadge(
@@ -708,7 +707,7 @@ class ImageMediaAlbumBubble extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: AppTextSize.chatSecondary(AppTextSize.messageBody()),
                 fontWeight: FontWeight.w500,
                 color: colors.linkBlue,
               ),
@@ -736,7 +735,7 @@ class ImageMediaAlbumBubble extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: AppTextSize.chatSecondary(AppTextSize.messageBody()),
                 fontWeight: FontWeight.w500,
                 color: colors.linkBlue,
               ),

@@ -16,7 +16,7 @@ import 'package:mithka/auth/auth_manager.dart';
 import 'package:mithka/chats/chat_list_view.dart';
 import 'package:mithka/components/app_icons.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import 'package:mithka/settings/translation_controller.dart';
+import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
@@ -181,8 +181,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    // The title opens the topic list sheet.
-    await tester.tap(find.byKey(const ValueKey('chatHeaderTitle')));
+    // The # button opens the topic list sheet.
+    await tester.tap(find.byKey(const ValueKey('chatHeaderTopics')));
     await tester.pumpAndSettle();
 
     expect(_row('all'), findsOneWidget);
@@ -211,7 +211,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('topic-selector-list')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('chatHeaderTitle')));
+    await tester.tap(find.byKey(const ValueKey('chatHeaderTopics')));
     await tester.pumpAndSettle();
     expect(_checkIn(_row('50')), findsOneWidget);
     expect(_railIn(_row('50')), findsOneWidget);

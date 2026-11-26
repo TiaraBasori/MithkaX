@@ -18,7 +18,7 @@ import '../notifications/push_device_registrar.dart';
 import '../notifications/push_service_settings.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
-import 'edit_field_view.dart';
+import 'profile_account/edit_field_view.dart';
 
 class PushServiceSection extends StatefulWidget {
   const PushServiceSection({super.key});

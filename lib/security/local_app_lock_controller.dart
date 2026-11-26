@@ -14,6 +14,7 @@ enum AppLockCredentialType { pin, gesture }
 
 enum AppLockAutoLockOption {
   disabled(0),
+  immediately(1),
   oneMinute(60),
   fiveMinutes(300),
   oneHour(3600),
@@ -120,6 +121,13 @@ class LocalAppLockController extends ChangeNotifier {
   int _lockEpoch = 0;
   Timer? _autoLockTimer;
   DateTime? _awaySince;
+
+  /// Whether the current away session actually left the app (hidden/paused)
+  /// rather than only losing focus to the notification shade, a permission
+  /// sheet or a biometric prompt. The immediate option locks on these states
+  /// only — exteraless's `autoLockIn == 1` locks in `onPause`, not on focus
+  /// loss, so glancing at a system dialog cannot lock the app.
+  bool _awayLeftApp = false;
 
   bool get initialized => _initialized;
   bool get enabled => _stored != null;
@@ -440,6 +448,7 @@ class LocalAppLockController extends ChangeNotifier {
     _autoLockTimer?.cancel();
     _autoLockTimer = null;
     _awaySince = null;
+    _awayLeftApp = false;
     _stored = null;
     _failedAttempts = const _StoredFailedAttempts();
     _locked = false;
@@ -456,28 +465,40 @@ class LocalAppLockController extends ChangeNotifier {
     await _persist(next);
     _stored = next;
     _rescheduleAutoLock();
+    if (option == AppLockAutoLockOption.immediately && _awayLeftApp) lock();
     notifyListeners();
   }
 
   /// Applies auto-lock timing and iOS app-switcher shielding to lifecycle
   /// transitions. A disabled timeout preserves the current unlocked session
   /// across brief background transitions, matching the official clients.
+  ///
+  /// [AppLockAutoLockOption.immediately] locks as soon as the app leaves the
+  /// foreground (hidden/paused/detached). `inactive` alone is a Control Center
+  /// glance, the notification shade or a permission sheet — the app never
+  /// actually left — so it only arms the timing window.
   void handleLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
         _handleResumed();
       case AppLifecycleState.inactive:
+        _handleAway(leftApp: false);
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-        _handleAway();
+        _handleAway(leftApp: true);
     }
   }
 
-  void _handleAway() {
+  void _handleAway({required bool leftApp}) {
     if (!enabled && !_storageUnavailable) return;
-    _awaySince ??= DateTime.now();
+    _awaySince ??= _now();
+    if (leftApp) _awayLeftApp = true;
     unawaited(_applyPrivacyShield(true));
+    if (autoLockOption == AppLockAutoLockOption.immediately) {
+      if (_awayLeftApp) lock();
+      return;
+    }
     _rescheduleAutoLock();
   }
 
@@ -485,15 +506,20 @@ class LocalAppLockController extends ChangeNotifier {
     _autoLockTimer?.cancel();
     _autoLockTimer = null;
     final awaySince = _awaySince;
+    final leftApp = _awayLeftApp;
     final option = autoLockOption;
-    if (enabled &&
-        awaySince != null &&
-        option != AppLockAutoLockOption.disabled &&
-        DateTime.now().difference(awaySince) >=
-            Duration(seconds: option.seconds)) {
-      lock();
-    }
     _awaySince = null;
+    _awayLeftApp = false;
+    if (enabled && awaySince != null) {
+      if (option == AppLockAutoLockOption.immediately) {
+        // Defensive: the actual lock happens on the way out; this covers a
+        // lock that was skipped because biometrics were mid-flight.
+        if (leftApp) lock();
+      } else if (option != AppLockAutoLockOption.disabled &&
+          _now().difference(awaySince) >= Duration(seconds: option.seconds)) {
+        lock();
+      }
+    }
     if (enabled || _storageUnavailable) {
       unawaited(_applyPrivacyShield(false));
     }
@@ -506,10 +532,11 @@ class LocalAppLockController extends ChangeNotifier {
     final option = autoLockOption;
     if (!enabled ||
         awaySince == null ||
-        option == AppLockAutoLockOption.disabled) {
+        option == AppLockAutoLockOption.disabled ||
+        option == AppLockAutoLockOption.immediately) {
       return;
     }
-    final elapsed = DateTime.now().difference(awaySince);
+    final elapsed = _now().difference(awaySince);
     final remaining = Duration(seconds: option.seconds) - elapsed;
     if (remaining <= Duration.zero) {
       lock();
@@ -519,7 +546,7 @@ class LocalAppLockController extends ChangeNotifier {
       _autoLockTimer = null;
       final currentAwaySince = _awaySince;
       if (!enabled || currentAwaySince == null) return;
-      if (DateTime.now().difference(currentAwaySince) >=
+      if (_now().difference(currentAwaySince) >=
           Duration(seconds: autoLockOption.seconds)) {
         lock();
       } else {

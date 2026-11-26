@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MithkaX's string catalogue. Edit translations here; run tools/gen_assets.py to push them into the app. -->
+<!-- Mithka's string catalogue. Edit translations here; run translations/tools/gen_assets.py to push them into the app. -->
 <resources>
     <string name="aboutCheckForUpdates">检查更新</string>
     <string name="aboutCheckingForUpdates">检查中…</string>
@@ -7,6 +7,7 @@
     <string name="aboutReportProblem">报告问题</string>
     <string name="aboutReportProblemDetail">附带不含聊天内容的诊断信息</string>
     <string name="aboutTelegramChannel">Telegram 频道</string>
+    <string name="aboutCommunityChat">交流群</string>
     <string name="aboutTitle">关于</string>
     <string name="aboutUpToDate">已是最新版本</string>
     <string name="aboutUpdateAvailable">{value1} 版本可用</string>
@@ -234,6 +235,8 @@
     <string name="aiServerModelHint">模型名称</string>
     <string name="aiServerPrivacy">已启用 AI 功能使用的文本会发送到此端点。API 密钥仅保存在此设备的安全存储中。</string>
     <string name="aiSettingsTitle">AI 设置</string>
+    <string name="aiShowComposerButton">在消息输入框中显示 AI 按钮</string>
+    <string name="aiShowComposerButtonDescription">关闭后将移除消息输入框旁的闪光按钮。</string>
     <string name="aiSummarizePrompts">总结提示词</string>
     <string name="aiSummarizeUsing">总结使用</string>
     <string name="aiSummaryActions">待办事项</string>
@@ -390,6 +393,7 @@
     <string name="appLockAutoLockDisabled">停用</string>
     <string name="appLockAutoLockFiveHours">离开 5 小时后</string>
     <string name="appLockAutoLockFiveMinutes">离开 5 分钟后</string>
+    <string name="appLockAutoLockImmediately">立即</string>
     <string name="appLockAutoLockOneHour">离开 1 小时后</string>
     <string name="appLockAutoLockOneMinute">离开 1 分钟后</string>
     <string name="appLockBiometricDescription">应用锁显示后，可使用{value1}解锁 Mithka X。</string>
@@ -433,6 +437,7 @@
     <string name="appLockTryBiometric">使用{value1}</string>
     <string name="appLockUnlockMethod">解锁方式</string>
     <string name="appLockUnlockTitle">解锁 Mithka X</string>
+    <string name="appLockUnlocked">已解锁</string>
     <string name="appLockUseBiometric">使用{value1}解锁</string>
     <string name="appLockVerifyTitle">验证应用锁</string>
     <string name="appLockWrongGesture">手势不正确。</string>
@@ -486,6 +491,8 @@
     <string name="appearanceInUseSize">正在使用</string>
     <string name="appearanceInterfaceSize">界面大小</string>
     <string name="appearanceLivePreviewUnavailable">实时预览不可用</string>
+    <string name="appearanceLocalFonts">本机字体</string>
+    <string name="appearanceLocalFontsDescription">已安装在本机系统中的字体，无需网络下载，可直接渲染。</string>
     <string name="appearanceManage">管理</string>
     <string name="appearanceMergeConsecutiveImages">合并显示媒体相册</string>
     <string name="appearanceMessageActionMenu">消息操作菜单</string>
@@ -500,6 +507,9 @@
     <string name="appearanceNameColorPremium">Premium 用户</string>
     <string name="appearanceNoCleanableFonts">无可清理</string>
     <string name="appearanceNoDownloadedFontCache">没有已下载的字体缓存。</string>
+    <string name="appearanceNoLocalFonts">未检测到本机已安装字体。</string>
+    <string name="appearanceOnlineFonts">Google Fonts（在线下载）</string>
+    <string name="appearanceOnlineFontsDescription">来自 Google Fonts 的外部云端字体，选择后按需下载并缓存在本地。</string>
     <string name="appearanceNoMatchingFonts">没有匹配的字体</string>
     <string name="appearancePerAccountTheming">每个账号单独使用主题</string>
     <string name="appearancePreviewAlbumCaption">群组相册里的两个瞬间。</string>
@@ -510,6 +520,7 @@
     <string name="appearancePreviewMessageSample">Jennie：聊天里见</string>
     <string name="appearancePreviewUsersSample">Mithka X 用户</string>
     <string name="appearanceRefreshCacheList">刷新缓存列表</string>
+    <string name="appearanceReloadFonts">刷新本机字体</string>
     <string name="appearanceRoundGroupAvatars">群聊头像显示为圆形</string>
     <string name="appearanceSearchFont">搜索字体</string>
     <string name="appearanceSectionChat">聊天</string>
@@ -874,6 +885,8 @@
     <string name="chatCannotSendMessages">你无法在此聊天中发送消息</string>
     <string name="chatConnectedBusinessBot">已连接的商务机器人</string>
     <string name="chatContactCallsOnly">仅支持与联系人通话</string>
+    <string name="chatContextPaneHide">隐藏群信息</string>
+    <string name="chatContextPaneShow">显示群信息</string>
     <string name="chatDelete">删除</string>
     <string name="chatDeleteActionsDone">操作已完成</string>
     <string name="chatDeleteActionsFailed">操作失败：{value1}</string>
@@ -2089,6 +2102,18 @@
     <string name="imageEditTextTool">文字</string>
     <string name="imageEditTitle">编辑图片</string>
     <string name="imagePreviewTitle">图片预览</string>
+    <string name="instantViewTextSize">文字大小</string>
+    <string name="instantViewExtracting">正在提取文章…</string>
+    <string name="instantViewOpenLocal">在即时预览中打开</string>
+    <string name="instantViewSearch">搜索</string>
+    <string name="instantViewPreviousMatch">上一个匹配</string>
+    <string name="instantViewNextMatch">下一个匹配</string>
+    <string name="instantViewTitle">即时预览</string>
+    <string name="instantViewOpenInBrowser">在浏览器中打开</string>
+    <string name="instantViewLoadFailed">无法加载此页面</string>
+    <string name="instantViewShowMore">展开</string>
+    <string name="instantViewShowLess">收起</string>
+    <string name="instantViewRetry">重试</string>
     <string name="keywordBlockerAddFromMessageTitle">屏蔽关键词</string>
     <string name="keywordBlockerDescription">添加关键词后，匹配的消息将不会在聊天中显示，也不会触发本地通知。支持普通关键词、re:正则、regex:正则、/正则/i。远程列表每行一条规则，# 或 // 开头为注释。</string>
     <string name="keywordBlockerDownload">下载</string>
@@ -2407,6 +2432,10 @@
     <string name="messageChecklistTaskHint">Task description</string>
     <string name="messageLeaveAComment">发表评论</string>
     <string name="messageLinkCopied">链接已复制</string>
+    <string name="messageLinkCopyEmail">复制邮箱</string>
+    <string name="messageLinkCopyHashtag">复制标签</string>
+    <string name="messageLinkCopyUsername">复制用户名</string>
+    <string name="messageLinkShareQr">分享二维码</string>
     <string name="messagePollClosed">Closed</string>
     <string name="messagePollStop">Close poll</string>
     <string name="messagePollStopConfirm">Voting cannot continue after this poll is closed.</string>
@@ -4008,7 +4037,6 @@
     <string name="videoPlayerUseSystemOrientation">使用系统屏幕方向</string>
     <string name="videoPlayerWaitingForFile">等待视频文件</string>
     <string name="videoTrimFailed">未能生成裁剪后的视频。</string>
-    <string name="vipBadgeLabel">VIP</string>
     <string name="voiceNotePreviewVoiceMessage">语音消息</string>
     <string name="mediaSpoilerReveal">剧透内容，点击显示</string>
     <string name="downloadsTasks">下载任务</string>
@@ -4134,4 +4162,22 @@
     <string name="mithkaxScheduledDeleteThreeDays">3 天</string>
     <string name="mithkaxScheduledDeleteOneWeek">1 周</string>
     <string name="mithkaxScheduledDeleteOneMonth">1 个月</string>
+
+    <string name="channelBottomBar">频道底栏</string>
+    <string name="channelBottomBarHidden">彻底隐藏</string>
+    <string name="channelBottomBarMute">默认（静音 / 取消静音）</string>
+    <string name="channelBottomBarNote">只影响已订阅但不能发言的频道。选择「讨论与私聊」时，频道既没有讨论组也没有私聊就完全隐藏底栏。</string>
+    <string name="channelDeleteTopic">删除话题</string>
+    <string name="channelMarkAllReadFailed">标为已读失败</string>
+    <string name="channelPanelDirect">私聊</string>
+    <string name="channelPanelDiscussion">讨论</string>
+    <string name="channelPostForwards">{value1} 次转发</string>
+    <string name="channelPostStats">频道帖子显示阅读量和转发次数</string>
+    <string name="channelPostViews">{value1} 次阅读</string>
+    <string name="channelBottomBarActions">讨论与私聊</string>
+    <string name="mithkaxTopicTabsDone">完成</string>
+    <string name="mithkaxTopicTabsReorder">重排标签页</string>
+    <string name="mithkaxTopicTabsMoveToBottom">标签栏移到底部</string>
+    <string name="mithkaxTopicTabsMoveToSide">标签栏移到侧边</string>
+    <string name="mithkaxTopicTabsMoveToTop">标签栏移到顶部</string>
 </resources>

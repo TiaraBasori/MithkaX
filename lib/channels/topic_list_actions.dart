@@ -288,7 +288,7 @@ Map<String, dynamic> createForumTopicRequest({
 
 /// The implicit title a send from a bot topic chat's "All" view starts its
 /// topic with: the message's first [maxLength] characters, ellipsised when
-/// longer — exteraless names bot-forum topics exactly this way. Returns an
+/// longer — the reference client names bot-forum topics exactly this way. Returns an
 /// empty string when the message carries no text, so the caller falls back to
 /// a media/placeholder title.
 String botTopicTitleForMessage(String text, {int maxLength = 16}) {
