@@ -4208,4 +4208,7 @@
     <string name="composerLinkPreviewDisable">링크 미리보기 숨기기</string>
     <string name="aboutUpdatePrereleases">사전 출시 버전 확인</string>
     <string name="aboutUpdatePrereleasesDetail">출시 후보와 베타 빌드도 업데이트로 제공합니다. 끄면 정식 릴리스만 확인합니다.</string>
+    <string name="settingsResetDatabase">데이터베이스 초기화</string>
+    <string name="settingsResetDatabaseMessage">로컬에 캐시된 메시지, 미디어, 이모지 글꼴, 검색 기록을 삭제할까요? 설정, 로그인 상태, 임시 보관함, 저장된 다운로드는 유지됩니다.</string>
+    <string name="settingsResetDatabaseDone">데이터베이스를 초기화했습니다</string>
 </resources>

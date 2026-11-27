@@ -4226,4 +4226,7 @@
     <string name="composerLinkPreviewDisable">Linkvorschau ausblenden</string>
     <string name="aboutUpdatePrereleases">Vorabversionen suchen</string>
     <string name="aboutUpdatePrereleasesDetail">Auch Release-Kandidaten und Beta-Builds als Update anbieten. Aus: nur offizielle Releases.</string>
+    <string name="settingsResetDatabase">Datenbank zurücksetzen</string>
+    <string name="settingsResetDatabaseMessage">Zwischengespeicherte Nachrichten, Medien, Emoji-Schriften und Suchverlauf löschen? Einstellungen, Sitzung, Entwürfe und gespeicherte Downloads bleiben erhalten.</string>
+    <string name="settingsResetDatabaseDone">Datenbank zurückgesetzt</string>
 </resources>

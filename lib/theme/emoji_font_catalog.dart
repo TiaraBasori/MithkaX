@@ -287,6 +287,27 @@ class EmojiFontCatalog {
     await _writeSizeIndex(sizes);
   }
 
+  /// Removes every downloaded pack from this revision's cache. The picker
+  /// selection and the catalog manifest stay: the next launch re-downloads
+  /// the chosen pack, and the manifest keeps working offline.
+  Future<int> clearCache() async {
+    var removed = 0;
+    final dir = await _cacheDir();
+    if (!await dir.exists()) return 0;
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      final name = entity.uri.pathSegments.last;
+      if (name == _sizeIndexFileName || name == 'manifest.json') continue;
+      try {
+        await entity.delete();
+        removed += 1;
+      } catch (_) {
+        // A locked file survives; the next download overwrites it.
+      }
+    }
+    return removed;
+  }
+
   /// Deletes a pack's cached font file (the picker's swipe-to-delete). Safe
   /// for any key: missing files are a no-op, the running family registration
   /// is only in-memory and dies with the process. Returns whether a file was

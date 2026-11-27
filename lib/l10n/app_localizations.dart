@@ -5566,6 +5566,9 @@ abstract final class AppStringKeys {
   static const historyBadgeStyleIcon = 'historyBadgeStyleIcon';
   static const historyBadgeStyleText = 'historyBadgeStyleText';
   static const historyBadgeStyleTitle = 'historyBadgeStyleTitle';
+  static const settingsResetDatabase = 'settingsResetDatabase';
+  static const settingsResetDatabaseMessage = 'settingsResetDatabaseMessage';
+  static const settingsResetDatabaseDone = 'settingsResetDatabaseDone';
   static const historyClearDatabase = 'historyClearDatabase';
   static const historyClearDatabaseMessage = 'historyClearDatabaseMessage';
   static const historyDatabaseClearedToast = 'historyDatabaseClearedToast';

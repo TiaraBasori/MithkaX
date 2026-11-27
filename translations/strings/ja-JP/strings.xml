@@ -4208,4 +4208,7 @@
     <string name="composerLinkPreviewDisable">リンクプレビューを非表示</string>
     <string name="aboutUpdatePrereleases">プレリリース版を確認</string>
     <string name="aboutUpdatePrereleasesDetail">リリース候補やベータ版も更新として提示します。オフの場合は正式版のみを確認します。</string>
+    <string name="settingsResetDatabase">データベースをリセット</string>
+    <string name="settingsResetDatabaseMessage">ローカルにキャッシュされたメッセージ・メディア・絵文字フォント・検索履歴を削除しますか？設定・ログイン状態・下書き・保存済みのダウンロードは保持されます。</string>
+    <string name="settingsResetDatabaseDone">データベースをリセットしました</string>
 </resources>

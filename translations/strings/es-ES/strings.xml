@@ -4226,4 +4226,7 @@
     <string name="composerLinkPreviewDisable">Ocultar vista previa</string>
     <string name="aboutUpdatePrereleases">Buscar versiones preliminares</string>
     <string name="aboutUpdatePrereleasesDetail">Ofrecer también versiones candidatas y beta como actualizaciones. Desactivado: solo versiones oficiales.</string>
+    <string name="settingsResetDatabase">Restablecer base de datos</string>
+    <string name="settingsResetDatabaseMessage">¿Eliminar los mensajes, medios, fuentes de emoji e historial de búsqueda en caché? Tus ajustes, sesión, borradores y descargas guardadas se conservan.</string>
+    <string name="settingsResetDatabaseDone">Base de datos restablecida</string>
 </resources>

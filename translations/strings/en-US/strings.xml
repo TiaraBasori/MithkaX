@@ -4226,4 +4226,7 @@
     <string name="composerLinkPreviewDisable">Hide link preview</string>
     <string name="aboutUpdatePrereleases">Check pre-release builds</string>
     <string name="aboutUpdatePrereleasesDetail">Offer release candidates and beta builds as updates. Off means only official releases are offered.</string>
+    <string name="settingsResetDatabase">Reset database</string>
+    <string name="settingsResetDatabaseMessage">Delete the locally cached messages, media, emoji packs and search history? Your settings, session, drafts and saved downloads stay.</string>
+    <string name="settingsResetDatabaseDone">Database reset</string>
 </resources>
