@@ -110,7 +110,8 @@ void main() {
                         '@type': 'formattedText',
                         'text':
                             '#emojiv2 {"emojis": [{"name": "Fluent 3D", '
-                            '"id": "fluent", "preview": 42, "file": 43}]}',
+                            '"id": "fluent", "preview": 42, "file": 43, '
+                            '"zip": 46, "size": 39196420}]}',
                       },
                     },
                   },
@@ -125,6 +126,12 @@ void main() {
       expect(entries!.single.key, 'fluent');
       expect(entries.single.chatId, -3778471221);
       expect(entries.single.channelMessageId, 43);
+      expect(
+        entries.single.channelArchiveMessageId,
+        46,
+        reason: 'the archive address must survive the chat-id stamp',
+      );
+      expect(entries.single.sizeBytes, 39196420);
       expect(
         calls.map((c) => c['@type']),
         containsAll(['searchPublicChat', 'searchChatMessages']),

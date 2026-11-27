@@ -80,6 +80,7 @@ class EmojiChannelSource {
               license: entry.license,
               chatId: chatId,
               channelMessageId: entry.channelMessageId,
+              channelArchiveMessageId: entry.channelArchiveMessageId,
               channelPreviewMessageId: entry.channelPreviewMessageId,
               sizeBytes: entry.sizeBytes,
             ),
