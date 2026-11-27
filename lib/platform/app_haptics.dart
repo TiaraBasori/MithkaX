@@ -6,11 +6,15 @@
 //  exteraless fires exactly two platform constants for its interface —
 //  KEYBOARD_TAP for taps, toggles, sliders and emoji, LONG_PRESS for long
 //  presses, drag lifts and destructive actions — plus the APP_ERROR double
-//  buzz for errors. Every one of them carries FLAG_IGNORE_GLOBAL_SETTING, so
-//  the system touch-vibration switch cannot silence the app. The Android shell
-//  of this bridge does the same (`HapticsPlugin.kt`) and answers whether the
-//  tick landed; when it did not, the tick falls back to Flutter's channel
-//  instead of disappearing.
+//  buzz for errors. The Android shell of this bridge does the same
+//  (`HapticsPlugin.kt`) and answers whether the tick landed; when it did not,
+//  the tick falls back to Flutter's channel instead of disappearing.
+//
+//  Intensity is the platform constant's, never a raw waveform: exteraless only
+//  ever calls `performHapticFeedback`, so any extra full-amplitude buzz reads
+//  as "stronger than the reference". The system touch-vibration switch stays
+//  authoritative (only the view's own flag is ignored), exactly like
+//  `AndroidUtilities.vibrate` in the reference client.
 //
 //  The one preference in [AppHaptics] is the app-wide switch: with it off
 //  nothing is sent to either channel, so no surface can buzz on its own.

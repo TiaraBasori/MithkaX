@@ -4220,4 +4220,21 @@
     <string name="mithkaxStickerSizeSmall">Klein</string>
     <string name="mithkaxStickerSizeLarge">Groß</string>
     <string name="mithkaxStickerSizeReset">Zurücksetzen</string>
+    <string name="composerLinkPreviewTitle">Linkvorschau</string>
+    <string name="composerLinkPreviewAbove">Vorschau über dem Text</string>
+    <string name="composerLinkPreviewBelow">Vorschau unter dem Text</string>
+    <string name="composerLinkPreviewOff">Linkvorschau aus</string>
+    <string name="composerLinkPreviewEnable">Linkvorschau anzeigen</string>
+    <string name="composerLinkPreviewDisable">Linkvorschau ausblenden</string>
+    <string name="aboutUpdatePrereleases">Vorabversionen suchen</string>
+    <string name="aboutUpdatePrereleasesDetail">Auch Release-Kandidaten und Beta-Builds als Update anbieten. Aus: nur offizielle Releases.</string>
+    <string name="settingsResetDatabase">Datenbank zurücksetzen</string>
+    <string name="settingsResetDatabaseMessage">Zwischengespeicherte Nachrichten, Medien, Emoji-Pakete, Suchverlauf, Entwürfe und gespeicherte Downloads löschen? Einstellungen und Sitzung bleiben erhalten.</string>
+    <string name="autoDownloadChatTypesTitle">Automatisch herunterladen in</string>
+    <string name="autoDownloadChatTypesDetail">Nur Chats der markierten Arten laden Medien automatisch.</string>
+    <string name="autoDownloadChatContacts">Kontakte</string>
+    <string name="autoDownloadChatPrivate">Private Chats</string>
+    <string name="autoDownloadChatGroups">Gruppen</string>
+    <string name="autoDownloadChatChannels">Kanäle</string>
+    <string name="settingsResetDatabaseDone">Datenbank zurückgesetzt</string>
 </resources>

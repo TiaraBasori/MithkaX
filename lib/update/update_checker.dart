@@ -20,6 +20,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:mithka/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app/app_version.dart';
 import '../tdlib/td_client.dart';
@@ -38,6 +39,11 @@ class UpdateChecker {
   UpdateChecker._();
 
   static const _isGooglePlayBuild = bool.fromEnvironment('GOOGLE_PLAY_BUILD');
+
+  /// About's "check pre-release builds" switch. Off means the update check
+  /// only follows official releases; the reference client ships the same
+  /// choice as an opt-in.
+  static const includePrereleasesKey = 'update.includePrereleases.v1';
   static const _channel = MethodChannel('mithka/app_info');
   static bool _checkedThisLaunch = false;
 
@@ -100,7 +106,9 @@ class UpdateChecker {
     final current = await _installedVersion();
     if (current.isEmpty) return UpdateCheckOutcome.unavailable;
 
-    final release = await fetchLatestRelease();
+    final release = await fetchLatestRelease(
+      includePrereleases: await _includePrereleases(),
+    );
     if (release == null) return UpdateCheckOutcome.unavailable;
     if (compareReleaseVersions(release.version, current) <= 0) {
       return UpdateCheckOutcome.upToDate;
@@ -111,6 +119,15 @@ class UpdateChecker {
       return _offerAndroidApk(context, release, current);
     }
     return _offerDesktopPackage(context, release, current, unasked: unasked);
+  }
+
+  static Future<bool> _includePrereleases() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(includePrereleasesKey) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// The running build's version, from the Android host or package metadata.

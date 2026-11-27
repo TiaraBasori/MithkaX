@@ -41,6 +41,23 @@ void main() {
       expect(apple.extension, 'ttf');
     });
 
+    test('a pack served as a zip remembers both addresses', () {
+      const body =
+          '#emojiv2 {"emojis": [{"name": "Apple", "id": "apple", '
+          '"preview": 22, "file": 23, "zip": 60, "size": 41943040}]}';
+      final apple = EmojiChannelSource.parseCatalog(body)!.single;
+      expect(apple.channelMessageId, 23);
+      expect(apple.channelArchiveMessageId, 60);
+      expect(apple.isArchive, isTrue);
+      expect(apple.sizeBytes, 41943040);
+
+      const plain =
+          '#emojiv2 {"emojis": [{"name": "X", "id": "x", "file": 7}]}';
+      final x = EmojiChannelSource.parseCatalog(plain)!.single;
+      expect(x.channelArchiveMessageId, isNull);
+      expect(x.isArchive, isFalse);
+    });
+
     test('entries without a preview id keep a null preview id', () {
       const body =
           '#emojiv2 {"emojis": [{'
@@ -93,7 +110,8 @@ void main() {
                         '@type': 'formattedText',
                         'text':
                             '#emojiv2 {"emojis": [{"name": "Fluent 3D", '
-                            '"id": "fluent", "preview": 42, "file": 43}]}',
+                            '"id": "fluent", "preview": 42, "file": 43, '
+                            '"zip": 46, "size": 39196420}]}',
                       },
                     },
                   },
@@ -108,6 +126,12 @@ void main() {
       expect(entries!.single.key, 'fluent');
       expect(entries.single.chatId, -3778471221);
       expect(entries.single.channelMessageId, 43);
+      expect(
+        entries.single.channelArchiveMessageId,
+        46,
+        reason: 'the archive address must survive the chat-id stamp',
+      );
+      expect(entries.single.sizeBytes, 39196420);
       expect(
         calls.map((c) => c['@type']),
         containsAll(['searchPublicChat', 'searchChatMessages']),

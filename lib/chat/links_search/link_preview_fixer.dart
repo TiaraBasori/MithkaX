@@ -14,6 +14,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../tdlib/json_helpers.dart';
 import '../../tdlib/td_models.dart';
 
+/// The composer's per-message preview choice, the reference client's link
+/// panel: on/off for the link being typed, and whether the card sits above or
+/// below the text (`linkPreviewOptions.show_above_text`).
+@immutable
+class ComposerLinkPreviewChoice {
+  const ComposerLinkPreviewChoice({
+    required this.enabled,
+    required this.showAboveText,
+  });
+
+  final bool enabled;
+  final bool showAboveText;
+}
+
 /// Preview mirrors plus the URL scanning needed to pick one. On by default,
 /// like exteraless's `FixLinkPreview`; the switch in Chat behaviour turns it
 /// off.
@@ -137,13 +151,20 @@ class LinkPreviewFixer extends ChangeNotifier {
   /// [request] with its preview pointed at a mirror, for the send paths that
   /// build an `inputMessageText` themselves.
   ///
+  /// [choice] is the composer panel's explicit answer and always wins, even
+  /// over a forced host: an off switch there means this message carries no
+  /// card, exactly like the reference client's "Do not link preview" row.
+  ///
   /// A request that already carries `link_preview_options` keeps them: an
   /// explicit choice by the caller beats a local preference. Anything that is
   /// not a plain text send — a caption, a media, a sticker — is returned as it
   /// came in, because TDLib only builds a preview card for text. Every composer
   /// funnel calls this, so a surface that builds its own request gets the same
   /// treatment as the main one.
-  Map<String, dynamic> applyTo(Map<String, dynamic> request) {
+  Map<String, dynamic> applyTo(
+    Map<String, dynamic> request, {
+    ComposerLinkPreviewChoice? choice,
+  }) {
     final content = request['input_message_content'];
     if (content is! Map<String, dynamic> ||
         content['@type'] != 'inputMessageText') {
@@ -151,6 +172,20 @@ class LinkPreviewFixer extends ChangeNotifier {
     }
     final text = content['text'];
     if (text is! Map<String, dynamic>) return request;
+    if (choice != null) {
+      final first = firstPreviewableUrl(
+        text.str('text') ?? '',
+        entities: TDParse.textEntities(text),
+      );
+      if (first == null) return request;
+      return {
+        ...request,
+        'input_message_content': {
+          ...content,
+          'link_preview_options': _optionsForChoice(first, choice),
+        },
+      };
+    }
     final options = optionsForFormattedText(text);
     if (options == null) return request;
     final forced = options['show_above_text'] == true;
@@ -162,6 +197,46 @@ class LinkPreviewFixer extends ChangeNotifier {
       'input_message_content': {...content, 'link_preview_options': options},
     };
   }
+
+  /// The composer panel's answer as `linkPreviewOptions`: disabled, or enabled
+  /// with the mirror URL (when the host has a rule) and the chosen side.
+  Map<String, dynamic> _optionsForChoice(
+    String url,
+    ComposerLinkPreviewChoice choice,
+  ) {
+    if (!choice.enabled) {
+      return {
+        '@type': 'linkPreviewOptions',
+        'is_disabled': true,
+        'show_above_text': choice.showAboveText,
+      };
+    }
+    final preview = forcedPreviewUrl(url) ?? fixedUrl(url);
+    return {
+      '@type': 'linkPreviewOptions',
+      'is_disabled': false,
+      'show_above_text': choice.showAboveText,
+      'url': ?preview,
+    };
+  }
+
+  /// The first URL in [text] that can carry a preview card, or null.
+  ///
+  /// The composer panel asks this on every keystroke; it is the same scan the
+  /// send path uses, so the panel never offers a toggle for a link Telegram
+  /// would not preview anyway.
+  String? previewableUrl(
+    String text, {
+    List<MessageTextEntity> entities = const [],
+  }) => firstPreviewableUrl(text, entities: entities);
+
+  /// The same scan for a TDLib `formattedText` payload, which is what the
+  /// composer's controller hands out.
+  String? previewableUrlForFormatted(Map<String, dynamic>? text) =>
+      firstPreviewableUrl(
+        text?.str('text') ?? '',
+        entities: TDParse.textEntities(text),
+      );
 
   /// The mirror to fetch [text]'s preview from, or null when the preference is
   /// off, the text has no link, or its first link has no rule.

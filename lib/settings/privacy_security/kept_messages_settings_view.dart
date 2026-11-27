@@ -25,6 +25,7 @@ import '../../history/message_history_store.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_theme.dart';
+import '../downloads_storage/local_database_reset.dart';
 import '../local_premium.dart';
 import '../profile_account/message_history_transfer_view.dart';
 import 'ghost_mode_settings_view.dart';
@@ -271,6 +272,7 @@ class _TransferSection extends StatelessWidget {
         ),
         _BadgeStyleRow(),
         const _ClearDatabaseRow(),
+        const _ResetDatabaseRow(),
       ],
     );
   }
@@ -346,6 +348,54 @@ class _ClearDatabaseRowState extends State<_ClearDatabaseRow> {
       leading: const SettingsLeadingIcon(icon: HeroAppIcons.database),
       enabled: !_clearing,
       onTap: _clear,
+    );
+  }
+}
+
+/// “重置数据库”: the wide local wipe. Unlike the mirror row above it also
+/// drops TDLib's cached media, downloaded emoji packs, the search history and
+/// the in-memory image cache — while the session, every preference, drafts and
+/// saved downloads survive. One destructive confirm, then a toast.
+class _ResetDatabaseRow extends StatefulWidget {
+  const _ResetDatabaseRow();
+
+  @override
+  State<_ResetDatabaseRow> createState() => _ResetDatabaseRowState();
+}
+
+class _ResetDatabaseRowState extends State<_ResetDatabaseRow> {
+  bool _working = false;
+
+  Future<void> _reset() async {
+    if (_working) return;
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: AppStringKeys.settingsResetDatabase.l10n(context),
+      message: AppStringKeys.settingsResetDatabaseMessage.l10n(context),
+      confirmText: AppStringKeys.historyClearAction.l10n(context),
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _working = true);
+    try {
+      await LocalDatabaseReset.run();
+      if (!mounted) return;
+      showToast(context, AppStringKeys.settingsResetDatabaseDone.l10n(context));
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsRow(
+      key: const ValueKey('settings-reset-database'),
+      title: AppStringKeys.settingsResetDatabase.l10n(context),
+      subtitle: AppStringKeys.settingsResetDatabaseMessage.l10n(context),
+      leading: const SettingsLeadingIcon(icon: HeroAppIcons.database),
+      titleColor: AppTheme.tagRed,
+      enabled: !_working,
+      onTap: _reset,
     );
   }
 }

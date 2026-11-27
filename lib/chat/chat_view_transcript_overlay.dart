@@ -376,6 +376,7 @@ extension _ChatViewTranscript on _ChatViewState {
       _actionReactionAvailability = null;
       _actionMessageLinkAvailable = null;
       _actionCanReply = null;
+      _actionCanDelete = null;
     });
     oldSelectionState?.selectableRegion.clearSelection();
     if (!message.isCall) {
@@ -389,13 +390,24 @@ extension _ChatViewTranscript on _ChatViewState {
   Future<void> _loadActionAvailability(int messageId, int generation) async {
     bool? canGetLink;
     bool? canBeReplied;
+    bool? canDelete;
     try {
       final availability = await _vm.messageActionAvailability(messageId);
       canGetLink = availability.canGetLink;
       canBeReplied = availability.canBeReplied;
+      canDelete = availability.canDelete;
     } catch (_) {
       canGetLink = false; // Fail closed — no query answer, no action.
       canBeReplied = false;
+      // The one local fallback: a transport that cannot answer
+      // `getMessageProperties` (the Bot API path) still lets an author delete
+      // their own message, while somebody else's message needs the chat's
+      // delete right — the same split the reference client applies client-side.
+      final target = _actionTarget;
+      canDelete =
+          target != null &&
+          target.id == messageId &&
+          (target.isOutgoing || _vm.canDeleteMessagesBySender);
     }
     if (!mounted ||
         generation != _actionPropertiesGeneration ||
@@ -405,6 +417,7 @@ extension _ChatViewTranscript on _ChatViewState {
     _updateState(() {
       _actionMessageLinkAvailable = canGetLink;
       _actionCanReply = canBeReplied;
+      _actionCanDelete = canDelete;
     });
   }
 

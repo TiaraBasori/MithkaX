@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/theme/emoji_channel_source.dart';
@@ -95,6 +96,44 @@ void main() {
       await catalog.ensureFontDownloaded(twemoji);
       expect(downloads, ['49', '49']);
       expect(file.lengthSync(), 512);
+    },
+  );
+
+  test(
+    'an archived pack downloads the zip and keeps the font inside',
+    () async {
+      // The channel serves heavy packs as a zip holding `font.ttf` (Apple is a
+      // 24 MB archive instead of a 45 MB font document). The catalog follows
+      // the archive, extracts the member and verifies THAT length.
+      final inner = List<int>.filled(777, 9);
+      final zip = ZipEncoder().encode(
+        Archive()
+          ..addFile(ArchiveFile('preview.png', 4, [1, 2, 3, 4]))
+          ..addFile(ArchiveFile('font.ttf', inner.length, inner)),
+      );
+      channelFonts['60'] = zip;
+      final archived = EmojiFontManifestEntry(
+        key: 'apple',
+        label: 'Apple Color Emoji',
+        license: '',
+        chatId: -100,
+        channelMessageId: 23,
+        channelArchiveMessageId: 60,
+        sizeBytes: inner.length,
+      );
+
+      await catalog.ensureFontDownloaded(archived);
+      expect(downloads, [
+        '60',
+      ], reason: 'the archive wins over the font message');
+      final font = File('${cacheDir.path}/apple.ttf');
+      expect(font.lengthSync(), inner.length);
+      expect(font.readAsBytesSync(), inner);
+      expect(File('${cacheDir.path}/apple.ttf.zip').existsSync(), isFalse);
+
+      // A second ensure sees the verified font and downloads nothing.
+      await catalog.ensureFontDownloaded(archived);
+      expect(downloads, ['60']);
     },
   );
 
@@ -203,6 +242,23 @@ class _FakeChannelSource implements EmojiChannelSource {
     final file = File(destPath);
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes, flush: true);
+    return bytes.length;
+  }
+
+  @override
+  Future<int?> downloadArchive({
+    required int chatId,
+    required int messageId,
+    required String destPath,
+    void Function(double progress)? onProgress,
+  }) async {
+    final bytes = fonts['$messageId'];
+    if (bytes == null) return null;
+    downloads.add('$messageId');
+    final file = File(destPath);
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes(bytes, flush: true);
+    onProgress?.call(1);
     return bytes.length;
   }
 

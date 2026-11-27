@@ -531,11 +531,18 @@ class MessageReaction {
     this.customEmojiId = 0,
     required this.count,
     required this.chosen,
+    this.reactors = const [],
   });
   final String? emoji;
   final int customEmojiId;
   final int count;
   final bool chosen;
+
+  /// The senders behind this bucket as TDLib reports them in
+  /// `messageReactions.recent_reactions` (id only; names/photos resolve
+  /// lazily). The reference client replaces a small count with these
+  /// reactors' avatars, which is why the ids are kept.
+  final List<MessageReactor> reactors;
 
   /// The TDLib reaction_type for add/removeMessageReaction.
   Map<String, dynamic> get type => customEmojiId != 0
@@ -544,6 +551,16 @@ class MessageReaction {
           'custom_emoji_id': customEmojiId.toString(),
         }
       : {'@type': 'reactionTypeEmoji', 'emoji': emoji};
+}
+
+/// One sender inside a reaction bucket (`messagePeerReaction`).
+class MessageReactor {
+  const MessageReactor({required this.senderId, this.date = 0});
+
+  final int senderId;
+
+  /// Unix seconds when the reaction was added.
+  final int date;
 }
 
 /// A sender's role in a group/channel.

@@ -11,15 +11,21 @@ import '../theme/app_theme.dart';
 ///
 ///  * Light surfaces get the brand's own ladder — lighter, base, deep — the
 ///    same shading [AppTheme.applyBrand] derives for the outgoing bubble.
-///  * Dark surfaces get that ladder lifted toward white, because a saturated
-///    fill on a near-black page reads as a hole. The launcher icon's day body
-///    does the same thing.
+///  * Dark surfaces get that ladder lifted toward the brand's pale AZURE, not
+///    toward white: a saturated fill on a near-black page still needs lift,
+///    but a white mark stops being the app's mark at all (the user asked for
+///    the white fill to go). With the default theme colour the dark mark is
+///    the same blue family as the light one; a custom theme keeps its hue and
+///    only gains lightness.
 List<Color> brandMarkColors(Brightness brightness) {
   final base = AppTheme.brand;
   if (brightness == Brightness.dark) {
+    // A pale tint of the brand itself: hue and saturation survive, lightness
+    // rises. Never white — that was the mark's old dark fill.
+    final hsl = HSLColor.fromColor(base);
     return [
-      Color.lerp(base, const Color(0xFFFFFFFF), 0.88)!,
-      Color.lerp(base, const Color(0xFFFFFFFF), 0.62)!,
+      hsl.withLightness(0.76).withSaturation(0.72).toColor(),
+      hsl.withLightness(0.58).withSaturation(0.86).toColor(),
     ];
   }
   final hsl = HSLColor.fromColor(base);

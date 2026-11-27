@@ -141,6 +141,7 @@ import 'links_search/link_handler.dart';
 import 'media/image_preview.dart';
 import 'media/media_download_service.dart';
 import 'media/media_library_saver.dart';
+import 'media/media_prefetch.dart';
 import 'media/music_player_controller.dart';
 import 'media/video_playback_queue.dart';
 import 'media/video_player_view.dart';
@@ -800,6 +801,12 @@ class _ChatViewState extends State<ChatView> {
 
   Map<int, _TranscriptEntry> _trackedTranscriptEntries = const {};
 
+  /// Off-screen warm window bookkeeping for the transcript: the entry range
+  /// already prefetched, and the entry starts that were on screen last pass.
+  (int, int)? _prefetchedRange;
+  final Set<int> _visibleEntryStarts = <int>{};
+  final Set<int> _visibleEntryStartsThisPass = <int>{};
+
   final Map<int, RenderBox> _mountedTranscriptEntries = {};
 
   bool _bottomGapCorrectionScheduled = false;
@@ -852,6 +859,11 @@ class _ChatViewState extends State<ChatView> {
   int _actionReactionAvailabilityGeneration = 0;
   bool? _actionMessageLinkAvailable;
   bool? _actionCanReply;
+
+  /// `messageProperties.can_be_deleted_*`. Null while the query is in flight
+  /// and whenever it failed: the menu keeps its Delete row hidden until the
+  /// server says this account may delete the message.
+  bool? _actionCanDelete;
 
   int _actionPropertiesGeneration = 0;
   Offset?
@@ -4978,6 +4990,7 @@ class _ChatViewState extends State<ChatView> {
       allowHideSender: _canHideSender(target),
       allowCopyMessageLink:
           !target.isCall && _actionMessageLinkAvailable == true,
+      allowDelete: _actionCanDelete == true,
       allowViewEdits: _actionTargetHasEdits(target),
       source: _actionSource,
       showingOriginalTranslation: _showOriginalTranslationMessageIds.contains(

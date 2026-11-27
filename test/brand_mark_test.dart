@@ -81,14 +81,37 @@ void main() {
       reason: 'the bottom-right stop deepens it',
     );
 
-    // Dark surfaces get the same ramp lifted toward white, so a saturated
-    // fill does not sink into a near-black page.
+    // Dark surfaces get the same ramp lifted toward the brand's pale azure,
+    // not toward white: the mark stays recognisably the brand's own hue.
     final dark = brandMarkColors(Brightness.dark);
-    expect(dark[0].computeLuminance(), greaterThan(0.75));
+    for (final stop in dark) {
+      final hsl = HSLColor.fromColor(stop);
+      expect(
+        hsl.saturation,
+        greaterThan(0.5),
+        reason: 'a white/grey fill has no saturation left: $stop',
+      );
+    }
     expect(
       dark[1].computeLuminance(),
-      greaterThan(dark[0].computeLuminance() * 0.5),
+      greaterThan(dark[0].computeLuminance() * 0.4),
     );
+    expect(
+      HSLColor.fromColor(dark[0]).hue,
+      closeTo(HSLColor.fromColor(const Color(0xFFE0443E)).hue, 1),
+      reason: 'the dark stops keep the theme hue',
+    );
+  });
+
+  test('the dark fill is never white', () {
+    AppTheme.applyBrand(const Color(AppTheme.defaultBrand));
+    for (final stop in brandMarkColors(Brightness.dark)) {
+      expect(
+        stop.computeLuminance(),
+        lessThan(0.62),
+        reason: 'the old white fill must stay gone: $stop',
+      );
+    }
   });
 
   testWidgets('a green brand paints a green mark', (tester) async {

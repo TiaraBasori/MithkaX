@@ -80,12 +80,16 @@ String? desktopPackageSuffix([Abi? abi, bool? appImage]) =>
 
 /// The newest release, or null when the request fails or is malformed.
 ///
-/// MithkaX ships every build as a pre-release, so the feed walks the release
-/// list and takes the first (newest) tag instead of `releases/latest`, which
-/// only answers stable releases and would never see one here.
+/// The feed walks the release list and takes the first (newest) tag instead of
+/// `releases/latest`, which answers only the stable release and would hide a
+/// newer pre-release build. [includePrereleases] decides whether those
+/// pre-release entries are offered at all; it defaults to false, matching the
+/// About switch's default, so an install that never touched the setting only
+/// follows official releases.
 Future<ReleaseInfo?> fetchLatestRelease({
   String owner = _owner,
   String repo = _repo,
+  bool includePrereleases = false,
 }) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
   try {
@@ -102,21 +106,26 @@ Future<ReleaseInfo?> fetchLatestRelease({
     final response = await request.close().timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) return null;
     final body = await response.transform(utf8.decoder).join();
-    return parseReleaseList(body);
+    return parseReleaseList(body, includePrereleases: includePrereleases);
   } finally {
     client.close(force: true);
   }
 }
 
-/// Reads the release list and returns the first (newest) entry, or null when
-/// the list is empty or malformed.
-ReleaseInfo? parseReleaseList(String body) {
+/// Reads the release list and returns the first (newest) allowed entry, or
+/// null when the list is empty or malformed.
+///
+/// A draft never counts (it is not published), and a pre-release only counts
+/// when [includePrereleases] says the user opted into those builds.
+ReleaseInfo? parseReleaseList(String body, {bool includePrereleases = false}) {
   final json = jsonDecode(body);
   if (json is! List || json.isEmpty) return null;
   ReleaseInfo? best;
   for (final entry in json.whereType<Map>()) {
     final tag = entry['tag_name'] as String?;
     if (tag == null) continue;
+    if (entry['draft'] == true) continue;
+    if (entry['prerelease'] == true && !includePrereleases) continue;
     final info = _parseOneRelease(entry, tag);
     if (info == null) continue;
     best ??= info;

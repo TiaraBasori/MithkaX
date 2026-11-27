@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../app/app_version.dart';
 import '../app/telemetry_config.dart';
 import '../chat/links_search/link_handler.dart';
@@ -39,6 +40,32 @@ class _AboutViewState extends State<AboutView> {
   DateTime? _lastVersionTapAt;
   bool _checking = false;
   UpdateCheckOutcome? _updateOutcome;
+
+  /// Whether the update check also follows pre-release builds. Read from the
+  /// same preference the checker consults, so the row always shows the value
+  /// the next check will use.
+  bool _includePrereleases = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadUpdatePreferences());
+  }
+
+  Future<void> _loadUpdatePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _includePrereleases =
+          prefs.getBool(UpdateChecker.includePrereleasesKey) ?? false;
+    });
+  }
+
+  Future<void> _setIncludePrereleases(bool value) async {
+    setState(() => _includePrereleases = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(UpdateChecker.includePrereleasesKey, value);
+  }
 
   /// Trailing text on the update row: the last outcome, or nothing yet.
   String _updateStatusLabel() {
@@ -147,6 +174,26 @@ class _AboutViewState extends State<AboutView> {
           SettingsCard.rows(
             rows: [
               if (UpdateChecker.supportsManualCheck) ...[
+                // The pre-release opt-in sits directly above the check row:
+                // it decides what that row (and the launch check) may find.
+                SettingsRow(
+                  key: const ValueKey('about-update-prereleases'),
+                  leading: const SettingsLeadingIcon(
+                    icon: HeroAppIcons.droplet,
+                  ),
+                  title: AppStrings.t(AppStringKeys.aboutUpdatePrereleases),
+                  subtitle: AppStrings.t(
+                    AppStringKeys.aboutUpdatePrereleasesDetail,
+                  ),
+                  showChevron: false,
+                  trailing: AppCheckbox(
+                    value: _includePrereleases,
+                    onChanged: (value) =>
+                        unawaited(_setIncludePrereleases(value)),
+                  ),
+                  onTap: () =>
+                      unawaited(_setIncludePrereleases(!_includePrereleases)),
+                ),
                 SettingsRow(
                   leading: const SettingsLeadingIcon(
                     icon: HeroAppIcons.download,

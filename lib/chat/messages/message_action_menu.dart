@@ -469,6 +469,7 @@ class MessageActionMenu extends StatelessWidget {
     this.hasSelectedQuote = false,
     this.allowSuggestedPostOffer = false,
     this.allowHideSender = false,
+    this.allowDelete = false,
     this.allowCopyMessageLink = false,
     this.allowViewEdits = false,
     this.allowProtectedCopyForward = false,
@@ -491,6 +492,13 @@ class MessageActionMenu extends StatelessWidget {
 
   /// Offer to hide this sender's messages on this device (groups only).
   final bool allowHideSender;
+
+  /// Whether this account may delete [message] at all
+  /// (`messageProperties.can_be_deleted_only_for_self` OR
+  /// `can_be_deleted_for_all_users`). The menu never guesses from ownership:
+  /// in a chat without delete rights another member's message has no Delete
+  /// row, and a server refusal is what the reference client gates on too.
+  final bool allowDelete;
 
   /// Offer [MessageAction.copyMessageLink] (server-verified availability).
   final bool allowCopyMessageLink;
@@ -758,7 +766,7 @@ class MessageActionMenu extends StatelessWidget {
   }) {
     // Call logs aren't reactable, but their delivery metadata stays useful.
     if (message.isCall) {
-      return [MessageAction.delete];
+      return [if (allowDelete) MessageAction.delete];
     }
     final result = <MessageAction>[];
     if (_hasCopyableText) {
@@ -844,7 +852,7 @@ class MessageActionMenu extends StatelessWidget {
     if (allowHideSender) result.add(MessageAction.hideSender);
     if (allowViewEdits) result.add(MessageAction.viewEdits);
     if (message.mirrorEntry != null) result.add(MessageAction.removeMirror);
-    result.add(MessageAction.delete);
+    if (allowDelete) result.add(MessageAction.delete);
     return result;
   }
 
