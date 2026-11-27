@@ -30,6 +30,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../chat/forum_topic_transcript.dart';
+import '../chat/media/media_prefetch.dart';
 import '../config/build_flags.dart';
 import '../tdlib/json_helpers.dart';
 import '../tdlib/td_client.dart';
@@ -942,6 +943,15 @@ class MessageHistoryStore extends ChangeNotifier {
       );
       if (mainCopied && posterCopied) break;
     }
+    // Nothing usable on disk: ask for the media now. A chat the user never
+    // opens has no row that would request the file, so without this the
+    // mirror records an entry whose snapshot never appears — the reference
+    // client avoids that by queueing the download from DownloadController the
+    // moment the update arrives. The prefetch still obeys the auto-download
+    // preset and runs below foreground priority.
+    if (!mainCopied) {
+      unawaited(MediaPrefetch.shared.prefetchTdContent(message.obj('content')));
+    }
   }
 
   /// The media a content payload can keep, largest first. A photo carries one
@@ -1556,7 +1566,19 @@ class MessageHistoryStore extends ChangeNotifier {
     final content = update.obj('new_content');
     final newText = _messageText(content) ?? '';
     final newKind = _messageKindKey(content) ?? '';
-    if (newText == existing.text && newKind == existing.kindKey) return;
+    // A photo whose picture was replaced keeps its caption and its kind: the
+    // only thing that moved is the file. Comparing just text/kind made those
+    // edits invisible — the long-press menu then had no revision to show.
+    final newFileId = _primaryMediaFileId(content);
+    final mediaSwapped =
+        newFileId > 0 &&
+        existing.mediaFileId > 0 &&
+        newFileId != existing.mediaFileId;
+    if (newText == existing.text &&
+        newKind == existing.kindKey &&
+        !mediaSwapped) {
+      return;
+    }
 
     final now = _nowSeconds();
     final event = MessageHistoryEvent(
@@ -1573,13 +1595,26 @@ class MessageHistoryStore extends ChangeNotifier {
     _byKey[key] = existing.copyWith(
       text: newText,
       kindKey: newKind,
+      mediaFileId: newFileId > 0 ? newFileId : existing.mediaFileId,
       events: [...existing.events, event],
     );
     notifyListeners();
     _schedulePersist();
-    if (newKind != existing.kindKey && newKind.isNotEmpty) {
+    if ((newKind != existing.kindKey && newKind.isNotEmpty) || mediaSwapped) {
       _snapshotEditedMediaOf(accountUserId, chatId, messageId, content, key);
     }
+  }
+
+  /// The file id of the content's full-size picture or file, or 0.
+  ///
+  /// Mirrors [_mediaCandidates]' first non-poster pick: the largest photo
+  /// size, or the video/document/animation file itself.
+  static int _primaryMediaFileId(Map<String, dynamic>? content) {
+    for (final candidate in _mediaCandidates(content)) {
+      if (candidate.poster) continue;
+      return jsonInt(candidate.file['id']) ?? 0;
+    }
+    return 0;
   }
 
   /// Snapshot the media of a just-recorded edit when the file is already on

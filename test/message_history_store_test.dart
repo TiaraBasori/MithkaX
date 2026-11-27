@@ -17,6 +17,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mithka/chat/media/media_prefetch.dart';
 import 'package:mithka/config/build_flags.dart';
 import 'package:mithka/history/message_history_settings.dart';
 import 'package:mithka/history/message_history_store.dart';
@@ -84,6 +85,44 @@ Map<String, dynamic> _message(
   },
 };
 
+/// Stands in for the prefetcher: records what the mirror asks for instead of
+/// talking to TDLib.
+class _RecordingPrefetch extends MediaPrefetch {
+  final contents = <Map<String, dynamic>?>[];
+
+  @override
+  Future<int> prefetchTdContent(Map<String, dynamic>? content) async {
+    contents.add(content);
+    return 0;
+  }
+}
+
+Map<String, dynamic> _photoMessage(
+  int chatId,
+  int messageId, {
+  String caption = '',
+  int fileId = 501,
+}) => {
+  '@type': 'message',
+  'chat_id': '$chatId',
+  'id': messageId,
+  'date': 1700000000,
+  'sender_id': {'@type': 'messageSenderUser', 'user_id': '42'},
+  'content': {
+    '@type': 'messagePhoto',
+    'caption': {'@type': 'formattedText', 'text': caption},
+    'photo': {
+      '@type': 'photo',
+      'sizes': [
+        {
+          '@type': 'photoSize',
+          'photo': {'@type': 'file', 'id': fileId, 'size': 4096},
+        },
+      ],
+    },
+  },
+};
+
 void main() {
   if (!_enabled) {
     return;
@@ -93,6 +132,7 @@ void main() {
   late StreamController<Map<String, dynamic>> updates;
   late StreamController<int> activeSlotChanges;
   late MessageHistoryStore store;
+  late _RecordingPrefetch prefetch;
   late int notifications;
 
   setUp(() async {
@@ -122,11 +162,14 @@ void main() {
       ..setRecordChannels(true)
       ..setSnapshotPrivate(true);
     store.initialize(prefs);
+    prefetch = _RecordingPrefetch();
+    MediaPrefetch.debugInstance = prefetch;
     notifications = 0;
     store.addListener(() => notifications++);
   });
 
   tearDown(() async {
+    MediaPrefetch.debugInstance = null;
     store.dispose();
     await updates.close();
     await activeSlotChanges.close();
@@ -193,6 +236,85 @@ void main() {
       expect(entry.events.single.newText, 'edited');
     },
   );
+
+  test('a replaced picture records a revision with the same caption', () async {
+    // Editing a photo in place (crop, sticker over it) keeps the caption and
+    // the kind: only the file id moves. That edit used to be dropped on the
+    // floor, so long-press had no "view edits" entry to offer.
+    await start();
+    store.recordIncomingMessage(
+      _photoMessage(11, 100, caption: 'same caption'),
+    );
+    emitAs(_clientA, 'updateMessageEdited', {
+      'chat_id': '11',
+      'message_id': 100,
+      'edit_date': 123,
+    });
+    emitAs(_clientA, 'updateMessageContent', {
+      'chat_id': '11',
+      'message_id': 100,
+      'new_content': {
+        '@type': 'messagePhoto',
+        'caption': {'@type': 'formattedText', 'text': 'same caption'},
+        'photo': {
+          '@type': 'photo',
+          'sizes': [
+            {
+              '@type': 'photoSize',
+              'photo': {'@type': 'file', 'id': 777, 'size': 4096},
+            },
+          ],
+        },
+      },
+    });
+    await pump();
+    final entry = store.entry(11, 100)!;
+    expect(entry.events, hasLength(1));
+    expect(entry.events.single.oldText, 'same caption');
+    expect(entry.events.single.newText, 'same caption');
+    expect(entry.mediaFileId, 777, reason: 'the entry follows the new picture');
+  });
+
+  test('a caption-only edit stays a single revision', () async {
+    await start();
+    store.recordIncomingMessage(_photoMessage(11, 101, caption: 'old'));
+    emitAs(_clientA, 'updateMessageEdited', {
+      'chat_id': '11',
+      'message_id': 101,
+      'edit_date': 124,
+    });
+    emitAs(_clientA, 'updateMessageContent', {
+      'chat_id': '11',
+      'message_id': 101,
+      'new_content': {
+        '@type': 'messagePhoto',
+        'caption': {'@type': 'formattedText', 'text': 'new'},
+        'photo': {
+          '@type': 'photo',
+          'sizes': [
+            {
+              '@type': 'photoSize',
+              'photo': {'@type': 'file', 'id': 501, 'size': 4096},
+            },
+          ],
+        },
+      },
+    });
+    await pump();
+    final entry = store.entry(11, 101)!;
+    expect(entry.events, hasLength(1));
+    expect(entry.mediaFileId, 501);
+  });
+
+  test('a recorded photo with no file on disk is prefetched', () async {
+    // Half of the snapshot problem: in a chat the user never opens, no row
+    // ever asks for the picture, so the mirror must ask itself.
+    await start();
+    store.recordIncomingMessage(_photoMessage(11, 102, caption: 'hi'));
+    await pump();
+    expect(prefetch.contents, hasLength(1));
+    expect(prefetch.contents.single?['@type'], 'messagePhoto');
+  });
 
   test('incoming messages mirror with sender, kind and text', () async {
     await start();
