@@ -1949,19 +1949,26 @@ class TdClient {
   /// while the client is closed, and reopen. Every account stays signed in and
   /// re-syncs chats, messages and media from the server.
   ///
-  /// Returns how many slots were reset. Bot-API accounts are skipped on
-  /// purpose: their on-device history is the only copy of what the bot sent,
-  /// not a cache of a server database.
-  Future<int> resetLocalDatabases() async {
+  /// Returns how many slots were reset plus a line per slot that failed. One
+  /// account's failure must not stop the others: each slot owns its database
+  /// and rolls back on its own. Bot-API accounts are skipped on purpose: their
+  /// on-device history is the only copy of what the bot sent, not a cache of a
+  /// server database.
+  Future<({int reset, List<String> failures})> resetLocalDatabases() async {
     var reset = 0;
+    final failures = <String>[];
     for (final slot in _clientForSlot.keys.toList(growable: false)) {
       final clientId = _clientForSlot[slot];
       if (clientId == null) continue;
       if (_botApiBackendForClient.containsKey(clientId)) continue;
-      await resetSlotDatabase(slot);
-      reset += 1;
+      try {
+        await resetSlotDatabase(slot);
+        reset += 1;
+      } catch (error) {
+        failures.add('account slot $slot: $error');
+      }
     }
-    return reset;
+    return (reset: reset, failures: List<String>.unmodifiable(failures));
   }
 
   /// One slot's database reset. See [resetLocalDatabases].

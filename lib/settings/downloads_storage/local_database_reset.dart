@@ -91,7 +91,9 @@ class LocalDatabaseReset {
     //    own exported session string (see TdClient.resetSlotDatabase).
     var databasesReset = 0;
     try {
-      databasesReset = await td.resetLocalDatabases();
+      final result = await td.resetLocalDatabases();
+      databasesReset = result.reset;
+      failures.addAll(result.failures);
     } catch (error) {
       failures.add('message database: $error');
     }

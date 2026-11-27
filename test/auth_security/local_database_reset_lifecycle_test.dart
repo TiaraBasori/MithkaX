@@ -232,11 +232,12 @@ void main() {
     );
   });
 
-  test('bot-API slots keep their on-device history', () async {
+  test('resetLocalDatabases walks every live Telegram slot', () async {
     final harness = await _prepare(respond: _steadyResponder(777));
     await harness.client.restoreSessionSlot(_syntheticSession());
-    final reset = await harness.client.resetLocalDatabases();
-    expect(reset, 1);
+    final result = await harness.client.resetLocalDatabases();
+    expect(result.reset, 1);
+    expect(result.failures, isEmpty);
     expect(harness.bindings.sentTo(100, 'close'), hasLength(1));
   });
 }
