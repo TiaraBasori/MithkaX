@@ -583,6 +583,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
 
   FVideoActions? _reusablePlayerActions;
 
+  // A device-side breadcrumb: the surface keeps a three-finger tap for itself so
+  // a player whose chrome never shows can still hand back what it saw.
+  final Set<int> _diagnosticPointers = <int>{};
+  Timer? _diagnosticPointerTimer;
+  int _chromeBuilds = 0;
+  int _surfaceTaps = 0;
+  bool _lastChromeVisible = false;
+
   /// Control visibility for the loading chrome, which mithka owns until the
   /// package player takes over. Reset whenever playback re-enters loading.
   bool _loadingControlsVisible = true;
@@ -913,19 +921,116 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     // A rightward swipe from the left edge slides the page away with the
     // finger so the player can be left from the surface itself.
     final drag = _dismissDx;
-    if (drag == 0) return player;
+    if (drag == 0) return _withPlayerDiagnostics(player);
     final progress = (drag / videoDismissDragDistance).clamp(0.0, 1.0);
-    return ColoredBox(
-      color: Colors.black,
-      child: Transform.translate(
-        key: const ValueKey('video-dismiss-drag'),
-        offset: Offset(drag, 0),
-        child: Transform.scale(
-          scale: 1 - progress * 0.06,
-          child: Opacity(opacity: 1 - progress * 0.3, child: player),
+    return _withPlayerDiagnostics(
+      ColoredBox(
+        color: Colors.black,
+        child: Transform.translate(
+          key: const ValueKey('video-dismiss-drag'),
+          offset: Offset(drag, 0),
+          child: Transform.scale(
+            scale: 1 - progress * 0.06,
+            child: Opacity(opacity: 1 - progress * 0.3, child: player),
+          ),
         ),
       ),
     );
+  }
+
+  /// Wraps the player in the breadcrumb listener.
+  ///
+  /// Three fingers held together for a moment copy a snapshot of what the
+  /// player believes — presentation, size, chrome bookkeeping, controller state
+  /// — so a player that shows no controls on a phone can be diagnosed without a
+  /// logcat session.
+  Widget _withPlayerDiagnostics(Widget child) {
+    return Listener(onPointerDown: _handleDiagnosticPointer, child: child);
+  }
+
+  void _handleDiagnosticPointer(PointerDownEvent event) {
+    _diagnosticPointers.add(event.pointer);
+    _diagnosticPointerTimer?.cancel();
+    if (_diagnosticPointers.length < 3) {
+      _diagnosticPointerTimer = Timer(
+        const Duration(milliseconds: 700),
+        _diagnosticPointers.clear,
+      );
+      return;
+    }
+    _diagnosticPointers.clear();
+    _copyPlayerDiagnostics();
+  }
+
+  void _copyPlayerDiagnostics() {
+    final media = MediaQuery.of(context);
+    final controller = _controller;
+    final value = controller?.value;
+    final report = <String>[
+      'mithkax video player',
+      'presentation: ${widget.presentation.name}',
+      'media: ${media.size.width.toStringAsFixed(1)}x'
+          '${media.size.height.toStringAsFixed(1)} @'
+          '${media.devicePixelRatio.toStringAsFixed(2)}',
+      'padding: ${media.padding}',
+      'insets: ${media.viewInsets.bottom.toStringAsFixed(1)}',
+      'route: ${ModalRoute.of(context)?.settings.name ?? '-'}',
+      'chrome builds: $_chromeBuilds, visible: $_lastChromeVisible, '
+          'surface taps: $_surfaceTaps',
+      'on-demand panel: $_onDemandPanelVisible, '
+          'standalone: ${_usesStandaloneFullscreenLayout(context)}',
+      'pip: system=$_systemPiPActive handoff=$_systemPiPHandoff '
+          'busy=$_systemPiPBusy',
+      'controller: ${value == null ? 'none' : 'ready=${value.isInitialized} playing=${value.isPlaying} '
+                'buffering=${value.isBuffering} '
+                'ended=${value.isCompleted} '
+                'size=${value.size.width.toInt()}x'
+                '${value.size.height.toInt()} '
+                'at=${value.position.inMilliseconds}ms'
+                '/${value.duration.inMilliseconds}ms'}',
+      'failed: $_failed, loading: ${_controller == null}',
+      'video: ${widget.video.id} '
+          '${widget.width ?? 0}x${widget.height ?? 0} '
+          '${widget.video.mimeType ?? ''}',
+    ].join('\n');
+    Clipboard.setData(ClipboardData(text: report));
+    // The player route has no Scaffold of its own, so the confirmation is a
+    // short-lived overlay rather than a snack bar.
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 0,
+        right: 0,
+        bottom: MediaQuery.paddingOf(context).bottom + 96,
+        child: IgnorePointer(
+          child: Center(
+            child: DecoratedBox(
+              key: const ValueKey('video-player-diagnostics-copied'),
+              decoration: BoxDecoration(
+                color: const Color(0xE6202124),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Text(
+                  'Player diagnostics copied',
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    Timer(const Duration(seconds: 2), entry.remove);
   }
 
   Widget _playbackSurface(VideoPlayerController? controller) {
@@ -1119,6 +1224,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
 
   Widget _playerChrome(BuildContext context, FVideoChromeScope scope) {
     _reusablePlayerActions = scope.actions;
+    _chromeBuilds++;
+    _lastChromeVisible = scope.snapshot.controlsVisible;
     // The chrome's speed controls ask the package to apply the next step.
     // Routing that through the hold's serializer keeps one newest desired
     // rate, so a speed step and a hold cannot land out of order.
@@ -2150,6 +2257,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       // drag a gesture has to be, so the release is that tap. Finish it here:
       // no other recognizer can, and a position step must not be committed.
       _cancelPlaybackGesture();
+      _surfaceTaps++;
       _reusablePlayerActions?.toggleControls();
       return;
     }
