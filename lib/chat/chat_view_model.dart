@@ -3421,13 +3421,15 @@ class ChatViewModel extends ChangeNotifier {
       _client.activeSlot == _accountSlot;
 
   /// Per-message action availability from `messageProperties`: whether a
-  /// shareable link exists (`can_get_link`) and whether Telegram accepts a
-  /// reply in this chat (`can_be_replied`). Both live only on the server
-  /// object, so one query answers the menu; a property error propagates and
-  /// the caller keeps both entries hidden.
-  Future<({bool canGetLink, bool canBeReplied})> messageActionAvailability(
-    int messageId,
-  ) async {
+  /// shareable link exists (`can_get_link`), whether Telegram accepts a reply
+  /// in this chat (`can_be_replied`) and whether THIS account may delete the
+  /// message (`can_be_deleted_only_for_self` / `can_be_deleted_for_all_users`).
+  /// All of them live only on the server object, so one query answers the
+  /// menu; a property error propagates and the caller keeps the entries
+  /// hidden, which is exactly what the reference client's
+  /// `MessageObject.canDeleteForAll` gate answers.
+  Future<({bool canGetLink, bool canBeReplied, bool canDelete})>
+  messageActionAvailability(int messageId) async {
     final properties = await _client.queryTo({
       '@type': 'getMessageProperties',
       'chat_id': chatId,
@@ -3436,6 +3438,9 @@ class ChatViewModel extends ChangeNotifier {
     return (
       canGetLink: properties.boolean('can_get_link') ?? false,
       canBeReplied: properties.boolean('can_be_replied') ?? false,
+      canDelete:
+          (properties.boolean('can_be_deleted_only_for_self') ?? false) ||
+          (properties.boolean('can_be_deleted_for_all_users') ?? false),
     );
   }
 

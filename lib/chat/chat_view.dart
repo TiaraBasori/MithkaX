@@ -852,6 +852,11 @@ class _ChatViewState extends State<ChatView> {
   bool? _actionMessageLinkAvailable;
   bool? _actionCanReply;
 
+  /// `messageProperties.can_be_deleted_*`. Null while the query is in flight
+  /// and whenever it failed: the menu keeps its Delete row hidden until the
+  /// server says this account may delete the message.
+  bool? _actionCanDelete;
+
   int _actionPropertiesGeneration = 0;
   Offset?
   _actionAnchor; // overlay-space point the HUD grows from / collapses to
@@ -4974,6 +4979,7 @@ class _ChatViewState extends State<ChatView> {
       allowHideSender: _canHideSender(target),
       allowCopyMessageLink:
           !target.isCall && _actionMessageLinkAvailable == true,
+      allowDelete: _actionCanDelete == true,
       allowViewEdits: _actionTargetHasEdits(target),
       source: _actionSource,
       showingOriginalTranslation: _showOriginalTranslationMessageIds.contains(

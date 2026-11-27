@@ -140,6 +140,60 @@ void main() {
     expect(surfaceWidth(tester), MessageActionMenu.desktopPreferredWidth);
   });
 
+  testWidgets('Delete only exists where the server allowed a deletion', (
+    tester,
+  ) async {
+    // `allowDelete` is the messageProperties answer
+    // (`can_be_deleted_only_for_self` OR `can_be_deleted_for_all_users`).
+    // Without it another member's message in a chat without delete rights
+    // used to offer Delete anyway; the menu must never guess that.
+    await pumpMenu(
+      tester,
+      platform: TargetPlatform.android,
+      layout: MessageActionMenuLayout.vertical,
+    );
+    expect(find.byKey(const ValueKey('message-action-delete')), findsNothing);
+
+    final picked = <MessageAction>[];
+    SharedPreferences.setMockInitialValues({});
+    final translation = TranslationController(
+      await SharedPreferences.getInstance(),
+    );
+    addTearDown(translation.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<TranslationController>.value(
+        value: translation,
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: ThemeData(extensions: [AppColors.light]),
+          home: Scaffold(
+            body: Center(
+              child: MessageActionMenu(
+                message: message(),
+                isPinned: false,
+                layout: MessageActionMenuLayout.vertical,
+                allowDelete: true,
+                onSelect: picked.add,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('message-action-delete')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('message-action-delete')));
+    await tester.pump();
+    expect(picked, [MessageAction.delete]);
+  });
+
   testWidgets('tapping a dropdown row selects its action', (tester) async {
     final picked = await pumpMenu(
       tester,
