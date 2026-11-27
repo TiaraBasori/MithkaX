@@ -120,17 +120,24 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
     return _imagePreviewGeometry().frameSize;
   }
 
+  /// GIFs render smaller than a photo of the same source: Telegram's own
+  /// animations sit around 200pt wide, while the 320pt photo budget read as an
+  /// oversized block in the transcript (the user's 100% default was "too
+  /// big"). 60% of the old budget keeps a 16:9 GIF near 258×145 at 100%, and
+  /// the sticker/GIF preference still scales from there.
+  static const _gifSizeBaseline = 0.6;
+
   /// A GIF's box: the same 320pt media budget as a photo, scaled by the one
   /// sticker/GIF size preference exteraless exposes. The lane caps the width so
   /// a larger setting grows tall GIFs instead of overflowing the bubble.
   Size _gifDisplaySize() {
-    final lane = _mediaMaxWidth();
+    final lane = _mediaMaxWidth() * _gifSizeBaseline;
     final scale = _theme.stickerMediaScale;
     return telegramDesktopMediaPreviewGeometry(
       sourceWidth: message.imageWidth,
       sourceHeight: message.imageHeight,
       availableWidth: math.min(lane, lane * scale),
-      maxHeight: telegramChatMediaPreviewMaxHeight * scale,
+      maxHeight: telegramChatMediaPreviewMaxHeight * _gifSizeBaseline * scale,
     ).frameSize;
   }
 
