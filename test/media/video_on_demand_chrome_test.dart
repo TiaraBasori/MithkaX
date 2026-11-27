@@ -37,6 +37,8 @@ class _FakeVideoPlatform extends VideoPlayerPlatform {
 
   @override
   Stream<VideoEvent> videoEventsFor(int playerId) {
+    // dispose() owns and closes this controller.
+    // ignore: close_sinks
     final controller = _events[playerId]!;
     scheduleMicrotask(() {
       if (!controller.isClosed) {
