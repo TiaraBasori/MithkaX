@@ -2522,10 +2522,10 @@ class _SearchViewModel extends ChangeNotifier {
           (a, b) => (b.integer('date') ?? 0).compareTo(a.integer('date') ?? 0),
         );
       final seen = <String>{};
-      final out = <_SearchHit>[];
+      final parsed = <(ChatMessage, int, _SearchSource)>[];
       final sourceCache = <int, _SearchSource>{};
       for (final object in raw) {
-        if (!_isCurrent(tab, runId, trimmed) || out.length >= resultLimit) {
+        if (!_isCurrent(tab, runId, trimmed) || parsed.length >= resultLimit) {
           break;
         }
         final chatId = object.int64('chat_id');
@@ -2535,8 +2535,19 @@ class _SearchViewModel extends ChangeNotifier {
         if (message == null) continue;
         final key = '$chatId:${message.id}';
         if (!seen.add(key)) continue;
-        out.add(_SearchHit.message(message, chatId: chatId, source: source));
+        parsed.add((message, chatId, source));
       }
+      final senderPhotos = await _senderPhotosFor(parsed);
+      if (!_isCurrent(tab, runId, trimmed)) return;
+      final out = <_SearchHit>[
+        for (final (message, chatId, source) in parsed)
+          _SearchHit.message(
+            message,
+            chatId: chatId,
+            source: source,
+            senderPhoto: senderPhotos[message.senderId],
+          ),
+      ];
       _finish(tab, runId, trimmed, out);
     } catch (_) {
       _finish(tab, runId, trimmed, const []);
@@ -2616,6 +2627,31 @@ class _SearchViewModel extends ChangeNotifier {
     }
   }
 
+  /// Resolves the avatar of each message's actual author. A search hit used to
+  /// lead with the chat photo, which names the wrong person for a group search
+  /// result; one request per distinct sender fills every row.
+  Future<Map<int, TdFileRef?>> _senderPhotosFor(
+    List<(ChatMessage, int, _SearchSource)> messages,
+  ) async {
+    final photos = <int, TdFileRef?>{};
+    final pending = <int, Future<TdFileRef?>>{};
+    for (final (message, _, source) in messages) {
+      // A media/music hit paints its own picture, so it needs no avatar.
+      if (_SearchHit._messageMediaThumb(message) != null) continue;
+      final id = message.senderId;
+      if (id == null) continue;
+      pending.putIfAbsent(
+        id,
+        () => messageSenderPhoto(message, chatPhoto: source.photo),
+      );
+    }
+    await Future.wait([
+      for (final entry in pending.entries)
+        entry.value.then((photo) => photos[entry.key] = photo),
+    ]);
+    return photos;
+  }
+
   Future<_SearchSource> _sourceFor(int chatId) async {
     try {
       final chat = await TdClient.shared.query({
@@ -2654,12 +2690,39 @@ class _SearchViewModel extends ChangeNotifier {
   }
 }
 
+/// The avatar a message search hit leads with: its sender's profile photo, or
+/// [chatPhoto] when the message has no user/chat author (service, anonymous).
+@visibleForTesting
+Future<TdFileRef?> messageSenderPhoto(
+  ChatMessage message, {
+  TdFileRef? chatPhoto,
+}) async {
+  if (message.senderPhoto != null) return message.senderPhoto;
+  final id = message.senderId;
+  if (id == null || id == 0) return chatPhoto;
+  try {
+    final object = id > 0
+        ? await TdClient.shared.query({'@type': 'getUser', 'user_id': id})
+        : await TdClient.shared.query({'@type': 'getChat', 'chat_id': id});
+    if (id > 0) {
+      message.senderName ??= TDParse.userName(object);
+    } else {
+      message.senderName ??= object.str('title');
+    }
+    return TDParse.smallPhoto(
+      id > 0 ? object.obj('profile_photo') : object.obj('photo'),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 /// The leading image of a search row.
 ///
-/// Text, link, file and voice hits identify their chat/person with the same
-/// round avatar the chat list uses. A media hit shows its own thumbnail, and a
-/// music hit shows the track cover, both in a rounded square: the picture IS
-/// the result. Hits with no identity (a `tg://` link suggestion) keep their
+/// Text, link, file and voice hits identify the message's SENDER with the same
+/// round avatar the chat list uses (not the chat the search found them in). A
+/// media hit shows its own thumbnail, and a music hit shows the track cover,
+/// both in a rounded square: the picture IS the result. Hits with no identity (a `tg://` link suggestion) keep their
 /// glyph in the same circle.
 class SearchHitLeadingImage extends StatelessWidget {
   const SearchHitLeadingImage({
@@ -2785,6 +2848,7 @@ class _SearchHit {
     ChatMessage message, {
     required int chatId,
     required _SearchSource source,
+    TdFileRef? senderPhoto,
   }) {
     final document = message.document;
     final music = message.music;
@@ -2797,7 +2861,9 @@ class _SearchHit {
       timeLabel: DateText.listLabel(message.date),
       date: message.date,
       sourceTitle: source.title,
-      photo: source.photo,
+      // A message hit identifies the person who wrote it, not the chat the
+      // search found it in. Media/music hits replace this with their picture.
+      photo: senderPhoto ?? source.photo,
       chatId: chatId,
       message: message,
       icon: _messageIcon(message),
@@ -2814,9 +2880,13 @@ class _SearchHit {
   final TdFileRef? photo;
   final ChatSummary? chat;
 
-  /// The name the leading avatar's monogram draws from: a message hit shows
-  /// the chat it was found in, not the message text.
-  String get avatarTitle => sourceTitle.isNotEmpty ? sourceTitle : title;
+  /// The name the leading avatar's monogram draws from: the message's sender
+  /// when known, otherwise the chat it was found in, never the message text.
+  String get avatarTitle {
+    final sender = message?.senderName?.trim();
+    if (sender != null && sender.isNotEmpty) return sender;
+    return sourceTitle.isNotEmpty ? sourceTitle : title;
+  }
 
   /// Chat, user and message hits all identify a peer; a bare link suggestion
   /// does not.
