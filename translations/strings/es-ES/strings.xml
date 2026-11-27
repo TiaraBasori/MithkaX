@@ -4224,4 +4224,6 @@
     <string name="composerLinkPreviewOff">Vista previa desactivada</string>
     <string name="composerLinkPreviewEnable">Mostrar vista previa</string>
     <string name="composerLinkPreviewDisable">Ocultar vista previa</string>
+    <string name="aboutUpdatePrereleases">Buscar versiones preliminares</string>
+    <string name="aboutUpdatePrereleasesDetail">Ofrecer también versiones candidatas y beta como actualizaciones. Desactivado: solo versiones oficiales.</string>
 </resources>

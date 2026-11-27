@@ -4990,6 +4990,9 @@ abstract final class AppStringKeys {
   static const presenceLastSeenWithinWeek = 'presenceLastSeenWithinWeek';
   static const presenceLastSeenWithinMonth = 'presenceLastSeenWithinMonth';
   static const aboutCheckForUpdates = 'aboutCheckForUpdates';
+  static const aboutUpdatePrereleases = 'aboutUpdatePrereleases';
+  static const aboutUpdatePrereleasesDetail = 'aboutUpdatePrereleasesDetail';
+
   static const aboutCheckingForUpdates = 'aboutCheckingForUpdates';
   static const aboutUpToDate = 'aboutUpToDate';
   static const aboutUpdateAvailable = 'aboutUpdateAvailable';

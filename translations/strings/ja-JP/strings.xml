@@ -4206,4 +4206,6 @@
     <string name="composerLinkPreviewOff">リンクプレビューはオフ</string>
     <string name="composerLinkPreviewEnable">リンクプレビューを表示</string>
     <string name="composerLinkPreviewDisable">リンクプレビューを非表示</string>
+    <string name="aboutUpdatePrereleases">プレリリース版を確認</string>
+    <string name="aboutUpdatePrereleasesDetail">リリース候補やベータ版も更新として提示します。オフの場合は正式版のみを確認します。</string>
 </resources>

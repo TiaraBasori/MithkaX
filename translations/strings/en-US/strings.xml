@@ -4224,4 +4224,6 @@
     <string name="composerLinkPreviewOff">Link preview off</string>
     <string name="composerLinkPreviewEnable">Show link preview</string>
     <string name="composerLinkPreviewDisable">Hide link preview</string>
+    <string name="aboutUpdatePrereleases">Check pre-release builds</string>
+    <string name="aboutUpdatePrereleasesDetail">Offer release candidates and beta builds as updates. Off means only official releases are offered.</string>
 </resources>

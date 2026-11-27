@@ -4224,4 +4224,6 @@
     <string name="composerLinkPreviewOff">Linkvorschau aus</string>
     <string name="composerLinkPreviewEnable">Linkvorschau anzeigen</string>
     <string name="composerLinkPreviewDisable">Linkvorschau ausblenden</string>
+    <string name="aboutUpdatePrereleases">Vorabversionen suchen</string>
+    <string name="aboutUpdatePrereleasesDetail">Auch Release-Kandidaten und Beta-Builds als Update anbieten. Aus: nur offizielle Releases.</string>
 </resources>
