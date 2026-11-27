@@ -1,10 +1,11 @@
 //
 //  brand_mark_test.dart
 //
-//  The mark's fill is derived from the theme's brand colour at paint time, so
-//  these tests set a brand colour nobody would pick by accident and read it
-//  back out of the painted pixels. A fill that quietly stopped following the
-//  brand (back to a baked asset, a const widget skipped on rebuild) fails here.
+//  The in-app mark is ALWAYS the night launcher icon's glyph body — the
+//  bright-azure to deep-azure ramp — in light and dark appearance alike. It
+//  does not follow the theme colour: derived pale tints turned the logo into a
+//  light-blue blob, which the user rejected. The frost ramp is reserved for
+//  the splash, which paints the mark on the brand gradient.
 //
 
 import 'package:flutter/material.dart';
@@ -65,72 +66,49 @@ List<double> _mean(List<List<int>> pixels) {
 void main() {
   tearDown(() => AppTheme.applyBrand(const Color(AppTheme.defaultBrand)));
 
-  test('the fill follows the theme brand colour', () {
-    AppTheme.applyBrand(const Color(0xFFE0443E));
-
-    final light = brandMarkColors(Brightness.light);
-    expect(light[1], const Color(0xFFE0443E));
+  test('the fill is the icon body, identical in both appearances', () {
+    final body = brandMarkColors();
+    expect(body.length, greaterThanOrEqualTo(3));
+    // Bright azure at the top-left, deep azure at the bottom-right.
     expect(
-      light[0].computeLuminance(),
-      greaterThan(light[1].computeLuminance()),
-      reason: 'the top-left stop lifts the brand',
+      body.first.computeLuminance(),
+      greaterThan(body.last.computeLuminance()),
     );
-    expect(
-      light[2].computeLuminance(),
-      lessThan(light[1].computeLuminance()),
-      reason: 'the bottom-right stop deepens it',
-    );
-
-    // Dark surfaces get the same ramp lifted toward the brand's pale azure,
-    // not toward white: the mark stays recognisably the brand's own hue.
-    final dark = brandMarkColors(Brightness.dark);
-    for (final stop in dark) {
+    for (final stop in body) {
       final hsl = HSLColor.fromColor(stop);
-      expect(
-        hsl.saturation,
-        greaterThan(0.5),
-        reason: 'a white/grey fill has no saturation left: $stop',
-      );
-    }
-    expect(
-      dark[1].computeLuminance(),
-      greaterThan(dark[0].computeLuminance() * 0.4),
-    );
-    expect(
-      HSLColor.fromColor(dark[0]).hue,
-      closeTo(HSLColor.fromColor(const Color(0xFFE0443E)).hue, 1),
-      reason: 'the dark stops keep the theme hue',
-    );
-  });
-
-  test('the dark fill is never white', () {
-    AppTheme.applyBrand(const Color(AppTheme.defaultBrand));
-    for (final stop in brandMarkColors(Brightness.dark)) {
-      expect(
-        stop.computeLuminance(),
-        lessThan(0.62),
-        reason: 'the old white fill must stay gone: $stop',
-      );
+      expect(hsl.saturation, greaterThan(0.6), reason: '$stop');
+      expect(hsl.hue, closeTo(210, 8), reason: 'the icon is azure: $stop');
     }
   });
 
-  testWidgets('a green brand paints a green mark', (tester) async {
+  test('a custom theme colour never repaints the mark', () {
+    final before = List<Color>.from(brandMarkColors());
+    AppTheme.applyBrand(const Color(0xFFE0443E));
+    expect(brandMarkColors(), before);
     AppTheme.applyBrand(const Color(0xFF1F9E4B));
+    expect(brandMarkColors(), before);
+  });
+
+  test('the frost ramp is the day icon and stays pale', () {
+    expect(markFrostColors.first.computeLuminance(), greaterThan(0.9));
+    expect(markFrostColors.last.computeLuminance(), greaterThan(0.5));
+  });
+
+  testWidgets('a red theme still paints the azure mark', (tester) async {
+    AppTheme.applyBrand(const Color(0xFFE0443E));
 
     final pixels = await _paint(tester, BrandMark(size: 120));
     expect(pixels, isNotEmpty);
     final mean = _mean(pixels);
-    expect(mean[1], greaterThan(mean[0] + 40), reason: 'mean $mean');
-    expect(mean[1], greaterThan(mean[2] + 40), reason: 'mean $mean');
+    expect(mean[2], greaterThan(mean[0] + 60), reason: 'mean $mean');
+    expect(mean[2], greaterThan(mean[1] + 20), reason: 'mean $mean');
   });
 
   testWidgets('the fill is a gradient, not one flat colour', (tester) async {
-    AppTheme.applyBrand(const Color(0xFF1F9E4B));
-
     final pixels = await _paint(tester, BrandMark(size: 120));
-    final greens = pixels.map((pixel) => pixel[1]).toSet();
+    final blues = pixels.map((pixel) => pixel[2]).toSet();
     expect(
-      greens.length,
+      blues.length,
       greaterThan(8),
       reason: 'a flat fill would give one value',
     );

@@ -1,40 +1,36 @@
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
 
-/// The app mark: one flat glyph, filled at paint time with a gradient built
-/// from the theme's brand colour.
+/// The app mark: one flat glyph, filled at paint time with the launcher
+/// icon's own body colours.
 ///
-/// Nothing is baked into an asset, so the mark follows 外观 → 主题颜色 and the
-/// light/dark appearance together:
-///
-///  * Light surfaces get the brand's own ladder — lighter, base, deep — the
-///    same shading [AppTheme.applyBrand] derives for the outgoing bubble.
-///  * Dark surfaces get that ladder lifted toward the brand's pale AZURE, not
-///    toward white: a saturated fill on a near-black page still needs lift,
-///    but a white mark stops being the app's mark at all (the user asked for
-///    the white fill to go). With the default theme colour the dark mark is
-///    the same blue family as the light one; a custom theme keeps its hue and
-///    only gains lightness.
-List<Color> brandMarkColors(Brightness brightness) {
-  final base = AppTheme.brand;
-  if (brightness == Brightness.dark) {
-    // A pale tint of the brand itself: hue and saturation survive, lightness
-    // rises. Never white — that was the mark's old dark fill.
-    final hsl = HSLColor.fromColor(base);
-    return [
-      hsl.withLightness(0.76).withSaturation(0.72).toColor(),
-      hsl.withLightness(0.58).withSaturation(0.86).toColor(),
-    ];
-  }
-  final hsl = HSLColor.fromColor(base);
-  return [
-    hsl.withLightness((hsl.lightness + 0.13).clamp(0.0, 1.0)).toColor(),
-    base,
-    hsl.withLightness((hsl.lightness - 0.09).clamp(0.0, 1.0)).toColor(),
-  ];
-}
+/// The mark is ALWAYS the night launcher icon's glyph — the bright-azure to
+/// deep-azure ramp — in light and dark appearance alike (「始终用深色图标的
+/// 主体部分做 logo」). It deliberately does not follow the theme colour: the
+/// derived pale tints read as a light-blue logo rather than the app's mark.
+/// The stops are sampled from `assets/app_icons/mithkax_default_night.png`.
+const List<Color> _markBody = [
+  Color(0xFF48B7FD),
+  Color(0xFF20A0F7),
+  Color(0xFF0C88EE),
+  Color(0xFF0775E9),
+  Color(0xFF0267EE),
+];
+
+/// The day icon's frost ramp (near-white to pale blue). Only for the mark
+/// painted ON the brand gradient (the cold-start splash), where the azure body
+/// would disappear into the page.
+const List<Color> markFrostColors = [
+  Color(0xFFF3F9FF),
+  Color(0xFFEBF5FE),
+  Color(0xFFD1E9FD),
+  Color(0xFFAFD7FC),
+  Color(0xFF8DC6FB),
+];
+
+/// The gradient every in-app [BrandMark] paints, in both appearances.
+List<Color> brandMarkColors() => _markBody;
 
 /// The share of a [BrandMark]'s box the glyph's ink fills, so a mark sitting
 /// in a row keeps the weight the shipped rasters had.
@@ -90,12 +86,12 @@ final Path brandMarkGlyph = Path()
   ..cubicTo(0.5, 14.111, 0.5, 13.283, 0.5, 12.455)
   ..close();
 
-/// Paints [brandMarkGlyph] filled from the theme's brand colour.
+/// Paints [brandMarkGlyph] filled with the launcher icon's body gradient.
 ///
-/// The fill is derived from `AppTheme.brand` while building. A `const`
-/// instance would be canonicalised, and the element would be skipped whenever
-/// an ancestor rebuilt, so a theme-colour change would leave the old fill on
-/// screen — both constructors stay non-const on purpose.
+/// The fill is resolved while building. A `const` instance would be
+/// canonicalised, and the element would be skipped whenever an ancestor
+/// rebuilt, so a theme/appearance change would leave the old fill on screen —
+/// both constructors stay non-const on purpose.
 // ignore_for_file: prefer_const_constructors_in_immutables
 class BrandMark extends StatelessWidget {
   /// A square [size] box whose ink fills [_inkShare] of it — the spacing the
@@ -124,7 +120,7 @@ class BrandMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final height = ink ?? box! * _inkShare;
-    final fill = colors ?? brandMarkColors(Theme.of(context).brightness);
+    final fill = colors ?? brandMarkColors();
     return SizedBox(
       width: box ?? height * _aspect,
       height: box ?? height,
