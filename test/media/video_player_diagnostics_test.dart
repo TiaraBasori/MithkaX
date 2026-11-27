@@ -191,10 +191,7 @@ void main() {
       expect(copied.single, contains('mithkax video player'));
       expect(copied.single, contains('chrome builds:'));
       expect(copied.single, contains('presentation: fullscreen'));
-      expect(
-        find.byKey(const ValueKey('video-player-diagnostics-copied')),
-        findsOneWidget,
-      );
+      expect(find.text('Copied'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(minutes: 11));

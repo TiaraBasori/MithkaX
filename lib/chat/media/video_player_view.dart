@@ -994,43 +994,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
           '${widget.video.mimeType ?? ''}',
     ].join('\n');
     Clipboard.setData(ClipboardData(text: report));
-    // The player route has no Scaffold of its own, so the confirmation is a
-    // short-lived overlay rather than a snack bar.
-    final overlay = Overlay.maybeOf(context);
-    if (overlay == null) return;
-    late final OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: 0,
-        right: 0,
-        bottom: MediaQuery.paddingOf(context).bottom + 96,
-        child: IgnorePointer(
-          child: Center(
-            child: DecoratedBox(
-              key: const ValueKey('video-player-diagnostics-copied'),
-              decoration: BoxDecoration(
-                color: const Color(0xE6202124),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                child: Text(
-                  'Player diagnostics copied',
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(entry);
-    Timer(const Duration(seconds: 2), entry.remove);
+    if (mounted) showToast(context, AppStringKeys.profileDetailCopied);
   }
 
   Widget _playbackSurface(VideoPlayerController? controller) {
