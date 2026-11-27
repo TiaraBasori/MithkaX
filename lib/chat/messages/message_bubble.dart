@@ -102,6 +102,18 @@ const EdgeInsets messageTextBubblePadding = EdgeInsets.symmetric(
 /// Corner radius of an ordinary text message bubble.
 const double messageTextBubbleRadius = 6;
 
+/// The strip reserved inside a surface bubble for the send time (and tick).
+///
+/// The reference client draws the time at `layoutHeight − 6.5dp −
+/// timeLayout.height` and its text bubbles keep the same room at the bottom;
+/// 15dp is one 12sp line plus the corner inset.
+const double messageBubbleMetaStrip = 15;
+
+/// The meta line's insets inside the bubble's bottom-right corner
+/// (`backgroundWidth − 9dp` in the reference client, minus its own padding).
+const double _bubbleMetaRight = 6;
+const double _bubbleMetaBottom = 2;
+
 /// Line cap for a link preview's description.
 ///
 /// exteraless lays the description out with `maxLines = 6` (3 in its compact
@@ -385,18 +397,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   bool _musicPressed = false;
 
   bool _showTappedTimestamp = false;
-
-  /// The detail timestamp a banded outgoing bubble wants to draw as the
-  /// leading item of its band. Set per build of [_row]; [_withFloatingBand]
-  /// consumes it and reports back through [_bandTimestampShown] so the
-  /// floating overlay never draws the same timestamp twice.
-  Widget? _pendingBandTimestamp;
-  bool _bandTimestampShown = false;
-
-  // Hover feeds nothing but the 10px detail timestamp, so it rides a notifier:
-  // a setState here rebuilt the entire bubble on every pointer crossing, and on
-  // desktop the cursor crosses a bubble boundary on most scroll frames.
-  final ValueNotifier<bool> _hoveringTimestamp = ValueNotifier(false);
 
   double? _layoutWidth;
 
@@ -889,8 +889,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     }
   }
 
-  void _setTimestampHover(bool hovering) => _hoveringTimestamp.value = hovering;
-
   ChatMessage get message => widget.bubble.message;
 
   // Theme state resolved once per build by [_resolveTheme]. The colour helpers
@@ -1144,12 +1142,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     required BorderRadius borderRadius,
     BoxConstraints constraints = const BoxConstraints(),
     bool containsAttachedComments = false,
+    bool reserveMeta = true,
   }) {
+    // The in-bubble send time lives in this strip; without it the last text
+    // line would run straight under the time.
+    final innerPadding = reserveMeta
+        ? padding.add(const EdgeInsets.only(bottom: messageBubbleMetaStrip))
+        : padding;
     if (!_showsMessageBubbleSurface) {
       return Container(
         key: key,
         constraints: constraints,
-        padding: padding,
+        padding: innerPadding,
         child: child,
       );
     }
@@ -1161,8 +1165,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         key: key,
         constraints: constraints,
         padding: _usesDecorativeBubbleBackground
-            ? _bubbleBackgroundStyle.contentPadding
-            : padding,
+            ? _bubbleBackgroundStyle.contentPadding.add(
+                const EdgeInsets.only(bottom: messageBubbleMetaStrip),
+              )
+            : innerPadding,
         child: child,
       );
     }
@@ -1171,7 +1177,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       background: _bubbleBackgroundStyle,
       fallbackColor: outgoing ? _outgoingBubbleColor : _incomingBubbleColor,
       fallbackBorderRadius: borderRadius,
-      fallbackPadding: padding,
+      fallbackPadding: innerPadding,
       fallbackBorder: outgoing || _messageColors != null
           ? null
           : Border.all(color: _colors.divider, width: 0.5),
@@ -1230,7 +1236,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     _sensitiveContentController.removeListener(_handleSensitiveContentChange);
     _swipe.dispose();
     _contentFlash.dispose();
-    _hoveringTimestamp.dispose();
     _voice.dispose();
     for (final r in _linkRecognizers) {
       r.dispose();
@@ -1290,21 +1295,16 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       platform == TargetPlatform.windows || platform == TargetPlatform.linux;
 
   Widget _row(bool outgoing) {
-    final alwaysShowTime =
+    final detailForced =
         widget.bubble.forceShowTimestamp || _theme.alwaysShowMessageTime;
-    final showDetailTime = alwaysShowTime || _showTappedTimestamp;
-    final timeInSenderHeader =
-        widget.bubble.isGroup && !outgoing && message.senderName != null;
     final platform = Theme.of(context).platform;
     final desktopInteraction = isDesktopTargetPlatform(platform);
     final desktopTouchInteraction = _supportsDesktopTouchGestures(platform);
-    // Own messages read their meta on one line: the send time leads the band
-    // of outside chips. Only a visible timestamp is armed — hover keeps its
-    // floating overlay, and a bubble without a band keeps it too.
-    _bandTimestampShown = false;
-    _pendingBandTimestamp = outgoing && showDetailTime
-        ? IgnorePointer(child: _messageDetailTimestamp())
-        : null;
+    // Every bubble carries its send time INSIDE, in the bottom-right corner the
+    // reference client uses (`ChatMessageCell.drawTimeInternal`: `layoutHeight −
+    // 6.5dp − timeLayout.height`, right edge at `backgroundWidth − 9dp`). The
+    // old floating label below the bubble and the band's leading timestamp both
+    // sat outside the surface; neither exists any more.
     final contentBody = _contentBody(outgoing);
     // The update blink wraps only the bubble's body: reaction chips, buttons
     // and the avatar keep their ink while a bot-edited body flashes.
@@ -1321,7 +1321,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         child: GestureDetector(
           key: _bubbleKey,
           behavior: HitTestBehavior.opaque,
-          onTap: () => _handleTap(alwaysShowTime),
+          onTap: () => _handleTap(detailForced),
           // A long press on a link opens the link's own menu; everywhere else it
           // is the message's menu (exteraless checks the pressed span first).
           onLongPressStart:
@@ -1454,7 +1454,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (widget.bubble.isGroup && message.senderName != null)
-                        _senderHeader(showDetailTime: showDetailTime),
+                        _senderHeader(),
                       // The badge Row is a no-op wrapper without a badge, and
                       // the Column already left-aligns the bubble.
                       if (widget.bubble.showRepeat)
@@ -1473,34 +1473,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               ],
       ),
     );
-    // The Stack and the Positioned stay put whatever the timestamp does: a tap
-    // toggles _showTappedTimestamp and a late sender name flips
-    // timeInSenderHeader, and dropping either wrapper would re-parent the whole
-    // bubble and re-inflate every child element (spoilers, inline video, map
-    // thumbnails). Hover therefore only ever swaps the Positioned's child.
-    final row = MouseRegion(
-      onEnter: (_) => _setTimestampHover(true),
-      onExit: (_) => _setTimestampHover(false),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          messageRow,
-          if (!timeInSenderHeader && !_bandTimestampShown)
-            _detailTimestampOverlay(
-              outgoing,
-              showDetailTime
-                  ? IgnorePointer(child: _messageDetailTimestamp())
-                  : ValueListenableBuilder<bool>(
-                      valueListenable: _hoveringTimestamp,
-                      builder: (context, hovering, _) => hovering
-                          ? IgnorePointer(child: _messageDetailTimestamp())
-                          : const SizedBox.shrink(),
-                    ),
-            ),
-        ],
-      ),
-    );
-    return _maybeGhost(row, outgoing);
+    // The timestamp lives inside the bubble now (see `_bubbleMeta`), so this
+    // row only carries the message itself — no floating label, no hover
+    // overlay, and no second Positioned to keep alive.
+    return _maybeGhost(messageRow, outgoing);
   }
 
   /// Ghost styling for a deleted message's kept copy (Telegram §1.4
@@ -1514,16 +1490,70 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     return Opacity(opacity: 0.55, child: child);
   }
 
-  Widget _detailTimestampOverlay(bool outgoing, Widget child) => Positioned(
-    left: outgoing ? null : 58,
-    right: outgoing ? 58 : null,
-    bottom: -5,
-    child: child,
-  );
+  /// The meta line inside the bubble: time first, then — for an own message
+  /// that is not edited — the delivery tick, exactly the reference client's
+  /// order. A media-only bubble paints it over the picture, so it carries the
+  /// reference client's shadow instead of the bubble's ink.
+  Widget _bubbleMetaRow(bool outgoing) {
+    final overMedia = _metaOverMedia();
+    final color = overMedia
+        ? Colors.white.withValues(alpha: 0.96)
+        : _messageTimeColor(outgoing);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _bubbleMetaLabel(),
+          key: const ValueKey('messageTappedTimestamp'),
+          maxLines: 1,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: AppTextSize.chatTime,
+            height: 1.1,
+            color: color,
+            shadows: overMedia
+                ? const [
+                    Shadow(
+                      color: Color(0x66000000),
+                      blurRadius: 3,
+                      offset: Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+        ),
+        if (outgoing && !message.isEdited) ...[
+          const SizedBox(width: 3),
+          _deliveryTick(
+            color: overMedia
+                ? color
+                : _messageColors != null
+                ? _messageTimeColor(outgoing)
+                : outgoing
+                ? _outgoingTextColor.withValues(alpha: 0.72)
+                : _colors.textTertiary,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// A bubble without caption paints its media edge to edge, so the meta line
+  /// sits ON the picture and needs the light ink + shadow the reference client
+  /// uses (`shouldDrawTimeOnMedia`).
+  bool _metaOverMedia() =>
+      message.animatedSticker != null ||
+      message.videoSticker != null ||
+      message.isDice ||
+      (message.stickerFileId != null && message.image != null) ||
+      ((message.video != null || message.image != null) &&
+          (_caption()?.trim().isEmpty ?? true));
 
   /// Only an incoming group message reads any of this — a 1:1 chat used to pay
   /// for the name-colour resolution and the role switch on every message.
-  Widget _senderHeader({required bool showDetailTime}) {
+  /// The sender line of an incoming group message. The send time is no longer
+  /// here — every bubble carries it inside its own bottom-right corner.
+  Widget _senderHeader() {
     final theme = _theme;
     final showMemberTags = theme.showMemberTags;
     final showSenderRole = switch (message.senderRole) {
@@ -1580,25 +1610,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                   : null,
             ),
           ),
-          const SizedBox(width: 5),
-          SizedBox(
-            width: 96,
-            height: 14,
-            child: showDetailTime
-                ? Align(
-                    alignment: Alignment.centerLeft,
-                    child: _messageDetailTimestamp(),
-                  )
-                : ValueListenableBuilder<bool>(
-                    valueListenable: _hoveringTimestamp,
-                    builder: (context, hovering, _) => hovering
-                        ? Align(
-                            alignment: Alignment.centerLeft,
-                            child: _messageDetailTimestamp(),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-          ),
         ],
       ),
     );
@@ -1617,18 +1628,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       child: avatar,
     );
   }
-
-  Widget _messageDetailTimestamp() => Text(
-    DateText.messageDetailLabel(message.date),
-    key: const ValueKey('messageTappedTimestamp'),
-    maxLines: 1,
-    textScaler: TextScaler.noScaling,
-    style: TextStyle(
-      fontSize: AppTextSize.chatTime,
-      height: 1.2,
-      color: _colors.textTertiary,
-    ),
-  );
 
   Widget _repeatBadge() => GestureDetector(
     key: const ValueKey('messageRepeatBadge'),
@@ -2070,43 +2069,77 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// the composed bubble - comment row included - and therefore always hangs
   /// BELOW that row, never between the post body and it.
   Widget _withFloatingMeta(Widget body, bool outgoing, {bool meta = true}) {
-    final withTick = _withDeliveryTick(body, outgoing, meta: meta);
+    final withMeta = _withBubbleMeta(body, outgoing, meta: meta);
     return _withFloatingBand(
-      _withCommentsOnly(withTick, outgoing),
+      _withCommentsOnly(withMeta, outgoing),
       outgoing,
       meta: meta,
     );
   }
 
-  /// The delivery tick is ink on the bubble's inside corner - it never
-  /// reserves a strip below the bubble. The edited mark replaces it, as it
-  /// always has.
-  Widget _withDeliveryTick(Widget child, bool outgoing, {bool meta = true}) {
-    if (!(meta && outgoing && !message.isEdited)) return child;
-    final usesMediaOverlayColor =
-        message.animatedSticker != null ||
-        message.videoSticker != null ||
-        message.isDice ||
-        (message.stickerFileId != null && message.image != null) ||
-        ((message.video != null || message.image != null) &&
-            (_caption()?.trim().isEmpty ?? true));
-    final tickColor = _messageColors != null && !usesMediaOverlayColor
-        ? _messageTimeColor(outgoing)
-        : outgoing
-        ? _outgoingTextColor.withValues(alpha: 0.72)
-        : _colors.textTertiary;
+  /// The send time — plus the outgoing delivery tick on its right, the
+  /// reference client's `12:34 ✓✓` order — drawn INSIDE the bubble's
+  /// bottom-right corner. `_bubbleBackground` reserves the strip it sits in.
+  ///
+  /// `meta: false` is for cards that already render their own footer (gift,
+  /// Gram transfer): their footer owns the message's meta line.
+  Widget _withBubbleMeta(Widget child, bool outgoing, {bool meta = true}) {
+    if (!meta) return child;
+    // A short bubble still has to hold its time on one line, so the meta's own
+    // width is a floor for the bubble: the reference client widens
+    // `backgroundWidth` to fit `timeWidth` the same way.
+    final minWidth = _bubbleMetaWidth(outgoing) + _bubbleMetaRight + 4;
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        child,
+        // The Stack hands its non-positioned child loose constraints, so the
+        // floor has to sit HERE to take effect: a short bubble grows just
+        // enough to hold `12:34 ✓✓` on one line.
+        ConstrainedBox(
+          constraints: BoxConstraints(minWidth: minWidth),
+          child: child,
+        ),
         Positioned(
-          right: 5,
-          bottom: 3,
-          child: IgnorePointer(child: _deliveryTick(color: tickColor)),
+          left: 0,
+          right: 0,
+          bottom: _bubbleMetaBottom,
+          child: IgnorePointer(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: _bubbleMetaRight),
+                child: _bubbleMetaRow(outgoing),
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
+
+  /// Width of the meta line, measured with the same style it paints with.
+  double _bubbleMetaWidth(bool outgoing) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: _bubbleMetaLabel(),
+        style: const TextStyle(fontSize: AppTextSize.chatTime, height: 1.1),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      textScaler: TextScaler.noScaling,
+    )..layout();
+    final timeWidth = painter.width;
+    painter.dispose();
+    final tickWidth = outgoing && !message.isEdited ? 3 + 10.0 : 0.0;
+    return timeWidth + tickWidth;
+  }
+
+  String _bubbleMetaLabel() =>
+      widget.bubble.forceShowTimestamp ||
+          _theme.alwaysShowMessageTime ||
+          _showTappedTimestamp
+      ? DateText.messageDetailLabel(message.date)
+      : DateText.bubbleLabel(message.date);
 
   /// The band under the bubble's outside edge: one chip language for the
   /// whole band, and its right edge is the bubble's own right edge.
@@ -2167,11 +2200,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         showEditedChip ||
         viewsChip != null ||
         forwardsChip != null;
-    // The send time only joins a band that is already there: a bubble without
-    // chips keeps the floating timestamp and its zero-height geometry.
-    final bandTimestamp = outgoing && hasChips ? _pendingBandTimestamp : null;
     if (!hasChips) return child;
-    _bandTimestampShown = bandTimestamp != null;
     // The edited mark rides the band's chip language like its siblings.
     final editedChip = showEditedChip
         ? IgnorePointer(
@@ -2228,10 +2257,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (bandTimestamp != null) ...[
-                    bandTimestamp,
-                    if (bandChips.isNotEmpty) const SizedBox(width: 8),
-                  ],
                   for (var i = 0; i < bandChips.length; i++) ...[
                     if (i > 0) const SizedBox(width: 4),
                     bandChips[i],
@@ -2457,6 +2482,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         padding: EdgeInsets.zero,
         borderRadius: BorderRadius.circular(AppRadius.card),
         containsAttachedComments: true,
+        // The comment row owns the bottom of this card; the meta line sits
+        // above it, inside the body's own bubble, so no strip is reserved here.
+        reserveMeta: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

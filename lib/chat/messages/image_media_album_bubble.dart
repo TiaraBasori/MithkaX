@@ -307,27 +307,6 @@ class ImageMediaAlbumBubble extends StatelessWidget {
               roleAfterName: isDesktopTargetPlatform(),
             ),
           ),
-          if (theme.alwaysShowMessageTime) ...[
-            const SizedBox(width: 5),
-            SizedBox(
-              width: 96,
-              height: 14,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  DateText.messageDetailLabel(first.date),
-                  key: const ValueKey('messageTappedTimestamp'),
-                  maxLines: 1,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 10,
-                    height: 1.2,
-                    color: colors.textTertiary,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -471,6 +450,17 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                                 : 0,
                           ),
                         ),
+                      // A caption owns the meta line below the grid; without
+                      // one the send time sits ON the last photo, exactly where
+                      // the reference client draws it (`shouldDrawTimeOnMedia`).
+                      if (captionMessage == null)
+                        Positioned(
+                          right: 5,
+                          bottom: 3,
+                          child: IgnorePointer(
+                            child: _albumMetaRow(context, interactionOwner),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -502,76 +492,90 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                             },
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(6, 7, 6, 3),
-                        child: Builder(
-                          builder: (context) {
-                            final selectionContent = Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                DesktopMessageQuoteSource(
-                                  key: ValueKey((
-                                    captionMessage.id,
-                                    captionText,
-                                  )),
-                                  message: captionMessage,
-                                  displayedText: replacesOriginal
-                                      ? ''
-                                      : captionText,
-                                  onChanged: onDesktopQuoteChanged,
-                                  child: _captionText(
-                                    captionText,
-                                    captionEntities,
-                                    displayedTextColor,
-                                    displayedLinkColor,
-                                    replacesOriginal: replacesOriginal,
-                                  ),
-                                ),
-                                if (showsTranslationBlock) ...[
-                                  const SizedBox(height: 7),
-                                  _translationBlock(
-                                    context,
-                                    captionMessage,
-                                    outgoing: outgoing,
-                                    baseTextColor: baseTextColor,
-                                    linkColor: baseLinkColor,
-                                  ),
-                                ],
-                              ],
-                            );
-                            if (!selecting &&
-                                isDesktopTargetPlatform(
-                                  Theme.of(context).platform,
-                                )) {
-                              return Listener(
-                                onPointerDown: (event) {
-                                  if (event.buttons == kSecondaryMouseButton) {
-                                    onLongPress?.call(
-                                      captionMessage,
-                                      Rect.fromLTWH(
-                                        event.position.dx,
-                                        event.position.dy,
-                                        0,
-                                        0,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Builder(
+                              builder: (context) {
+                                final selectionContent = Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    DesktopMessageQuoteSource(
+                                      key: ValueKey((
+                                        captionMessage.id,
+                                        captionText,
+                                      )),
+                                      message: captionMessage,
+                                      displayedText: replacesOriginal
+                                          ? ''
+                                          : captionText,
+                                      onChanged: onDesktopQuoteChanged,
+                                      child: _captionText(
+                                        captionText,
+                                        captionEntities,
+                                        displayedTextColor,
+                                        displayedLinkColor,
+                                        replacesOriginal: replacesOriginal,
                                       ),
-                                      MessageActionSource.normal,
-                                    );
-                                  }
-                                },
-                                child: DesktopMessageTextSelectionArea(
+                                    ),
+                                    if (showsTranslationBlock) ...[
+                                      const SizedBox(height: 7),
+                                      _translationBlock(
+                                        context,
+                                        captionMessage,
+                                        outgoing: outgoing,
+                                        baseTextColor: baseTextColor,
+                                        linkColor: baseLinkColor,
+                                      ),
+                                    ],
+                                  ],
+                                );
+                                if (!selecting &&
+                                    isDesktopTargetPlatform(
+                                      Theme.of(context).platform,
+                                    )) {
+                                  return Listener(
+                                    onPointerDown: (event) {
+                                      if (event.buttons ==
+                                          kSecondaryMouseButton) {
+                                        onLongPress?.call(
+                                          captionMessage,
+                                          Rect.fromLTWH(
+                                            event.position.dx,
+                                            event.position.dy,
+                                            0,
+                                            0,
+                                          ),
+                                          MessageActionSource.normal,
+                                        );
+                                      }
+                                    },
+                                    child: DesktopMessageTextSelectionArea(
+                                      child: selectionContent,
+                                    ),
+                                  );
+                                }
+                                final selectionKey = mobileTextSelectionAreaKey;
+                                if (selectionKey == null) {
+                                  return selectionContent;
+                                }
+                                return MobileMessageTextSelectionArea(
+                                  selectionAreaKey: selectionKey,
+                                  onSelectionChanged:
+                                      onMobileTextSelectionChanged,
+                                  onDisposed:
+                                      onMobileTextSelectionDisposed ?? () {},
                                   child: selectionContent,
-                                ),
-                              );
-                            }
-                            final selectionKey = mobileTextSelectionAreaKey;
-                            if (selectionKey == null) return selectionContent;
-                            return MobileMessageTextSelectionArea(
-                              selectionAreaKey: selectionKey,
-                              onSelectionChanged: onMobileTextSelectionChanged,
-                              onDisposed:
-                                  onMobileTextSelectionDisposed ?? () {},
-                              child: selectionContent,
-                            );
-                          },
+                                );
+                              },
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: _albumMetaRow(context, interactionOwner),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -658,6 +662,41 @@ class ImageMediaAlbumBubble extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// The in-bubble send time of an album, in the reference client's corner.
+  /// The caption block carries it under the text; a caption-less album paints
+  /// it over the last photo, hence the white ink + shadow variant.
+  Widget _albumMetaRow(BuildContext context, ChatMessage owner) {
+    final theme = context.watch<ThemeController>();
+    final overMedia = owner.text.trim().isEmpty;
+    final color = overMedia
+        ? Colors.white.withValues(alpha: 0.96)
+        : theme.alwaysShowMessageTime
+        ? context.colors.textTertiary
+        : context.colors.textTertiary;
+    return Text(
+      theme.alwaysShowMessageTime
+          ? DateText.messageDetailLabel(owner.date)
+          : DateText.bubbleLabel(owner.date),
+      key: const ValueKey('messageTappedTimestamp'),
+      maxLines: 1,
+      textScaler: TextScaler.noScaling,
+      style: TextStyle(
+        fontSize: AppTextSize.chatTime,
+        height: 1.1,
+        color: color,
+        shadows: overMedia
+            ? const [
+                Shadow(
+                  color: Color(0x66000000),
+                  blurRadius: 3,
+                  offset: Offset(0, 1),
+                ),
+              ]
+            : null,
+      ),
     );
   }
 
