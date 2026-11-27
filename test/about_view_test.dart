@@ -15,9 +15,9 @@ import 'package:mithka/components/brand_mark.dart';
 import 'package:mithka/components/ui_components.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/settings/about_view.dart';
-import 'package:mithka/update/update_checker.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
+import 'package:mithka/update/update_checker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
