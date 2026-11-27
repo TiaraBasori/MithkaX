@@ -15,7 +15,7 @@ import 'package:mithka/chat/messages/quick_reaction_choice.dart';
 import 'package:mithka/theme/app_theme.dart';
 
 List<QuickReactionChoice> _choices(int count) => [
-  for (var i = 0; i < count; i++) QuickReactionChoice.emoji('😀'),
+  for (var i = 0; i < count; i++) const QuickReactionChoice.emoji('😀'),
 ];
 
 Future<void> _pump(WidgetTester tester, Widget child) async {
