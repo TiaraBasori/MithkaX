@@ -10,11 +10,14 @@ import 'reaction_reactor_avatars.dart';
 /// The reaction buckets under a message bubble or media album.
 ///
 /// Laid out the way the reference client draws `ReactionsLayoutInBubble`: one
-/// 26dp chip per bucket, an 20dp emoji, a 13sp count, a translucent fill and a
-/// pill corner — no border, no big raised pill. A bucket with at most three
-/// reactors (and at most three on the whole message) shows those reactors'
-/// overlapping avatars INSTEAD of its number, which is also what the reference
-/// client does; in a private chat the two participants stand in for the count.
+/// 26dp chip per bucket, a 20dp emoji, a 13sp bold count, a fill at 15.6% of
+/// the accent and a pill corner — no border, no big raised pill. The bucket
+/// the reader chose is a SOLID accent chip with white ink, exactly like the
+/// reference; every other chip keeps the translucent tint. A bucket with at
+/// most three reactors (and at most three on the whole message) shows those
+/// reactors' overlapping avatars INSTEAD of its number, which is also what the
+/// reference client does; in a private chat the two participants stand in for
+/// the count.
 ///
 /// Sorting follows the reference too: a private chat leads with the bucket the
 /// reader chose, a group/channel with the biggest bucket.
@@ -57,8 +60,8 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
     final reactions = _sortedReactions();
     final total = reactions.fold<int>(0, (sum, r) => sum + r.count);
     return Wrap(
-      spacing: 5,
-      runSpacing: 5,
+      spacing: 4,
+      runSpacing: 4,
       alignment: widget.outgoing ? WrapAlignment.end : WrapAlignment.start,
       children: [for (final r in reactions) _chip(c, r, total)],
     );
@@ -92,8 +95,13 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
   }
 
   Widget _chip(AppColors c, MessageReaction r, int total) {
-    final foreground = r.chosen ? AppTheme.brand : c.textSecondary;
-    final avatars = _avatarSlot(r, total);
+    // Chosen: solid accent with white ink (the reference's selected chip).
+    // Others: the accent at 15.6% with the accent as ink.
+    final fill = r.chosen
+        ? AppTheme.brand
+        : AppTheme.brand.withValues(alpha: 0.156);
+    final foreground = r.chosen ? Colors.white : AppTheme.brand;
+    final avatars = _avatarSlot(r, total, fill);
     return GestureDetector(
       key: ValueKey('reactionChip-${widget.message.id}-${_reactionKey(r)}'),
       behavior: HitTestBehavior.opaque,
@@ -103,12 +111,12 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
         height: 26,
         padding: EdgeInsets.only(
           left: 8,
-          right: avatars == null && r.count <= 1 ? 6 : 7,
+          // 8 + emoji 20 + 4 + count + 8 is the reference chip's box; a lone
+          // emoji closes at 31pt (8 + 20 + 3).
+          right: avatars == null && r.count <= 1 ? 3 : 8,
         ),
         decoration: BoxDecoration(
-          color: r.chosen
-              ? AppTheme.brand.withValues(alpha: 0.156)
-              : c.searchFill,
+          color: fill,
           borderRadius: BorderRadius.circular(13),
         ),
         child: Row(
@@ -130,7 +138,7 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
     if (r.customEmojiId != 0) {
       return CustomEmojiView(id: r.customEmojiId, color: color);
     }
-    return Text(r.emoji ?? '', style: const TextStyle(fontSize: 17));
+    return Text(r.emoji ?? '', style: const TextStyle(fontSize: 20));
   }
 
   /// The avatars that replace the count, or null when this bucket keeps it.
@@ -140,24 +148,26 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
   /// and the peer when not); a group/channel only does so while the message has
   /// at most three reactors in total, because beyond that the avatars no longer
   /// name who reacted.
-  Widget? _avatarSlot(MessageReaction r, int total) {
+  Widget? _avatarSlot(MessageReaction r, int total, Color fill) {
     if (_isPrivateChat) {
       final me = _meAvatar();
       final peer = _peerAvatar();
       final people = r.count == 2 ? [me, peer] : [if (r.chosen) me else peer];
       if (people.isEmpty) return null;
-      return _avatarStack(people);
+      return _avatarStack(people, fill);
     }
     if (r.count > 3 || total > 3 || r.reactors.isEmpty) return null;
     return _ReactorAvatarStack(
       key: ValueKey('reactionAvatars-${widget.message.id}-${_reactionKey(r)}'),
       senders: r.reactors.take(3).map((reactor) => reactor.senderId).toList(),
+      ringColor: fill,
     );
   }
 
-  Widget _avatarStack(List<_AvatarPerson> people) => _AvatarsRow(
+  Widget _avatarStack(List<_AvatarPerson> people, Color fill) => _AvatarsRow(
     people: people,
     key: ValueKey('reactionAvatars-${widget.message.id}'),
+    ringColor: fill,
   );
 
   _AvatarPerson _meAvatar() =>
@@ -173,7 +183,7 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
         '${r.count}',
         style: TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),
@@ -217,9 +227,17 @@ class _AvatarPerson {
 /// The reference client's overlap: 20dp faces, every further face inset by
 /// 16dp, each ringed in the chip's own fill so the stack reads as one pill.
 class _AvatarsRow extends StatelessWidget {
-  const _AvatarsRow({super.key, required this.people});
+  const _AvatarsRow({
+    super.key,
+    required this.people,
+    required this.ringColor,
+  });
 
   final List<_AvatarPerson> people;
+
+  /// The chip fill behind the stack: the 1.5pt ring uses it so overlapping
+  /// faces read as one pill on the chosen solid chip and the tinted one alike.
+  final Color ringColor;
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +256,7 @@ class _AvatarsRow extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: c.searchFill, width: 1.5),
+                  border: Border.all(color: ringColor, width: 1.5),
                 ),
                 child: PhotoAvatar(
                   title: people[i].title,
@@ -256,9 +274,14 @@ class _AvatarsRow extends StatelessWidget {
 /// The group/channel variant: resolves each reactor's name and photo through
 /// the process-wide cache and paints the same overlapping stack.
 class _ReactorAvatarStack extends StatefulWidget {
-  const _ReactorAvatarStack({super.key, required this.senders});
+  const _ReactorAvatarStack({
+    super.key,
+    required this.senders,
+    required this.ringColor,
+  });
 
   final List<int> senders;
+  final Color ringColor;
 
   @override
   State<_ReactorAvatarStack> createState() => _ReactorAvatarStackState();
@@ -328,6 +351,6 @@ class _ReactorAvatarStackState extends State<_ReactorAvatarStack> {
               )
             : const _AvatarPerson(title: ''),
     ];
-    return _AvatarsRow(people: people);
+    return _AvatarsRow(people: people, ringColor: widget.ringColor);
   }
 }

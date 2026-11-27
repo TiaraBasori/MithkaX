@@ -129,7 +129,9 @@ void main() {
       previews.any(
         (text) =>
             text.maxLines == 1 &&
-            text.text.style?.fontSize == AppTextSize.messageBody(),
+            // The reference client's reply text is one step below the body
+            // size; the panel used to run it at full message size.
+            text.text.style?.fontSize == AppTextSize.callout,
       ),
       isTrue,
     );

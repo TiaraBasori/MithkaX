@@ -2,10 +2,12 @@
 //  reaction_chip_design_test.dart
 //
 //  Reaction chips follow the reference client's `ReactionsLayoutInBubble`:
-//  26dp tall, pill corners, a translucent fill with NO border, a 13sp count,
-//  and — the visible difference — a small bucket shows its reactors' avatars
-//  instead of a number. A private chat always does (the two participants), a
-//  group only while the message carries at most three reactors in total.
+//  26dp tall, pill corners, a 20dp emoji, a 13sp BOLD count, the accent at
+//  15.6% for every bucket the reader did not choose and a SOLID accent chip
+//  with white ink for the one they did, and — the visible difference — a small
+//  bucket shows its reactors' avatars instead of a number. A private chat
+//  always does (the two participants), a group only while the message carries
+//  at most three reactors in total.
 //
 
 import 'package:flutter/material.dart';
@@ -96,10 +98,34 @@ void main() {
       13,
       reason: 'a 26dp chip rounds to a pill',
     );
-    // The count is 13sp, semibold, in the chip's own ink.
+    // The chosen bucket is a solid accent pill; the count is 13sp bold in
+    // white ink.
+    expect(decoration.color, AppTheme.brand);
     final count = tester.widget<Text>(find.text('4'));
     expect(count.style?.fontSize, 13);
-    expect(count.style?.fontWeight, FontWeight.w600);
+    expect(count.style?.fontWeight, FontWeight.w700);
+    expect(count.style?.color, Colors.white);
+    // The emoji keeps the reference's 20dp glyph.
+    expect(tester.widget<Text>(find.text('👍')).style?.fontSize, 20);
+  });
+
+  testWidgets('an unchosen bucket keeps the translucent accent fill', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _message(
+        chatId: -1001234567890,
+        reactions: const [MessageReaction(emoji: '👍', count: 4, chosen: false)],
+      ),
+    );
+    final chip = find.byKey(const ValueKey('reactionChip-5-emoji:👍'));
+    final box = tester.widget<Container>(
+      find.descendant(of: chip, matching: find.byType(Container)).first,
+    );
+    final decoration = box.decoration! as BoxDecoration;
+    expect(decoration.color!.a, closeTo(0.156, 0.005));
+    expect(decoration.color!.b, closeTo(AppTheme.brand.b, 0.001));
   });
 
   testWidgets('a private chat replaces the count with both participants', (

@@ -4915,28 +4915,35 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       child: Container(
         key: const ValueKey('messageReplyQuote'),
         decoration: BoxDecoration(
-          color: line.withValues(alpha: 0.10),
+          color: line.withValues(
+            alpha: _brightness == Brightness.dark ? 0.12 : 0.10,
+          ),
           borderRadius: BorderRadius.circular(4),
           border: Border(left: BorderSide(color: line, width: 3)),
         ),
-        padding: const EdgeInsets.fromLTRB(10, 3, 6, 4),
+        padding: EdgeInsets.fromLTRB(
+          message.replyToImage != null ? 8 : 10,
+          5,
+          10,
+          5,
+        ),
         child: IgnorePointer(
           child: Row(
             children: [
               if (message.replyToImage != null) ...[
                 SizedBox(
                   key: const ValueKey('messageReplyStickerThumb'),
-                  width: 37,
-                  height: 37,
+                  width: 34,
+                  height: 34,
                   child: TDImage(
                     photo:
                         message.replyToImage?.thumbnail ?? message.replyToImage,
                     cornerRadius: 4,
-                    cacheWidth: _cachePx(37),
-                    cacheHeight: _cachePx(37),
+                    cacheWidth: _cachePx(34),
+                    cacheHeight: _cachePx(34),
                   ),
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(width: 5),
               ],
               Expanded(
                 child: Column(
@@ -4954,7 +4961,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                                   TextSpan(
                                     text: sender,
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                               ],
@@ -4989,7 +4996,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: AppTextSize.messageBody(),
+                          fontSize: AppTextSize.callout,
                           height: 1.3,
                           color: faded,
                         ),
@@ -5022,109 +5029,123 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final statusId = _replyShowsSenderEmoji
         ? message.replyToSenderEmojiStatusId
         : 0;
-    return GestureDetector(
-      key: const ValueKey('messageReplyOpenOriginal'),
-      behavior: HitTestBehavior.opaque,
-      onTap: openOriginal,
-      child: Container(
-        key: const ValueKey('messageReplyQuote'),
-        width: double.infinity,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: line.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(4),
-          border: Border(left: BorderSide(color: line, width: 3)),
-        ),
-        child: Stack(
-          children: [
-            if (statusId != 0) ...[
-              Positioned(
-                right: -10,
-                top: -12,
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.14,
-                    child: StatusEmojiView(
-                      key: const ValueKey('messageReplySenderEmojiStatus'),
-                      id: statusId,
-                      size: 46,
-                      color: line,
-                      animate: false,
+    final hasThumb = message.replyToImage != null;
+    // The reference client's reply panel: a content-sized rounded block, a
+    // 3dp accent rule on the leading edge, the accent at 10% behind it (12% on
+    // a dark page), a bold 14pt author and a 14pt preview — one line, or five
+    // for an explicit quote. It never stretches to the bubble's width: a short
+    // reply to a short message is a short panel.
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: GestureDetector(
+        key: const ValueKey('messageReplyOpenOriginal'),
+        behavior: HitTestBehavior.opaque,
+        onTap: openOriginal,
+        child: Container(
+          key: const ValueKey('messageReplyQuote'),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: line.withValues(
+              alpha: _brightness == Brightness.dark ? 0.12 : 0.10,
+            ),
+            borderRadius: BorderRadius.circular(4),
+            border: Border(left: BorderSide(color: line, width: 3)),
+          ),
+          child: Stack(
+            children: [
+              if (statusId != 0) ...[
+                Positioned(
+                  right: -10,
+                  top: -12,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: 0.14,
+                      child: StatusEmojiView(
+                        key: const ValueKey('messageReplySenderEmojiStatus'),
+                        id: statusId,
+                        size: 46,
+                        color: line,
+                        animate: false,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                right: 26,
-                bottom: -12,
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.10,
-                    child: StatusEmojiView(
-                      id: statusId,
-                      size: 26,
-                      color: line,
-                      animate: false,
+                Positioned(
+                  right: 26,
+                  bottom: -12,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: 0.10,
+                      child: StatusEmojiView(
+                        id: statusId,
+                        size: 26,
+                        color: line,
+                        animate: false,
+                      ),
                     ),
+                  ),
+                ),
+              ],
+              Padding(
+                // The thumbnail sits at 8/5 in the reference panel and the
+                // text starts 3pt after it; without a thumbnail the text
+                // takes the panel's own 10pt inset.
+                padding: EdgeInsets.fromLTRB(hasThumb ? 8 : 10, 5, 10, 5),
+                child: IgnorePointer(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (message.replyToImage != null) ...[
+                        SizedBox(
+                          key: const ValueKey('messageReplyMediaPreview'),
+                          width: 34,
+                          height: 34,
+                          child: TDImage(
+                            photo:
+                                message.replyToImage?.thumbnail ??
+                                message.replyToImage,
+                            cornerRadius: 4,
+                            cacheWidth: _cachePx(34),
+                            cacheHeight: _cachePx(34),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                      ],
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (sender.isNotEmpty)
+                              Text.rich(
+                                TextSpan(
+                                  text: sender,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 14, color: line),
+                              ),
+                            if ((message.replyPreviewText ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 1),
+                              _replyPreviewText(
+                                faded,
+                                outgoing,
+                                maxLines: message.replyToQuote != null ? 5 : 1,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 3, 6, 4),
-              child: IgnorePointer(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (message.replyToImage != null) ...[
-                      SizedBox(
-                        key: const ValueKey('messageReplyMediaPreview'),
-                        width: 37,
-                        height: 37,
-                        child: TDImage(
-                          photo:
-                              message.replyToImage?.thumbnail ??
-                              message.replyToImage,
-                          cornerRadius: 4,
-                          cacheWidth: _cachePx(37),
-                          cacheHeight: _cachePx(37),
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (sender.isNotEmpty)
-                            Text.rich(
-                              TextSpan(
-                                text: sender,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, color: line),
-                            ),
-                          if ((message.replyPreviewText ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 1),
-                            _replyPreviewText(
-                              faded,
-                              outgoing,
-                              maxLines: message.replyToQuote != null ? 5 : 1,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -5139,7 +5160,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     unicode: true,
   );
 
-  /// The quoted reply's two-line preview, spaced like the body it answers.
+  /// The quoted reply's preview, spaced like the body it answers and set one
+  /// step below it (14pt at the default body size), the reference client's
+  /// reply-text size.
   Widget _replyPreviewText(Color faded, bool outgoing, {int maxLines = 1}) {
     final spaced = _displaySpacing(
       message.replyPreviewText ?? '',
@@ -5155,7 +5178,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       false,
       maxLines: maxLines,
       entities: spaced.entities,
-      fontSize: AppTextSize.messageBody(),
+      fontSize: AppTextSize.callout,
     );
   }
 
