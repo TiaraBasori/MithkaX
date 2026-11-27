@@ -172,12 +172,17 @@ class QuickReactionBar extends StatelessWidget {
     required this.reactions,
     required this.onReaction,
     required this.onExpand,
+    this.showExpand = true,
   });
 
   static const maxFittedButtonCount = 10;
   static const emojiSize = 28.0;
   static const _horizontalPadding = 8.0;
   static const _verticalPadding = 6.0;
+
+  /// One emoji slot's width. The strip hugs its content, so a chat with two
+  /// available reactions gets a two-slot pill instead of a screen-wide bar.
+  static const slotWidth = 40.0;
 
   /// The slot never shrinks below the size the pill was designed around; it
   /// GROWS when the inherited line box is taller than that constant, so the
@@ -202,16 +207,36 @@ class QuickReactionBar extends StatelessWidget {
   final ValueChanged<QuickReactionChoice> onReaction;
   final VoidCallback onExpand;
 
+  /// False when the strip already lists every reaction the message allows:
+  /// an expand button would only reopen the same set.
+  final bool showExpand;
+
+  /// How many emoji slots fit in one row of [availableWidth]. The bar shows
+  /// every available reaction and drops the expand button while the whole set
+  /// fits; only a larger set needs the full picker.
+  static int fittedCapacity(double availableWidth) {
+    final slots =
+        ((availableWidth - _horizontalPadding * 2) / slotWidth).floor();
+    return slots.clamp(1, maxFittedButtonCount);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = MessageActionPalette.of(context);
-    final buttonCount = reactions.length + 1;
+    final buttonCount = reactions.length + (showExpand ? 1 : 0);
     final slotExtent = _slotExtent(context);
+    final available = MediaQuery.sizeOf(context).width - 24;
+    // Hug the emoji slots: a short reaction list used to stretch across the
+    // whole menu width. A list too long to fit keeps the full lane and
+    // scrolls horizontally.
+    final fitted =
+        _horizontalPadding * 2 + buttonCount * QuickReactionBar.slotWidth;
+    final width = buttonCount <= maxFittedButtonCount
+        ? math.min(fitted, available)
+        : MessageActionMenu.widthForAvailable(available);
     return Container(
       key: const ValueKey('quick-reaction-bar'),
-      width: MessageActionMenu.widthForAvailable(
-        MediaQuery.sizeOf(context).width - 24,
-      ),
+      width: width,
       padding: const EdgeInsets.symmetric(
         horizontal: _horizontalPadding,
         vertical: _verticalPadding,
@@ -226,7 +251,7 @@ class QuickReactionBar extends StatelessWidget {
           final buttons = <Widget>[
             for (final emoji in reactions)
               _reactionButton(emoji, palette, slotExtent),
-            _expandButton(palette, slotExtent),
+            if (showExpand) _expandButton(palette, slotExtent),
           ];
           if (buttonCount <= maxFittedButtonCount) {
             return Row(
@@ -253,7 +278,7 @@ class QuickReactionBar extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () => onReaction(reaction),
       child: SizedBox(
-        width: 40,
+        width: QuickReactionBar.slotWidth,
         height: slotExtent,
         child: Center(
           child: reaction.isCustom
@@ -278,7 +303,7 @@ class QuickReactionBar extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onExpand,
       child: SizedBox(
-        width: 40,
+        width: QuickReactionBar.slotWidth,
         height: slotExtent,
         child: Center(
           child: Container(
@@ -313,6 +338,7 @@ class MenuReactionBar extends StatelessWidget {
     required this.reactions,
     required this.onReaction,
     required this.onExpand,
+    this.showExpand = true,
   });
 
   /// Six plus the expand button divide the menu's 220pt width into 30pt
@@ -340,6 +366,9 @@ class MenuReactionBar extends StatelessWidget {
   final List<QuickReactionChoice> reactions;
   final ValueChanged<QuickReactionChoice> onReaction;
   final VoidCallback onExpand;
+
+  /// False when the strip already lists every reaction the message allows.
+  final bool showExpand;
 
   @override
   Widget build(BuildContext context) {
@@ -384,19 +413,20 @@ class MenuReactionBar extends StatelessWidget {
                       ),
               ),
             ),
-          Expanded(
-            child: _MenuReactionSlot(
-              key: const ValueKey('menu-reaction-expand'),
-              palette: palette,
-              slotExtent: slotExtent,
-              onTap: onExpand,
-              child: AppIcon(
-                HeroAppIcons.faceSmile,
-                size: 21,
-                color: palette.foreground,
+          if (showExpand)
+            Expanded(
+              child: _MenuReactionSlot(
+                key: const ValueKey('menu-reaction-expand'),
+                palette: palette,
+                slotExtent: slotExtent,
+                onTap: onExpand,
+                child: AppIcon(
+                  HeroAppIcons.faceSmile,
+                  size: 21,
+                  color: palette.foreground,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
