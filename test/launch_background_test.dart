@@ -304,9 +304,9 @@ void main() {
 
     test('the cold-start mark is baked once per appearance', () async {
       // The launch window is native, so the mark ships baked twice: the
-      // azure fill for values/colors.xml, the frost fill for
-      // values-night/colors.xml. A missing night copy would leave the blue
-      // mark on the near-black starting window.
+      // azure fill for values/colors.xml and its lifted night blue for
+      // values-night/colors.xml. A missing night copy would leave the day
+      // azure on the near-black starting window.
       for (final bucket in ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
         for (final name in ['penguin_launch', 'penguin_splash']) {
           for (final qualifier in ['drawable', 'drawable-night']) {
@@ -357,16 +357,18 @@ void main() {
             inInclusiveRange(90, 200),
             reason: '$bucket/$name day ink luminance',
           );
-          // The night mark is its frost body: near-white but still blue.
+          // Both appearances are the brand's blue. The night fill used to
+          // be a near-white frost, which read as a white glyph on the
+          // starting window; it is now the same hue, lifted for legibility.
           expect(
             night.luminance,
-            greaterThan(200),
-            reason: '$bucket/$name night ink',
+            inInclusiveRange(90, 200),
+            reason: '$bucket/$name night ink must stay blue, never white',
           );
           expect(
             night.meanBlue,
-            greaterThan(night.meanRed),
-            reason: '$bucket/$name night ink must stay cool',
+            greaterThan(night.meanRed + 100),
+            reason: '$bucket/$name night ink must stay blue-dominant',
           );
         }
       }
