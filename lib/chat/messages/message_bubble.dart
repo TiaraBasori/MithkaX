@@ -2111,6 +2111,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// Gram transfer): their footer owns the message's meta line.
   Widget _withBubbleMeta(Widget child, bool outgoing, {bool meta = true}) {
     if (!meta) return child;
+    // Only a real bubble carries its time in the corner. Media and stickers
+    // have no bubble to sit in, and stamping the time over the artwork hides
+    // the picture — the band below (`_withFloatingBand`) draws it instead.
+    if (!_showsMessageBubbleSurface) return child;
     // A short bubble still has to hold its time on one line, so the meta's own
     // width is a floor for the bubble: the reference client widens
     // `backgroundWidth` to fit `timeWidth` the same way.
@@ -2220,12 +2224,35 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
             }),
           )
         : null;
+    // Bubble-less content (photo, sticker, round video) keeps its send time in
+    // this band: the reference puts it under the media, never on top of it.
+    final timeChip = meta && !_showsMessageBubbleSurface && !message.isService
+        ? Row(
+            key: ValueKey('messageBandTime-${message.id}'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _bubbleMetaLabel(),
+                style: TextStyle(
+                  fontSize: AppTextSize.chatTime,
+                  height: 1.1,
+                  color: chipForeground,
+                ),
+              ),
+              if (outgoing) ...[
+                const SizedBox(width: 3),
+                _deliveryTick(color: chipForeground),
+              ],
+            ],
+          )
+        : null;
     final hasChips =
         showReplies ||
         ghostMarker != null ||
         showEditedChip ||
         viewsChip != null ||
-        forwardsChip != null;
+        forwardsChip != null ||
+        timeChip != null;
     if (!hasChips) return child;
     // The edited mark rides the band's chip language like its siblings.
     final editedChip = showEditedChip
@@ -2247,6 +2274,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         : null;
     // One 4px gap between neighbours, whichever marks a bubble carries.
     final bandChips = <Widget>[
+      ?timeChip,
       ?viewsChip,
       ?forwardsChip,
       if (showReplies)
@@ -2840,6 +2868,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
             mainAxisSize: MainAxisSize.min,
             children: messageSelectableParts,
           );
+    final replyPanel = includeReplyQuote && message.replyPreviewText != null
+        ? _replyQuote(outgoing)
+        : null;
+    final body = _mobileSelectableText(messageSelectableContent);
+    // ONE width for the marker and the body, the way the reference draws a
+    // reply: the line spans the bubble and the text sits under it. Both go in a
+    // stretched column inside an intrinsic-width box, so the bubble is as wide
+    // as the wider of the two (clamped to the lane) and a two-word marker over a
+    // paragraph lines up instead of sitting in a box of its own. Rich blocks
+    // carry a LayoutBuilder, which cannot answer an intrinsic query, so those
+    // bubbles keep the marker at its own width.
+    final shareReplyWidth = replyPanel != null && displayRichBlocks.isEmpty;
     final parts = <Widget>[
       // The forward attribution rides INSIDE the bubble, above the text,
       // where it has always lived; only via-bot differs below.
@@ -2851,11 +2891,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         _viaBotHeader(outgoing),
         const SizedBox(height: 3),
       ],
-      if (includeReplyQuote && message.replyPreviewText != null) ...[
-        _replyQuote(outgoing),
-        const SizedBox(height: 5),
+      if (shareReplyWidth)
+        IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [replyPanel, const SizedBox(height: 5), body],
+          ),
+        )
+      else ...[
+        if (replyPanel != null) ...[replyPanel, const SizedBox(height: 5)],
+        body,
       ],
-      _mobileSelectableText(messageSelectableContent),
       if (_showsAiSummary) ...[
         const SizedBox(height: 7),
         _aiSummaryBlock(outgoing),
@@ -3455,7 +3502,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         height: size.height,
         child: TDImage(
           photo: image,
-          fit: BoxFit.contain,
           cacheWidth: _cachePx(size.width),
           cacheHeight: _cachePx(size.height),
           showProgress: true,
@@ -5061,39 +5107,38 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         ),
         child: Stack(
           children: [
-            if (statusId != 0) ...[
+            if (statusId != 0)
+              // The status emoji is a watermark on the AUTHOR line only. It used
+              // to be two 46/26dp glyphs pinned to the panel's corners, which
+              // put a 14% wash of colour directly behind the quoted text — the
+              // preview read as smudged. Clip it to the first line's height.
               Positioned(
-                right: -10,
-                top: -12,
+                top: -7,
+                right: -6,
                 child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.14,
-                    child: StatusEmojiView(
-                      key: const ValueKey('messageReplySenderEmojiStatus'),
-                      id: statusId,
-                      size: 46,
-                      color: line,
-                      animate: false,
+                  child: ClipRect(
+                    child: SizedBox(
+                      width: 52,
+                      height: 30,
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Opacity(
+                          opacity: 0.12,
+                          child: StatusEmojiView(
+                            key: const ValueKey(
+                              'messageReplySenderEmojiStatus',
+                            ),
+                            id: statusId,
+                            size: 40,
+                            color: line,
+                            animate: false,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-              Positioned(
-                right: 26,
-                bottom: -12,
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.10,
-                    child: StatusEmojiView(
-                      id: statusId,
-                      size: 26,
-                      color: line,
-                      animate: false,
-                    ),
-                  ),
-                ),
-              ),
-            ],
             Padding(
               // The thumbnail sits at 8/5 in the reference panel and the
               // text starts 3pt after it; without a thumbnail the text
@@ -5442,7 +5487,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   Widget _imageContent(TdFileRef image, bool outgoing) {
     final geometry = _imagePreviewGeometry();
-    final imageSize = geometry.contentSize;
     final caption = _caption();
     final grouped = _groupsMediaCaption(caption);
     final frameSize = Size(
@@ -5451,42 +5495,27 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           : geometry.frameSize.width,
       geometry.frameSize.height,
     );
-    final usesBlurredFrame =
-        geometry.needsBlurredFill ||
-        frameSize.width > geometry.frameSize.width + 0.5;
     final mediaRadius = grouped && _showsMessageBubbleSurface ? 0.0 : 10.0;
     final mediaBorderRadius = _messageBorderRadius(mediaRadius);
+    // The thumbnail CROPS into the frame the geometry chose: the shape is the
+    // target, the photo fills it. The old blurred-letterbox branch shrank the
+    // picture inside bars instead, which read as a stretched, padded card.
     final media = GestureDetector(
       onTap: () => widget.bubble.onOpenImage?.call(message),
       child: SizedBox(
         width: frameSize.width,
         height: frameSize.height,
-        child: usesBlurredFrame
-            ? _letterboxFrame(
-                fillSource: image.thumbnail ?? image,
-                childSize: imageSize,
-                borderRadius: mediaBorderRadius,
-                child: TDImage(
-                  photo: image,
-                  cornerRadius: 0,
-                  fit: BoxFit.contain,
-                  cacheWidth: _cachePx(imageSize.width),
-                  cacheHeight: _cachePx(imageSize.height),
-                  showProgress: true,
-                ),
-              )
-            : ClipRRect(
-                key: ValueKey('messageMediaClip-${message.id}'),
-                borderRadius: mediaBorderRadius,
-                child: TDImage(
-                  photo: image,
-                  cornerRadius: 0,
-                  fit: BoxFit.contain,
-                  cacheWidth: _cachePx(imageSize.width),
-                  cacheHeight: _cachePx(imageSize.height),
-                  showProgress: true,
-                ),
-              ),
+        child: ClipRRect(
+          key: ValueKey('messageMediaClip-${message.id}'),
+          borderRadius: mediaBorderRadius,
+          child: TDImage(
+            photo: image,
+            cornerRadius: 0,
+            cacheWidth: _cachePx(frameSize.width),
+            cacheHeight: _cachePx(frameSize.height),
+            showProgress: true,
+          ),
+        ),
       ),
     );
     final mediaWithApplyAction = widget.bubble.onApplyMessageBubble == null
@@ -6407,7 +6436,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               height: 180,
               child: TDImage(
                 photo: doc.file,
-                fit: BoxFit.contain,
                 cornerRadius: 4,
                 showProgress: true,
               ),
