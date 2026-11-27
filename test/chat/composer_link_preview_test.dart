@@ -136,7 +136,7 @@ void main() {
     expect(vm.composerLinkPreview!.enabled, isTrue);
   });
 
-  testWidgets('the menu moves the card above or below the text', (
+  testWidgets('the panel moves the card above or below the text', (
     tester,
   ) async {
     final vm = await pumpComposer(tester);
@@ -146,16 +146,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('composerLinkPreviewBanner')));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('app-anchored-menu-link-preview-position')),
+      find.byKey(const ValueKey('composerLinkPreviewOptionsSheet')),
       findsOneWidget,
     );
     await tester.tap(
-      find.byKey(const ValueKey('app-anchored-menu-link-preview-position')),
+      find.byKey(const ValueKey('composerLinkPreviewOptionPosition')),
     );
     await tester.pumpAndSettle();
     expect(vm.composerLinkPreview!.showAboveText, isTrue);
+    await tester.tap(
+      find.byKey(const ValueKey('composerLinkPreviewOptionDone')),
+    );
+    await tester.pumpAndSettle();
 
-    // The row's label names the side the card is on now.
+    // Reopening names the side the card is on now: the row offers the move
+    // back down.
     await tester.tap(find.byKey(const ValueKey('composerLinkPreviewBanner')));
     await tester.pumpAndSettle();
     expect(find.text('Preview below the text'), findsOneWidget);

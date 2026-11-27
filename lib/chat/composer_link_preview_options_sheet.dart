@@ -77,120 +77,128 @@ class _ComposerLinkPreviewOptionsSheetState
       clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppStringKeys.composerLinkPreviewTitle.l10n(context),
-                    style: AppTextStyle.title(
-                      colors.textPrimary,
-                      weight: AppTextWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    AppStringKeys.composerLinkPreviewOptionsSubtitle.l10n(
-                      context,
-                    ),
-                    style: AppTextStyle.body(colors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            // The link itself, in the reply sheet's preview slot: the host is
-            // the title, the URL the subtitle.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-              child: Container(
-                key: const ValueKey('composerLinkPreviewOptionsLink'),
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                decoration: BoxDecoration(
-                  color: colors.searchFill,
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                ),
-                child: Row(
+        // A short window (landscape phone, desktop pane) must scroll the
+        // panel instead of overflowing it.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppIcon(
-                      HeroAppIcons.link,
-                      size: 19,
-                      color: _enabled ? colors.linkBlue : colors.textTertiary,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _host,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.body(
-                              _enabled ? colors.linkBlue : colors.textTertiary,
-                              weight: AppTextWeight.semibold,
-                            ),
-                          ),
-                          Text(
-                            widget.url,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.body(colors.textSecondary),
-                          ),
-                        ],
+                    Text(
+                      AppStringKeys.composerLinkPreviewTitle.l10n(context),
+                      style: AppTextStyle.title(
+                        colors.textPrimary,
+                        weight: AppTextWeight.bold,
                       ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      AppStringKeys.composerLinkPreviewOptionsSubtitle.l10n(
+                        context,
+                      ),
+                      style: AppTextStyle.body(colors.textSecondary),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            _LinkPreviewMenuRow(
-              key: ValueKey(
-                _enabled
-                    ? 'composerLinkPreviewOptionDisable'
-                    : 'composerLinkPreviewOptionEnable',
+              // The link itself, in the reply sheet's preview slot: the host is
+              // the title, the URL the subtitle.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: Container(
+                  key: const ValueKey('composerLinkPreviewOptionsLink'),
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                  decoration: BoxDecoration(
+                    color: colors.searchFill,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                  ),
+                  child: Row(
+                    children: [
+                      AppIcon(
+                        HeroAppIcons.link,
+                        size: 19,
+                        color: _enabled ? colors.linkBlue : colors.textTertiary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _host,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyle.body(
+                                _enabled
+                                    ? colors.linkBlue
+                                    : colors.textTertiary,
+                                weight: AppTextWeight.semibold,
+                              ),
+                            ),
+                            Text(
+                              widget.url,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyle.body(colors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              icon: _enabled ? HeroAppIcons.eyeSlash : HeroAppIcons.eye,
-              label: _enabled
-                  ? AppStringKeys.composerLinkPreviewDisable.l10n(context)
-                  : AppStringKeys.composerLinkPreviewEnable.l10n(context),
-              onTap: _toggleEnabled,
-            ),
-            if (_enabled)
+              const SizedBox(height: 6),
               _LinkPreviewMenuRow(
-                key: const ValueKey('composerLinkPreviewOptionPosition'),
-                icon: _above ? HeroAppIcons.arrowDown : HeroAppIcons.arrowUp,
-                label: _above
-                    ? AppStringKeys.composerLinkPreviewBelow.l10n(context)
-                    : AppStringKeys.composerLinkPreviewAbove.l10n(context),
-                onTap: _togglePosition,
+                key: ValueKey(
+                  _enabled
+                      ? 'composerLinkPreviewOptionDisable'
+                      : 'composerLinkPreviewOptionEnable',
+                ),
+                icon: _enabled ? HeroAppIcons.eyeSlash : HeroAppIcons.eye,
+                label: _enabled
+                    ? AppStringKeys.composerLinkPreviewDisable.l10n(context)
+                    : AppStringKeys.composerLinkPreviewEnable.l10n(context),
+                onTap: _toggleEnabled,
               ),
-            const SizedBox(height: 6),
-            _LinkPreviewMenuRow(
-              key: const ValueKey('composerLinkPreviewOptionDone'),
-              icon: HeroAppIcons.check,
-              label: AppStringKeys.composerLinkPreviewOptionDone.l10n(context),
-              onTap: () => Navigator.of(context).pop(),
-            ),
-            if (_enabled)
+              if (_enabled)
+                _LinkPreviewMenuRow(
+                  key: const ValueKey('composerLinkPreviewOptionPosition'),
+                  icon: _above ? HeroAppIcons.arrowDown : HeroAppIcons.arrowUp,
+                  label: _above
+                      ? AppStringKeys.composerLinkPreviewBelow.l10n(context)
+                      : AppStringKeys.composerLinkPreviewAbove.l10n(context),
+                  onTap: _togglePosition,
+                ),
+              const SizedBox(height: 6),
               _LinkPreviewMenuRow(
-                key: const ValueKey('composerLinkPreviewOptionRemove'),
-                icon: HeroAppIcons.trash,
-                label: AppStringKeys.composerLinkPreviewDisable.l10n(context),
-                color: AppTheme.tagRed,
-                onTap: () {
-                  widget.onEnabledChanged(false);
-                  Navigator.of(context).pop();
-                },
+                key: const ValueKey('composerLinkPreviewOptionDone'),
+                icon: HeroAppIcons.check,
+                label: AppStringKeys.composerLinkPreviewOptionDone.l10n(
+                  context,
+                ),
+                onTap: () => Navigator.of(context).pop(),
               ),
-            const SizedBox(height: 8),
-          ],
+              if (_enabled)
+                _LinkPreviewMenuRow(
+                  key: const ValueKey('composerLinkPreviewOptionRemove'),
+                  icon: HeroAppIcons.trash,
+                  label: AppStringKeys.composerLinkPreviewDisable.l10n(context),
+                  color: AppTheme.tagRed,
+                  onTap: () {
+                    widget.onEnabledChanged(false);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
