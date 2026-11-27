@@ -1,10 +1,12 @@
 //
 //  search_hit_avatar_shape_test.dart
 //
-//  Every search result leads with the peer's avatar. The result's own photo or
-//  video preview used to take that slot as a rounded rectangle, so a Messages
-//  hit looked like a square avatar and hid which chat it belonged to.
+//  Search rows lead by type: text/link/file/voice keep the round peer avatar,
+//  while a media hit shows its own thumbnail and a music hit its cover.
 //
+
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,6 +15,7 @@ import 'package:mithka/chats/search_view.dart';
 import 'package:mithka/components/app_icons.dart';
 import 'package:mithka/components/photo_avatar.dart';
 import 'package:mithka/l10n/app_localizations.dart';
+import 'package:mithka/tdlib/td_models.dart';
 import 'package:mithka/theme/theme_controller.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,6 +94,41 @@ void main() {
     );
     final decoration = box.decoration! as BoxDecoration;
     expect(decoration.shape, BoxShape.circle);
+  });
+
+  testWidgets('a media hit leads with its rounded thumbnail', (tester) async {
+    final scratch = Directory.systemTemp.createTempSync('search_thumb');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final path = '${scratch.path}/thumb.png';
+    File(path).writeAsBytesSync(
+      base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+        'YAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      ),
+    );
+    await _pump(
+      tester,
+      SearchHitLeadingImage(
+        title: 'TrollStore',
+        isPeer: true,
+        size: 54,
+        media: TdFileRef(id: 91, localPath: path),
+        icon: HeroAppIcons.solidImage,
+        tint: Colors.blue,
+      ),
+    );
+    expect(
+      find.byKey(const ValueKey('search-hit-media-thumb')),
+      findsOneWidget,
+    );
+    expect(find.byType(PhotoAvatar), findsNothing);
+    final clip = tester.widget<ClipRRect>(
+      find.byKey(const ValueKey('search-hit-media-thumb')),
+    );
+    expect(
+      (clip.borderRadius as BorderRadius).topLeft.x,
+      closeTo(54 * 0.15, 0.01),
+    );
   });
 
   testWidgets('a peer with a photo still draws the avatar', (tester) async {

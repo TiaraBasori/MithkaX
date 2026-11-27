@@ -34,10 +34,14 @@ void main() {
     expect(theme.stickerMediaScale, 1.0);
     theme.stickerMediaSize = 20;
     expect(theme.stickerMediaScale, closeTo(1.4, 0.001));
-    theme.stickerMediaSize = 4;
-    expect(theme.stickerMediaScale, closeTo(1 / 3, 0.001));
+    theme.stickerMediaSize = 2;
+    expect(theme.stickerMediaScale, closeTo(0.2, 0.001));
     theme.stickerMediaSize = 99;
     expect(theme.stickerMediaSize, 20);
+    // A 5% step is exactly 0.75 of a size unit; the slider maps each notch
+    // back through the same formula.
+    theme.stickerMediaSize = 14 + 5 * 15 / 100;
+    expect(theme.stickerMediaScale, closeTo(1.05, 0.001));
   });
 
   testWidgets('a mounted sticker resizes when the preference changes', (
@@ -119,6 +123,20 @@ void main() {
     theme.stickerMediaSize = 20;
     await tester.pump();
     expect(find.text('140%'), findsOneWidget);
+
+    // Dragging moves in whole 5% notches (24 divisions over 20%..140%).
+    theme.stickerMediaSize = 14;
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const ValueKey('sticker-size-slider')),
+      const Offset(24, 0),
+    );
+    await tester.pumpAndSettle();
+    final percent = (theme.stickerMediaScale * 100).round();
+    expect(percent, isNot(100));
+    expect(percent % 5, 0);
+    expect(find.text('$percent%'), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('sticker-size-reset')));
     await tester.pump();
     expect(theme.stickerMediaSize, 14);

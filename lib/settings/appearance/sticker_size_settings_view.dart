@@ -2,8 +2,9 @@
 //  sticker_size_settings_view.dart
 //
 //  One size preference for stickers and GIFs in the transcript, matching
-//  exteraless's sticker-size slider (4..20, default 14). Both preview rows
-//  scale with the value so the choice is visible before leaving the page.
+//  exteraless's sticker-size slider (2..20, default 14 → 20%..140%). The
+//  slider moves in 5% steps; both preview rows scale with it so the choice is
+//  visible before leaving the page.
 //
 
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class StickerSizeSettingsView extends StatelessWidget {
     final theme = context.watch<ThemeController>();
     final colors = context.colors;
     final scale = theme.stickerMediaScale;
+    final percent = (scale * 100).round();
     return SettingsPageScaffold(
       key: const ValueKey('sticker-size-settings-page'),
       title: AppStrings.t(AppStringKeys.mithkaxStickerSizeTitle),
@@ -39,7 +41,7 @@ class StickerSizeSettingsView extends StatelessWidget {
                 Expanded(
                   child: _Sample(
                     label: AppStrings.t(AppStringKeys.historyKindSticker),
-                    child: BrandMark(size: (58 * scale).clamp(24, 86)),
+                    child: BrandMark(size: (58 * scale).clamp(12, 82)),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -47,8 +49,8 @@ class StickerSizeSettingsView extends StatelessWidget {
                   child: _Sample(
                     label: AppStrings.t(AppStringKeys.historyKindAnimation),
                     child: _GifSample(
-                      width: (132 * scale).clamp(64, 176),
-                      height: (86 * scale).clamp(42, 116),
+                      width: (132 * scale).clamp(26, 185),
+                      height: (86 * scale).clamp(18, 120),
                     ),
                   ),
                 ),
@@ -79,7 +81,7 @@ class StickerSizeSettingsView extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${(scale * 100).round()}%',
+                      '$percent%',
                       key: const ValueKey('sticker-size-percent'),
                       style: TextStyle(
                         fontSize: 14,
@@ -109,11 +111,12 @@ class StickerSizeSettingsView extends StatelessWidget {
                     ),
                     child: Slider(
                       key: const ValueKey('sticker-size-slider'),
-                      value: theme.stickerMediaSize,
-                      min: 4,
-                      max: 20,
-                      divisions: 16,
-                      onChanged: (value) => theme.stickerMediaSize = value,
+                      value: percent.toDouble().clamp(20, 140),
+                      min: 20,
+                      max: 140,
+                      divisions: 24,
+                      onChanged: (value) => theme.stickerMediaSize =
+                          14 + (value - 100) * 15 / 100,
                     ),
                   ),
                 ),

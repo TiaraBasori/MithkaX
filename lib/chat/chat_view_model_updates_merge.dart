@@ -821,6 +821,10 @@ extension ChatViewModelUpdates on ChatViewModel {
     m.replyToImage = quoted.previewImage;
     m.replyToImageWidth = quoted.imageWidth;
     m.replyToImageHeight = quoted.imageHeight;
+    // The marker shows the ORIGINAL author's identity, not this message's.
+    m.replyToSenderAccentColorId = quoted.senderAccentColorId;
+    m.replyToSenderEmojiStatusId = quoted.senderEmojiStatusId;
+    m.replyToSenderIsPremium = quoted.senderIsPremium;
     if (quoted.isOutgoing) {
       m.replyToSender = meName;
       return;
@@ -2158,7 +2162,11 @@ extension ChatViewModelUpdates on ChatViewModel {
     m.replyToPreview = body;
     m.replyToDate = entry.date;
     if (entry.senderId != 0) {
-      m.replyToSender = _senderCache[entry.senderId]?.name ?? '';
+      final info = _senderCache[entry.senderId];
+      m.replyToSender = info?.name ?? '';
+      m.replyToSenderAccentColorId = info?.accentColorId ?? -1;
+      m.replyToSenderEmojiStatusId = info?.emojiStatusId ?? 0;
+      m.replyToSenderIsPremium = info?.isPremium ?? false;
       if ((m.replyToSender ?? '').isEmpty && entry.senderId > 0) {
         unawaited(_resolveQuotedSender(m, entry.senderId));
       }

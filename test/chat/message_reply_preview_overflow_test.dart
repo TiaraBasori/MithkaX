@@ -84,7 +84,10 @@ void main() {
             matching: find.byType(RichText),
           ),
         )
-        .firstWhere((text) => text.maxLines == 2);
+        .firstWhere(
+          (text) =>
+              text.maxLines == 1 && text.text.toPlainText().contains('iPhone'),
+        );
   }
 
   testWidgets('a reply preview with inline custom emoji never fades', (

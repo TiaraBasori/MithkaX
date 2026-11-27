@@ -1,5 +1,27 @@
 part of 'chat_view.dart';
 
+/// The GIF gallery around [target]: every motion message that may preview
+/// beside it, in transcript order. A target outside the loaded transcript (for
+/// example a rich block's synthetic message) is appended so the tap still
+/// opens the picture the user pressed.
+@visibleForTesting
+List<ChatMessage> animationGalleryFor(
+  List<ChatMessage> messages,
+  ChatMessage target,
+) {
+  final gallery = messages
+      .where(
+        (m) =>
+            m.contentType == 'messageAnimation' &&
+            m.video != null &&
+            m.image != null &&
+            canPreviewMediaAlongside(m, target),
+      )
+      .toList();
+  if (!gallery.any((m) => m.id == target.id)) gallery.add(target);
+  return gallery;
+}
+
 extension _ChatViewActions on _ChatViewState {
   void _enterSelection(ChatMessage message) {
     _updateState(() {
@@ -722,6 +744,30 @@ extension _ChatViewActions on _ChatViewState {
     unawaited(openImagePreview(context, items: items, startIndex: startIndex));
   }
 
+  /// A GIF is a looping picture, not a video: open it in the image viewer,
+  /// which plays the MP4 over its still without a seek bar or duration chrome.
+  void _openAnimation(ChatMessage message) {
+    if (message.video == null || message.image == null) {
+      _playVideo(message);
+      return;
+    }
+    final gallery = animationGalleryFor(_vm.messages, message);
+    final start = gallery.indexWhere((m) => m.id == message.id);
+    unawaited(
+      openImagePreview(
+        context,
+        items: [for (final m in gallery) m.image!],
+        animations: [for (final m in gallery) m.video],
+        startIndex: start,
+        messageActions: _imageMessageActions(gallery),
+        metadata: MediaMetadata.listFor(
+          gallery,
+          enabled: context.read<ThemeController>().mediaMetadataEnabled,
+        ),
+      ),
+    );
+  }
+
   void _openSticker(ChatMessage message) {
     final desktop = isDesktopTargetPlatform(Theme.of(context).platform);
     Navigator.of(context).push(
@@ -757,6 +803,7 @@ extension _ChatViewActions on _ChatViewState {
       onOpenReply: _openReplyMessage,
       onOpenImage: _openImage,
       onOpenSticker: _openSticker,
+      onOpenAnimation: _openAnimation,
       onPlayVideo: _playVideo,
       onPlayMusic: _playMusicMessage,
       onButtonTap: _pressMessageButton,

@@ -158,6 +158,7 @@ import 'messages/message_arrival.dart';
 import 'messages/message_bubble.dart';
 import 'messages/message_bubble_repository_view.dart';
 import 'messages/message_double_tap_action.dart';
+import 'messages/message_preview_label.dart';
 import 'messages/message_quote_selection_dialog.dart';
 import 'messages/message_reaction_availability.dart';
 import 'messages/message_replies_sheet.dart';
@@ -2124,6 +2125,7 @@ class _ChatViewState extends State<ChatView> {
             )
           : null,
       onOpenSticker: _openSticker,
+      onOpenAnimation: _openAnimation,
       onPlayVideo: _playVideo,
       onPlayMusic: _playMusicMessage,
       onButtonTap: _pressMessageButton,
@@ -4066,9 +4068,11 @@ class _ChatViewState extends State<ChatView> {
 
   Widget _pinnedBar(ChatMessage pinned) {
     final c = context.colors;
-    final text = pinned.text.trim().isEmpty
-        ? AppStrings.t(AppStringKeys.chatSearchMessageResultLabel)
-        : pinned.text.replaceAll('\n', ' ');
+    final raw = pinned.text.trim();
+    final generic = AppStrings.t(AppStringKeys.chatSearchMessageResultLabel);
+    final text = raw.isEmpty || raw == generic
+        ? messagePreviewLabel(pinned)
+        : raw.replaceAll('\n', ' ');
     final canPrevious = _vm.hasPreviousPinnedMessage;
     final canNext = _vm.hasNextPinnedMessage;
     return GestureDetector(

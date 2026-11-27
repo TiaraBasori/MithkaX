@@ -798,6 +798,9 @@ abstract final class AppStringKeys {
       'appearanceSenderNameReadabilityBlend';
   static const appearanceSenderNameReadabilityNone =
       'appearanceSenderNameReadabilityNone';
+  static const appearanceReplySenderStyle = 'appearanceReplySenderStyle';
+  static const appearanceReplySenderStyleNote =
+      'appearanceReplySenderStyleNote';
   static const appearanceShowChatListSearch = 'appearanceShowChatListSearch';
   static const appearanceShowEditAndReadMarks =
       'appearanceShowEditAndReadMarks';

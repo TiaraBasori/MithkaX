@@ -537,6 +537,8 @@
     <string name="appearanceSenderNameReadabilityBackground">Hintergrund hinzufügen</string>
     <string name="appearanceSenderNameReadabilityBlend">Farbe mischen</string>
     <string name="appearanceSenderNameReadabilityNone">Keine</string>
+    <string name="appearanceReplySenderStyle">Absenderstil in Antworten</string>
+    <string name="appearanceReplySenderStyleNote">Ausgeschaltet verwenden Antwortmarker eine schlichte Akzentfarbe ohne die benutzerdefinierte Farbe und das Emoji des Absenders.</string>
     <string name="appearanceShowChatListSearch">Chatlistensuche</string>
     <string name="appearanceShowEditAndReadMarks">Bearbeitet- und Gelesen-Markierungen anzeigen</string>
     <string name="appearanceShowFolderBadges">Ordner-Badges</string>

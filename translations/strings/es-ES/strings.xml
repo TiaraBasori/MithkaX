@@ -537,6 +537,8 @@
     <string name="appearanceSenderNameReadabilityBackground">Añadir fondo</string>
     <string name="appearanceSenderNameReadabilityBlend">Mezclar color</string>
     <string name="appearanceSenderNameReadabilityNone">Ninguno</string>
+    <string name="appearanceReplySenderStyle">Estilo del remitente en las respuestas</string>
+    <string name="appearanceReplySenderStyleNote">Desactivado, los marcadores de respuesta usan un color de acento simple, sin el color ni el emoji personalizados del remitente.</string>
     <string name="appearanceShowChatListSearch">Buscar en chats</string>
     <string name="appearanceShowEditAndReadMarks">Mostrar marcas de edición y lectura</string>
     <string name="appearanceShowFolderBadges">Insignias de carpetas</string>

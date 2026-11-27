@@ -537,6 +537,8 @@
     <string name="appearanceSenderNameReadabilityBackground">添加背景</string>
     <string name="appearanceSenderNameReadabilityBlend">混合颜色</string>
     <string name="appearanceSenderNameReadabilityNone">无</string>
+    <string name="appearanceReplySenderStyle">回复标识使用发送者样式</string>
+    <string name="appearanceReplySenderStyleNote">关闭后回复标识使用简洁的主题色，不显示发送者的自定义颜色和 emoji。</string>
     <string name="appearanceShowChatListSearch">聊天列表搜索</string>
     <string name="appearanceShowEditAndReadMarks">显示编辑和已读标记</string>
     <string name="appearanceShowFolderBadges">文件夹未读徽章</string>

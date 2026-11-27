@@ -151,15 +151,6 @@ extension _MessageBubbleTextEntities on _MessageBubbleState {
     );
   }
 
-  Color _replyQuoteBackground(bool outgoing) {
-    if (_messageColors != null) {
-      return _messageAccentFill(_messageReplyLineColor(outgoing));
-    }
-    final base = outgoing ? _outgoingBubbleColor : _incomingBubbleColor;
-    final dark = _brightness == Brightness.dark;
-    return Color.lerp(base, dark ? Colors.white : Colors.black, 0.10)!;
-  }
-
   /// Trailing inline meta: delivery progress, replaced by edit status.
   InlineSpan _metaSpan(bool outgoing) {
     final faint = _messageTimeColor(outgoing);

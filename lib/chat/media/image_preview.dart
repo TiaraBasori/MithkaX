@@ -33,14 +33,17 @@ Future<void> openImagePreview(
   Future<void> Function(int index)? onMore,
   ImageViewerMessageActions? messageActions,
   List<MediaMetadata?> metadata = const [],
+  List<TdFileRef?> animations = const [],
 }) async {
   if (items.isEmpty) return;
   final index = startIndex.clamp(0, items.length - 1);
-  if (imagePreviewCanUseIndependentWindow(
-    primaryActionLabel: primaryActionLabel,
-    onPrimaryAction: onPrimaryAction,
-    onMore: onMore,
-  )) {
+  // A GIF/motion page cannot travel to the still-only native window.
+  if (animations.isEmpty &&
+      imagePreviewCanUseIndependentWindow(
+        primaryActionLabel: primaryActionLabel,
+        onPrimaryAction: onPrimaryAction,
+        onMore: onMore,
+      )) {
     final opened = await DesktopImagePreviewWindowService.instance.open(
       items,
       startIndex: index,
@@ -62,6 +65,7 @@ Future<void> openImagePreview(
         onMore: onMore,
         messageActions: messageActions,
         metadata: metadata,
+        animations: animations,
       ),
     ),
   );

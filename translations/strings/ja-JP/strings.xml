@@ -537,6 +537,8 @@
     <string name="appearanceSenderNameReadabilityBackground">背景を追加</string>
     <string name="appearanceSenderNameReadabilityBlend">色を混ぜる</string>
     <string name="appearanceSenderNameReadabilityNone">なし</string>
+    <string name="appearanceReplySenderStyle">返信マーカーに送信者のスタイルを使用</string>
+    <string name="appearanceReplySenderStyleNote">オフにすると、返信マーカーは送信者のカスタムカラーと絵文字を使わず、シンプルなテーマ色になります。</string>
     <string name="appearanceShowChatListSearch">チャット検索</string>
     <string name="appearanceShowEditAndReadMarks">編集済み・既読マークを表示</string>
     <string name="appearanceShowFolderBadges">フォルダーバッジ</string>

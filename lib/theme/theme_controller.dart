@@ -1198,8 +1198,9 @@ class ThemeController extends ChangeNotifier {
     _autoRevealRestrictedMedia =
         _prefs.getBool(_autoRevealRestrictedMediaKey) ?? false;
     _liquidGlassBottomBar = _prefs.getBool(_liquidGlassBottomBarKey) ?? false;
+    _replyQuoteSenderStyle = _prefs.getBool(_replyQuoteSenderStyleKey) ?? true;
     _stickerMediaSize = (_prefs.getDouble(_stickerMediaSizeKey) ?? 14).clamp(
-      4.0,
+      2.0,
       20.0,
     );
     _simpleMode = _prefs.getBool(_simpleModeKey) ?? false;
@@ -1323,6 +1324,7 @@ class ThemeController extends ChangeNotifier {
   static const _hideBlockedUserMessagesKey = 'hideBlockedUserMessages';
   static const _autoRevealRestrictedMediaKey = 'autoRevealRestrictedMedia';
   static const _liquidGlassBottomBarKey = 'liquidGlassBottomBar';
+  static const _replyQuoteSenderStyleKey = 'mithkax.replyQuoteSenderStyle.v1';
   static const _stickerMediaSizeKey = 'mithkax.stickerMediaSize.v1';
   static const _simpleModeKey = 'simpleMode';
   static const _showChannelsTabKey = 'showChannelsTab';
@@ -1431,6 +1433,7 @@ class ThemeController extends ChangeNotifier {
   bool _hideBlockedUserMessages = false;
   bool _autoRevealRestrictedMedia = false;
   bool _liquidGlassBottomBar = false;
+  bool _replyQuoteSenderStyle = true;
 
   /// exteraless's sticker-size value (4..20, default 14). One value drives both
   /// stickers and GIFs in the transcript; [stickerMediaScale] is the relative
@@ -2004,11 +2007,15 @@ class ThemeController extends ChangeNotifier {
   bool get autoRevealRestrictedMedia => _autoRevealRestrictedMedia;
   bool get liquidGlassBottomBar => _liquidGlassBottomBar;
 
+  /// Reply markers use the quoted author's name colour and emoji status,
+  /// exteraless's reply-line styling. Off renders a plain theme-coloured line.
+  bool get replyQuoteSenderStyle => _replyQuoteSenderStyle;
+
   double get stickerMediaSize => _stickerMediaSize;
 
   /// Relative size factor: 1.0 at exteraless's default 14. Its mobile formula
   /// spans `0.5 + (size - 14) / 30` of the viewport, so the same % swing is
-  /// `1 + (size - 14) / 15` here (about 0.33×..1.4×).
+  /// `1 + (size - 14) / 15` here (0.2×..1.4×, exteraless's 2..20 range).
   double get stickerMediaScale => 1 + (_stickerMediaSize - 14) / 15;
 
   /// Collapses the phone composer to one row and moves its tools into the
@@ -3267,6 +3274,13 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  set replyQuoteSenderStyle(bool value) {
+    if (_replyQuoteSenderStyle == value) return;
+    _replyQuoteSenderStyle = value;
+    _prefs.setBool(_replyQuoteSenderStyleKey, value);
+    notifyListeners();
+  }
+
   set liquidGlassBottomBar(bool value) {
     if (_liquidGlassBottomBar == value) return;
     _liquidGlassBottomBar = value;
@@ -3275,7 +3289,7 @@ class ThemeController extends ChangeNotifier {
   }
 
   set stickerMediaSize(double value) {
-    final next = value.clamp(4.0, 20.0).toDouble();
+    final next = value.clamp(2.0, 20.0).toDouble();
     if ((_stickerMediaSize - next).abs() < 0.001) return;
     _stickerMediaSize = next;
     _prefs.setDouble(_stickerMediaSizeKey, next);

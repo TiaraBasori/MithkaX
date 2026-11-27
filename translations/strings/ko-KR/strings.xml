@@ -537,6 +537,8 @@
     <string name="appearanceSenderNameReadabilityBackground">배경 추가</string>
     <string name="appearanceSenderNameReadabilityBlend">색상 혼합</string>
     <string name="appearanceSenderNameReadabilityNone">없음</string>
+    <string name="appearanceReplySenderStyle">답장 표시에 발신자 스타일 사용</string>
+    <string name="appearanceReplySenderStyleNote">끄면 답장 표시가 발신자의 사용자 지정 색상과 이모지 없이 단순한 테마 색상을 사용합니다.</string>
     <string name="appearanceShowChatListSearch">채팅 목록 검색</string>
     <string name="appearanceShowEditAndReadMarks">수정 및 읽음 표시 보이기</string>
     <string name="appearanceShowFolderBadges">폴더 배지</string>

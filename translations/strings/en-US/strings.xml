@@ -537,6 +537,8 @@
     <string name="appearanceSenderNameReadabilityBackground">Add Background</string>
     <string name="appearanceSenderNameReadabilityBlend">Blend Color</string>
     <string name="appearanceSenderNameReadabilityNone">None</string>
+    <string name="appearanceReplySenderStyle">Sender style in replies</string>
+    <string name="appearanceReplySenderStyleNote">When off, reply markers use a plain accent colour without the sender's custom colour and emoji.</string>
     <string name="appearanceShowChatListSearch">Chat list search</string>
     <string name="appearanceShowEditAndReadMarks">Show Edit and Read Marks</string>
     <string name="appearanceShowFolderBadges">Folder badges</string>

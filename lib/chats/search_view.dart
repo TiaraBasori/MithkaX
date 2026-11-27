@@ -1479,6 +1479,7 @@ class _DesktopCompactSearchThumb extends StatelessWidget {
     isPeer: hit.isPeerResult,
     size: 40,
     photo: hit.photo,
+    media: hit.media,
     icon: hit.icon,
     tint: hit.tint,
   );
@@ -2055,6 +2056,7 @@ class _SearchViewState extends State<SearchView> {
     isPeer: hit.isPeerResult,
     size: 54,
     photo: hit.photo,
+    media: hit.media,
     icon: hit.icon,
     tint: hit.tint,
   );
@@ -2652,13 +2654,13 @@ class _SearchViewModel extends ChangeNotifier {
   }
 }
 
-/// The leading image of a search row: always the peer's avatar, never the
-/// result's own media preview.
+/// The leading image of a search row.
 ///
-/// A photo or video thumbnail in the result list reads as a square avatar and
-/// hides who the result belongs to, so every hit shows the chat/person
-/// identity in the same round shape as the chat list. Hits with no identity
-/// (a `tg://` link suggestion) keep their glyph, drawn in the same circle.
+/// Text, link, file and voice hits identify their chat/person with the same
+/// round avatar the chat list uses. A media hit shows its own thumbnail, and a
+/// music hit shows the track cover, both in a rounded square: the picture IS
+/// the result. Hits with no identity (a `tg://` link suggestion) keep their
+/// glyph in the same circle.
 class SearchHitLeadingImage extends StatelessWidget {
   const SearchHitLeadingImage({
     super.key,
@@ -2668,6 +2670,7 @@ class SearchHitLeadingImage extends StatelessWidget {
     required this.icon,
     required this.tint,
     this.photo,
+    this.media,
   });
 
   /// The peer's name; the monogram falls back to it when there is no photo.
@@ -2677,11 +2680,34 @@ class SearchHitLeadingImage extends StatelessWidget {
   final bool isPeer;
   final double size;
   final TdFileRef? photo;
+
+  /// A media thumbnail (`message.image` for photo/video/animation) or a
+  /// music cover. Non-null wins over the peer avatar and draws as a rounded
+  /// square instead of a circle.
+  final TdFileRef? media;
   final AppIconData icon;
   final Color tint;
 
   @override
   Widget build(BuildContext context) {
+    final media = this.media;
+    if (media != null) {
+      return ClipRRect(
+        key: const ValueKey('search-hit-media-thumb'),
+        borderRadius: BorderRadius.circular(size * 0.15),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: TDImage(
+            photo: media.thumbnail ?? media,
+            cornerRadius: 0,
+            cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+            cacheHeight: (size * MediaQuery.devicePixelRatioOf(context))
+                .round(),
+          ),
+        ),
+      );
+    }
     if (isPeer || photo != null) {
       return PhotoAvatar(title: title, photo: photo, size: size);
     }
@@ -2713,6 +2739,7 @@ class _SearchHit {
     this.chatId,
     this.message,
     this.telegramLink,
+    this.media,
   }) : icon = icon ?? HeroAppIcons.message;
 
   factory _SearchHit.chat(ChatSummary chat, {String? subtitle}) => _SearchHit(
@@ -2763,6 +2790,7 @@ class _SearchHit {
     final music = message.music;
     final title = document?.fileName ?? music?.title ?? _messageTitle(message);
     final subtitle = _messageSubtitle(message, source.title);
+    final media = _messageMediaThumb(message);
     return _SearchHit(
       title: title,
       subtitle: subtitle,
@@ -2774,6 +2802,7 @@ class _SearchHit {
       message: message,
       icon: _messageIcon(message),
       tint: _messageTint(message),
+      media: media,
     );
   }
 
@@ -2796,6 +2825,10 @@ class _SearchHit {
   final int? chatId;
   final ChatMessage? message;
   final String? telegramLink;
+
+  /// The result's own picture for a media/music hit; null keeps the peer
+  /// avatar (text, link, file, voice).
+  final TdFileRef? media;
   final AppIconData icon;
   final Color tint;
 
@@ -2860,6 +2893,22 @@ class _SearchHit {
       pieces.add(text.replaceAll('\n', ' '));
     }
     return pieces.join(' · ');
+  }
+
+  /// The picture a message hit leads with: a music track's cover, or a
+  /// photo/video/GIF's own thumbnail. Everything else identifies its sender.
+  static TdFileRef? _messageMediaThumb(ChatMessage message) {
+    final music = message.music;
+    if (music != null) return music.cover;
+    if (message.image == null) return null;
+    return switch (message.contentType) {
+      'messagePhoto' ||
+      'messageVideo' ||
+      'messageAnimation' ||
+      'messageSticker' ||
+      'messageAnimatedEmoji' => message.image,
+      _ => null,
+    };
   }
 
   static AppIconData _messageIcon(ChatMessage message) {

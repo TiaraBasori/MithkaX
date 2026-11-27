@@ -163,6 +163,7 @@ Future<void> showMessageRepliesSheet({
   ValueChanged<int>? onOpenReply,
   ValueChanged<ChatMessage>? onOpenImage,
   ValueChanged<ChatMessage>? onOpenSticker,
+  ValueChanged<ChatMessage>? onOpenAnimation,
   ValueChanged<ChatMessage>? onPlayVideo,
   ValueChanged<ChatMessage>? onPlayMusic,
   void Function(ChatMessage message, MessageButton button)? onButtonTap,
@@ -185,6 +186,7 @@ Future<void> showMessageRepliesSheet({
       onOpenReply: onOpenReply,
       onOpenImage: onOpenImage,
       onOpenSticker: onOpenSticker,
+      onOpenAnimation: onOpenAnimation,
       onPlayVideo: onPlayVideo,
       onPlayMusic: onPlayMusic,
       onButtonTap: onButtonTap,
@@ -206,6 +208,7 @@ class _MessageRepliesSheet extends StatefulWidget {
     this.onOpenReply,
     this.onOpenImage,
     this.onOpenSticker,
+    this.onOpenAnimation,
     this.onPlayVideo,
     this.onPlayMusic,
     this.onButtonTap,
@@ -223,6 +226,7 @@ class _MessageRepliesSheet extends StatefulWidget {
   final ValueChanged<int>? onOpenReply;
   final ValueChanged<ChatMessage>? onOpenImage;
   final ValueChanged<ChatMessage>? onOpenSticker;
+  final ValueChanged<ChatMessage>? onOpenAnimation;
   final ValueChanged<ChatMessage>? onPlayVideo;
   final ValueChanged<ChatMessage>? onPlayMusic;
   final void Function(ChatMessage message, MessageButton button)? onButtonTap;
@@ -1295,6 +1299,7 @@ class _MessageRepliesSheetState extends State<_MessageRepliesSheet> {
         onOpenImage: _openImage,
         onOpenImageGallery: _openImageGallery,
         onOpenSticker: widget.onOpenSticker,
+        onOpenAnimation: widget.onOpenAnimation,
         onPlayVideo: widget.onPlayVideo,
         onPlayMusic: widget.onPlayMusic,
         onButtonTap: widget.onButtonTap,
@@ -1669,6 +1674,7 @@ class MessageReplySheetItem extends StatelessWidget {
     this.onOpenImage,
     this.onOpenImageGallery,
     this.onOpenSticker,
+    this.onOpenAnimation,
     this.onPlayVideo,
     this.onPlayMusic,
     this.onButtonTap,
@@ -1692,6 +1698,7 @@ class MessageReplySheetItem extends StatelessWidget {
   final ValueChanged<ChatMessage>? onOpenImage;
   final ImageGalleryOpenCallback? onOpenImageGallery;
   final ValueChanged<ChatMessage>? onOpenSticker;
+  final ValueChanged<ChatMessage>? onOpenAnimation;
   final ValueChanged<ChatMessage>? onPlayVideo;
   final ValueChanged<ChatMessage>? onPlayMusic;
   final void Function(ChatMessage message, MessageButton button)? onButtonTap;
@@ -1715,6 +1722,7 @@ class MessageReplySheetItem extends StatelessWidget {
       onOpenImage: onOpenImage,
       onOpenImageGallery: onOpenImageGallery,
       onOpenSticker: onOpenSticker,
+      onOpenAnimation: onOpenAnimation,
       onPlayVideo: onPlayVideo,
       onPlayMusic: onPlayMusic,
       onButtonTap: onButtonTap,

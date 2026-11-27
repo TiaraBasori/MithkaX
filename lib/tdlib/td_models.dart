@@ -813,6 +813,9 @@ class ChatMessage {
     this.replyToImage,
     this.replyToImageWidth,
     this.replyToImageHeight,
+    this.replyToSenderAccentColorId = -1,
+    this.replyToSenderEmojiStatusId = 0,
+    this.replyToSenderIsPremium = false,
     this.serviceUserIds = const [],
     this.appearancePreview,
     this.communityPreview,
@@ -970,6 +973,13 @@ class ChatMessage {
   TdFileRef? replyToImage; // thumbnail/photo shown inside the quote block
   int? replyToImageWidth;
   int? replyToImageHeight;
+
+  /// The quoted author's identity styling, so a reply marker can use the
+  /// ORIGINAL sender's colour and custom emoji instead of the current
+  /// message's. -1 / 0 mean the quote has no resolved peer styling.
+  int replyToSenderAccentColorId;
+  int replyToSenderEmojiStatusId;
+  bool replyToSenderIsPremium;
 
   // Service messages such as member joins may carry affected user ids, resolved
   // by the chat view model once TDLib can provide display names.

@@ -1360,6 +1360,14 @@ class ChatViewAppearanceSettingsView extends StatelessWidget {
         ),
         appearance._toggleRow(
           context,
+          HeroAppIcons.reply.data,
+          AppStrings.t(AppStringKeys.appearanceReplySenderStyle),
+          theme.replyQuoteSenderStyle,
+          (value) => theme.replyQuoteSenderStyle = value,
+          subtitle: AppStrings.t(AppStringKeys.appearanceReplySenderStyleNote),
+        ),
+        appearance._toggleRow(
+          context,
           HeroAppIcons.images.data,
           AppStrings.t(AppStringKeys.appearanceMergeConsecutiveImages),
           theme.groupImageMessages,
