@@ -175,12 +175,18 @@ void main() {
       'android/app/src/main/kotlin/x/empty/mithka/HapticsPlugin.kt',
     ).readAsStringSync();
     // The reference client fires exactly two constants for its interface, and
-    // both ignore flags keep them alive with the system switch off. A raw
-    // waveform of a few ms is dropped by some HALs and once left the whole app
-    // silent, so it must stay a fallback only.
+    // its intensity is whatever the platform assigns those constants. A raw
+    // waveform at DEFAULT_AMPLITUDE is louder than any platform tick, so no
+    // path may use one; a refused tick answers false and Dart falls back to
+    // Flutter's channel instead.
     expect(source, contains('performHapticFeedback(constant, FLAGS)'));
-    expect(source, contains('FLAG_IGNORE_VIEW_SETTING'));
-    expect(source, contains('FLAG_IGNORE_GLOBAL_SETTING'));
+    expect(
+      source,
+      contains('HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING'),
+    );
+    // The system-wide touch-vibration switch stays authoritative, like
+    // exteraless's own vibrate helper; ignoring it made the ticks stronger.
+    expect(source, isNot(contains('FLAG_IGNORE_GLOBAL_SETTING')));
     expect(
       source,
       contains('"longPress", "error" -> HapticFeedbackConstants.LONG_PRESS'),
@@ -188,12 +194,8 @@ void main() {
     expect(source, contains('else -> HapticFeedbackConstants.KEYBOARD_TAP'));
     expect(source, isNot(contains('HapticFeedbackConstants.CONFIRM')));
     expect(source, isNot(contains('HapticFeedbackConstants.REJECT')));
-    expect(source, contains('VibrationEffect.createOneShot'));
+    expect(source, isNot(contains('VibrationEffect')));
     expect(source, contains('const val CHANNEL = "mithka/haptics"'));
-    final manifest = File(
-      'android/app/src/main/AndroidManifest.xml',
-    ).readAsStringSync();
-    expect(manifest, contains('android.permission.VIBRATE'));
     final activity = File(
       'android/app/src/main/kotlin/x/empty/mithka/MainActivity.kt',
     ).readAsStringSync();

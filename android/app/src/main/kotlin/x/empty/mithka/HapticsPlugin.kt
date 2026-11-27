@@ -1,13 +1,8 @@
 package x.empty.mithka
 
 import android.app.Activity
-import android.content.Context
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -21,35 +16,25 @@ import io.flutter.plugin.common.MethodChannel
  *
  * `performHapticFeedback` is the platform's own effect, which is the only path
  * that produces a felt tick on every device (a raw `Vibrator` waveform of a
- * few milliseconds is dropped outright by some HALs). Both ignore flags bypass
- * the system "touch vibration" switch, so the tick still fires with it off.
+ * few milliseconds is dropped outright by some HALs). The intensity is
+ * therefore exactly the reference client's: it also only ever fires these
+ * constants. `FLAG_IGNORE_VIEW_SETTING` keeps the tick alive when a view has
+ * haptics disabled; the system-wide touch-vibration switch and its intensity
+ * are deliberately NOT bypassed, because exteraless honours them
+ * (`AndroidUtilities.vibrate`) and ignoring them was what made the fork's
+ * ticks feel stronger than the reference.
  *
- * A raw one-shot covers a refused request (unattached window), and Dart falls
- * back again when this answers false — a tick can never disappear silently.
+ * A refused request answers false and Dart falls back to Flutter's own channel
+ * (the same constants, no flags) — a tick can never disappear silently, and no
+ * path ever fires a raw full-amplitude waveform.
  */
 class HapticsPlugin(
     private val activity: Activity,
     messenger: BinaryMessenger,
 ) :
     MethodChannel.MethodCallHandler {
-    private val appContext = activity.applicationContext
     private val channel = MethodChannel(messenger, CHANNEL)
     private val handler = Handler(Looper.getMainLooper())
-
-    /** Manager first, legacy service after it: some ROMs ship no manager. */
-    @Suppress("DEPRECATION")
-    private val vibrator: Vibrator? = try {
-        val manager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            appContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-        } else {
-            null
-        }
-        val resolved = manager?.defaultVibrator
-            ?: appContext.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        if (resolved?.hasVibrator() == true) resolved else null
-    } catch (_: Exception) {
-        null
-    }
 
     init {
         channel.setMethodCallHandler(this)
@@ -68,7 +53,7 @@ class HapticsPlugin(
             "longPress", "error" -> HapticFeedbackConstants.LONG_PRESS
             else -> HapticFeedbackConstants.KEYBOARD_TAP
         }
-        if (!tick(constant)) return oneShot(kind)
+        if (!tick(constant)) return false
         if (kind == "error") {
             // APP_ERROR is a double buzz: the second pulse lands 150 ms later.
             handler.postDelayed(
@@ -85,29 +70,6 @@ class HapticsPlugin(
         return view.performHapticFeedback(constant, FLAGS)
     }
 
-    /** Only used when the platform haptic was refused; a plain buzz, no waveform. */
-    @Suppress("DEPRECATION")
-    private fun oneShot(kind: String?): Boolean {
-        val target = vibrator ?: return false
-        val durationMs = when (kind) {
-            "longPress" -> 40L
-            "error" -> 200L
-            else -> 20L
-        }
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                target.vibrate(
-                    VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE),
-                )
-            } else {
-                target.vibrate(durationMs)
-            }
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     fun dispose() {
         handler.removeCallbacksAndMessages(null)
         channel.setMethodCallHandler(null)
@@ -116,9 +78,12 @@ class HapticsPlugin(
     companion object {
         const val CHANNEL = "mithka/haptics"
 
-        /** Ignore the view's own switch and the system touch-vibration one. */
-        private const val FLAGS = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING or
-            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+        /**
+         * Ignore only the *view's* own switch. The global touch-vibration
+         * setting stays authoritative, so the user's system intensity applies
+         * exactly as it does in the reference client.
+         */
+        private const val FLAGS = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
 
         /** Gap between the two pulses of an error buzz. */
         private const val ERROR_GAP_MS = 150L
