@@ -141,6 +141,26 @@ class _AutoDownloadSettingsViewState extends State<AutoDownloadSettingsView> {
               ),
             ],
           ),
+          // Where auto-download may run at all. The reference client keeps
+          // this mask next to its presets; TDLib has no chat types, so the
+          // gate is client-side and applies to every network.
+          SettingsSection(
+            titleKey: AppStringKeys.autoDownloadChatTypesTitle,
+            rows: [
+              for (final type in AutoDownloadChatType.values)
+                _toggle(
+                  AppStrings.t(type.labelKey),
+                  _controller.allowsChatType(type),
+                  (value) async {
+                    await _controller.setChatType(type, value);
+                  },
+                  key: ValueKey('auto-download-chat-${type.name}'),
+                ),
+            ],
+          ),
+          SettingsNote(
+            text: AppStrings.t(AppStringKeys.autoDownloadChatTypesDetail),
+          ),
           SettingsSection(
             titleKey: AppStringKeys.autoDownloadSettingsPreloadingAndCalls,
             rows: [
@@ -260,8 +280,10 @@ class _AutoDownloadSettingsViewState extends State<AutoDownloadSettingsView> {
   Widget _toggle(
     String title,
     bool value,
-    Future<void> Function(bool) update,
-  ) => SettingsSwitchRow(
+    Future<void> Function(bool) update, {
+    Key? key,
+  }) => SettingsSwitchRow(
+    key: key,
     title: title,
     value: value,
     onChanged: (next) {

@@ -4227,6 +4227,12 @@
     <string name="aboutUpdatePrereleases">Buscar versiones preliminares</string>
     <string name="aboutUpdatePrereleasesDetail">Ofrecer también versiones candidatas y beta como actualizaciones. Desactivado: solo versiones oficiales.</string>
     <string name="settingsResetDatabase">Restablecer base de datos</string>
-    <string name="settingsResetDatabaseMessage">¿Eliminar los mensajes, medios, fuentes de emoji e historial de búsqueda en caché? Tus ajustes, sesión, borradores y descargas guardadas se conservan.</string>
+    <string name="settingsResetDatabaseMessage">¿Borrar los mensajes, medios, paquetes de emoji, historial de búsqueda, borradores y descargas guardadas de la caché local? Tus ajustes y la sesión se mantienen.</string>
+    <string name="autoDownloadChatTypesTitle">Descargar automáticamente en</string>
+    <string name="autoDownloadChatTypesDetail">Solo los chats de los tipos marcados descargan medios por su cuenta.</string>
+    <string name="autoDownloadChatContacts">Contactos</string>
+    <string name="autoDownloadChatPrivate">Chats privados</string>
+    <string name="autoDownloadChatGroups">Grupos</string>
+    <string name="autoDownloadChatChannels">Canales</string>
     <string name="settingsResetDatabaseDone">Base de datos restablecida</string>
 </resources>

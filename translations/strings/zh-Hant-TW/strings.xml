@@ -4209,6 +4209,12 @@
     <string name="aboutUpdatePrereleases">檢查預發佈版本</string>
     <string name="aboutUpdatePrereleasesDetail">把預發佈與測試版本也作為更新提供。關閉時只檢查正式版本。</string>
     <string name="settingsResetDatabase">重設資料庫</string>
-    <string name="settingsResetDatabaseMessage">刪除本機快取的訊息、媒體、表情字型與搜尋紀錄？你的設定、登入狀態、草稿與已儲存的下載都會保留。</string>
+    <string name="settingsResetDatabaseMessage">刪除本機快取訊息、媒體、表情包、搜尋記錄、草稿與已儲存的下載？設定與登入狀態會保留。</string>
+    <string name="autoDownloadChatTypesTitle">自動下載於</string>
+    <string name="autoDownloadChatTypesDetail">只有勾選的聊天類型會自行下載媒體。</string>
+    <string name="autoDownloadChatContacts">聯絡人</string>
+    <string name="autoDownloadChatPrivate">私聊</string>
+    <string name="autoDownloadChatGroups">群組</string>
+    <string name="autoDownloadChatChannels">頻道</string>
     <string name="settingsResetDatabaseDone">資料庫已重設</string>
 </resources>

@@ -4209,6 +4209,12 @@
     <string name="aboutUpdatePrereleases">사전 출시 버전 확인</string>
     <string name="aboutUpdatePrereleasesDetail">출시 후보와 베타 빌드도 업데이트로 제공합니다. 끄면 정식 릴리스만 확인합니다.</string>
     <string name="settingsResetDatabase">데이터베이스 초기화</string>
-    <string name="settingsResetDatabaseMessage">로컬에 캐시된 메시지, 미디어, 이모지 글꼴, 검색 기록을 삭제할까요? 설정, 로그인 상태, 임시 보관함, 저장된 다운로드는 유지됩니다.</string>
+    <string name="settingsResetDatabaseMessage">로컬에 캐시된 메시지, 미디어, 이모지 팩, 검색 기록, 임시 저장된 메시지, 저장한 다운로드를 삭제할까요? 설정과 세션은 유지됩니다.</string>
+    <string name="autoDownloadChatTypesTitle">자동 다운로드 대상</string>
+    <string name="autoDownloadChatTypesDetail">선택한 종류의 채팅에서만 미디어를 자동으로 내려받습니다.</string>
+    <string name="autoDownloadChatContacts">연락처</string>
+    <string name="autoDownloadChatPrivate">개인 채팅</string>
+    <string name="autoDownloadChatGroups">그룹</string>
+    <string name="autoDownloadChatChannels">채널</string>
     <string name="settingsResetDatabaseDone">데이터베이스를 초기화했습니다</string>
 </resources>

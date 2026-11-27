@@ -4227,6 +4227,12 @@
     <string name="aboutUpdatePrereleases">Rechercher les préversions</string>
     <string name="aboutUpdatePrereleasesDetail">Proposer aussi les versions candidates et bêta comme mises à jour. Désactivé : seules les versions officielles.</string>
     <string name="settingsResetDatabase">Réinitialiser la base de données</string>
-    <string name="settingsResetDatabaseMessage">Supprimer les messages, médias, polices d’emoji et recherches en cache ? Vos réglages, la session, les brouillons et les téléchargements enregistrés sont conservés.</string>
+    <string name="settingsResetDatabaseMessage">Supprimer les messages, médias, packs d’emoji, historique de recherche, brouillons et téléchargements enregistrés en cache ? Vos réglages et votre session sont conservés.</string>
+    <string name="autoDownloadChatTypesTitle">Téléchargement auto dans</string>
+    <string name="autoDownloadChatTypesDetail">Seuls les types de discussion cochés téléchargent des médias automatiquement.</string>
+    <string name="autoDownloadChatContacts">Contacts</string>
+    <string name="autoDownloadChatPrivate">Discussions privées</string>
+    <string name="autoDownloadChatGroups">Groupes</string>
+    <string name="autoDownloadChatChannels">Canaux</string>
     <string name="settingsResetDatabaseDone">Base de données réinitialisée</string>
 </resources>

@@ -115,6 +115,12 @@ extension AppLocalizationsContext on BuildContext {
 }
 
 abstract final class AppStringKeys {
+  static const autoDownloadChatTypesTitle = 'autoDownloadChatTypesTitle';
+  static const autoDownloadChatTypesDetail = 'autoDownloadChatTypesDetail';
+  static const autoDownloadChatContacts = 'autoDownloadChatContacts';
+  static const autoDownloadChatPrivate = 'autoDownloadChatPrivate';
+  static const autoDownloadChatGroups = 'autoDownloadChatGroups';
+  static const autoDownloadChatChannels = 'autoDownloadChatChannels';
   static const storageDownloadLocation = 'storageDownloadLocation';
   static const storageDownloadCacheLocation = 'storageDownloadCacheLocation';
   static const storageDownloadSaveFolder = 'storageDownloadSaveFolder';
