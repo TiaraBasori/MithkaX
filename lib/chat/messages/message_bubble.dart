@@ -5019,11 +5019,12 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   /// 引用 quote block shown above a reply's text.
   ///
-  /// exteraless's reply line, not a second bubble: a faint wash in the quoted
-  /// author's colour, a 3px rule, the author in that colour with their custom
-  /// emoji status watermark, then the quoted body at the message's own size.
-  /// The settings switch turns the author styling off and leaves one plain
-  /// theme-coloured marker.
+  /// exteraless's reply line, not a second bubble: a faint wash, a 3px rule,
+  /// the author in the accent with their custom emoji status watermark, then
+  /// the quoted body one step below the message's size. An INCOMING reply
+  /// takes the quoted author's colour; our own bubble keeps the bubble's ink
+  /// (see [_replyAccentColor]). The settings switch turns the author styling
+  /// off and leaves one plain theme-coloured marker.
   Widget _replyQuote(bool outgoing) {
     final line = _replyAccentColor(outgoing);
     final faded = _messageReplyTextColor(outgoing);
@@ -5041,118 +5042,117 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     // a dark page), a bold 14pt author and a 14pt preview — one line, or five
     // for an explicit quote. It never stretches to the bubble's width: a short
     // reply to a short message is a short panel.
-    return Align(
-      alignment: AlignmentDirectional.centerStart,
-      child: GestureDetector(
-        key: const ValueKey('messageReplyOpenOriginal'),
-        behavior: HitTestBehavior.opaque,
-        onTap: openOriginal,
-        child: Container(
-          key: const ValueKey('messageReplyQuote'),
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: line.withValues(
-              alpha: _brightness == Brightness.dark ? 0.12 : 0.10,
-            ),
-            borderRadius: BorderRadius.circular(4),
-            border: Border(left: BorderSide(color: line, width: 3)),
+    // No Align/Expanded wrapper: either would take the bubble's full width and
+    // stretch a two-word panel across the row. The column's start alignment
+    // keeps the hugged panel on the leading edge.
+    return GestureDetector(
+      key: const ValueKey('messageReplyOpenOriginal'),
+      behavior: HitTestBehavior.opaque,
+      onTap: openOriginal,
+      child: Container(
+        key: const ValueKey('messageReplyQuote'),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: line.withValues(
+            alpha: _brightness == Brightness.dark ? 0.12 : 0.10,
           ),
-          child: Stack(
-            children: [
-              if (statusId != 0) ...[
-                Positioned(
-                  right: -10,
-                  top: -12,
-                  child: IgnorePointer(
-                    child: Opacity(
-                      opacity: 0.14,
-                      child: StatusEmojiView(
-                        key: const ValueKey('messageReplySenderEmojiStatus'),
-                        id: statusId,
-                        size: 46,
-                        color: line,
-                        animate: false,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 26,
-                  bottom: -12,
-                  child: IgnorePointer(
-                    child: Opacity(
-                      opacity: 0.10,
-                      child: StatusEmojiView(
-                        id: statusId,
-                        size: 26,
-                        color: line,
-                        animate: false,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              Padding(
-                // The thumbnail sits at 8/5 in the reference panel and the
-                // text starts 3pt after it; without a thumbnail the text
-                // takes the panel's own 10pt inset.
-                padding: EdgeInsets.fromLTRB(hasThumb ? 8 : 10, 5, 10, 5),
+          borderRadius: BorderRadius.circular(4),
+          border: Border(left: BorderSide(color: line, width: 3)),
+        ),
+        child: Stack(
+          children: [
+            if (statusId != 0) ...[
+              Positioned(
+                right: -10,
+                top: -12,
                 child: IgnorePointer(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (message.replyToImage != null) ...[
-                        SizedBox(
-                          key: const ValueKey('messageReplyMediaPreview'),
-                          width: 34,
-                          height: 34,
-                          child: TDImage(
-                            photo:
-                                message.replyToImage?.thumbnail ??
-                                message.replyToImage,
-                            cornerRadius: 4,
-                            cacheWidth: _cachePx(34),
-                            cacheHeight: _cachePx(34),
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                      ],
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (sender.isNotEmpty)
-                              Text.rich(
-                                TextSpan(
-                                  text: sender,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 14, color: line),
-                              ),
-                            if ((message.replyPreviewText ?? '')
-                                .isNotEmpty) ...[
-                              const SizedBox(height: 1),
-                              _replyPreviewText(
-                                faded,
-                                outgoing,
-                                maxLines: message.replyToQuote != null ? 5 : 1,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+                  child: Opacity(
+                    opacity: 0.14,
+                    child: StatusEmojiView(
+                      key: const ValueKey('messageReplySenderEmojiStatus'),
+                      id: statusId,
+                      size: 46,
+                      color: line,
+                      animate: false,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 26,
+                bottom: -12,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.10,
+                    child: StatusEmojiView(
+                      id: statusId,
+                      size: 26,
+                      color: line,
+                      animate: false,
+                    ),
                   ),
                 ),
               ),
             ],
-          ),
+            Padding(
+              // The thumbnail sits at 8/5 in the reference panel and the
+              // text starts 3pt after it; without a thumbnail the text
+              // takes the panel's own 10pt inset.
+              padding: EdgeInsets.fromLTRB(hasThumb ? 8 : 10, 5, 10, 5),
+              child: IgnorePointer(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (message.replyToImage != null) ...[
+                      SizedBox(
+                        key: const ValueKey('messageReplyMediaPreview'),
+                        width: 34,
+                        height: 34,
+                        child: TDImage(
+                          photo:
+                              message.replyToImage?.thumbnail ??
+                              message.replyToImage,
+                          cornerRadius: 4,
+                          cacheWidth: _cachePx(34),
+                          cacheHeight: _cachePx(34),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                    ],
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (sender.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                text: sender,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, color: line),
+                            ),
+                          if ((message.replyPreviewText ?? '').isNotEmpty) ...[
+                            const SizedBox(height: 1),
+                            _replyPreviewText(
+                              faded,
+                              outgoing,
+                              maxLines: message.replyToQuote != null ? 5 : 1,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

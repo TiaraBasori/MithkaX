@@ -81,6 +81,9 @@ void main() {
     // panel must stay well under it and under the bubble it sits in.
     expect(panel.width, lessThan(200));
     expect(panel.width, lessThanOrEqualTo(bubble.width));
+    // The bubble itself must hug too: an expanded panel would still stretch
+    // the whole row.
+    expect(bubble.width, lessThan(200));
   });
 
   testWidgets('the author is bold and the preview one step below the body', (
