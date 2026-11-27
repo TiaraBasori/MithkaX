@@ -596,9 +596,9 @@
     <string name="autoDownloadSettingsPreloadLargeVideos">预加载大视频以便流式播放</string>
     <string name="autoDownloadSettingsPreloadNextAudio">预加载下一段音频</string>
     <string name="autoDownloadSettingsPreloadStories">预加载快拍</string>
-    <string name="autoDownloadSettingsPreloadingAndCalls">预加载和调用</string>
+    <string name="autoDownloadSettingsPreloadingAndCalls">预加载与通话</string>
     <string name="autoDownloadSettingsSizeNever">从不</string>
-    <string name="autoDownloadSettingsTheseSettingsAreAppliedDirectlyToTDLibFor">这些设置直接应用于 Wi-Fi、移动数据和漫游的 TDLib。当全自动下载关闭时，视频播放仍然可以流式传输下载的前缀。</string>
+    <string name="autoDownloadSettingsTheseSettingsAreAppliedDirectlyToTDLibFor">这些设置直接作用于 TDLib 的 Wi-Fi、移动数据和漫游配置。关闭自动下载后，视频播放仍可边下边播。</string>
     <string name="autoDownloadSettingsUseLessDataForCalls">通话时减少数据用量</string>
     <string name="autoDownloadSettingsVideos">视频</string>
     <string name="autoDownloadSettingsWhenConnectedToWiFi">连接 Wi-Fi 时</string>
@@ -1589,7 +1589,7 @@
     <string name="downloadsPauseAllDownloads">暂停所有下载</string>
     <string name="downloadsPausedProgress">已暂停 · {value1} / {value2}</string>
     <string name="downloadsRefreshDownloads">刷新下载</string>
-    <string name="downloadsRemoveAndDeleteFile">删除并删除文件</string>
+    <string name="downloadsRemoveAndDeleteFile">移除并删除文件</string>
     <string name="downloadsRemoveAndKeepCachedFile">删除并保留缓存文件</string>
     <string name="downloadsRemoveFromDownloads">从下载中删除？</string>
     <string name="downloadsResume">继续下载</string>
@@ -4214,8 +4214,8 @@
     <string name="aboutUpdatePrereleasesDetail">把预发布和测试版本也作为更新提供。关闭时只检查正式版本。</string>
     <string name="settingsResetDatabase">重置数据库</string>
     <string name="settingsResetDatabaseMessage">删除本地消息数据库并重新从服务器同步？媒体缓存、表情包、搜索记录、草稿和已保存的下载也会一并清除。设置和登录状态会保留。</string>
-    <string name="autoDownloadChatTypesTitle">自动下载于</string>
-    <string name="autoDownloadChatTypesDetail">只有勾选的聊天类型会自行下载媒体。</string>
+    <string name="autoDownloadChatTypesTitle">自动下载范围</string>
+    <string name="autoDownloadChatTypesDetail">仅勾选的聊天类型会自动下载媒体。</string>
     <string name="autoDownloadChatContacts">联系人</string>
     <string name="autoDownloadChatPrivate">私聊</string>
     <string name="autoDownloadChatGroups">群组</string>
