@@ -455,20 +455,23 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                                 : 0,
                           ),
                         ),
-                      // A caption owns the meta line below the grid; without
-                      // one the send time sits ON the last photo, exactly where
-                      // the reference client draws it (`shouldDrawTimeOnMedia`).
-                      if (captionMessage == null)
-                        Positioned(
-                          right: 5,
-                          bottom: 3,
-                          child: IgnorePointer(
-                            child: _albumMetaRow(context, interactionOwner),
-                          ),
-                        ),
                     ],
                   ),
                 ),
+                // Media never carries the time ON the picture: a caption
+                // gives the album a bubble, which stamps the time in its
+                // corner, and a caption-less grid puts the time in its own
+                // line under the photos.
+                if (captionMessage == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: IgnorePointer(
+                        child: _albumMetaRow(context, interactionOwner),
+                      ),
+                    ),
+                  ),
                 if (captionMessage != null)
                   Builder(
                     builder: (captionContext) => GestureDetector(
@@ -670,17 +673,10 @@ class ImageMediaAlbumBubble extends StatelessWidget {
     );
   }
 
-  /// The in-bubble send time of an album, in the reference client's corner.
-  /// The caption block carries it under the text; a caption-less album paints
-  /// it over the last photo, hence the white ink + shadow variant.
+  /// The album's send time. The caption block carries it under the text; a
+  /// caption-less grid carries it under the photos. Never on the picture.
   Widget _albumMetaRow(BuildContext context, ChatMessage owner) {
     final theme = context.watch<ThemeController>();
-    final overMedia = owner.text.trim().isEmpty;
-    final color = overMedia
-        ? Colors.white.withValues(alpha: 0.96)
-        : theme.alwaysShowMessageTime
-        ? context.colors.textTertiary
-        : context.colors.textTertiary;
     return Text(
       theme.alwaysShowMessageTime
           ? DateText.messageDetailLabel(owner.date)
@@ -691,16 +687,7 @@ class ImageMediaAlbumBubble extends StatelessWidget {
       style: TextStyle(
         fontSize: AppTextSize.chatTime,
         height: 1.1,
-        color: color,
-        shadows: overMedia
-            ? const [
-                Shadow(
-                  color: Color(0x66000000),
-                  blurRadius: 3,
-                  offset: Offset(0, 1),
-                ),
-              ]
-            : null,
+        color: context.colors.textTertiary,
       ),
     );
   }

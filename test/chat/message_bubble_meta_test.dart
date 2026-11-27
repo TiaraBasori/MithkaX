@@ -221,4 +221,60 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 2));
   });
+
+  testWidgets('a caption-less album keeps the time under the photos', (
+    tester,
+  ) async {
+    final preferences = await SharedPreferences.getInstance();
+    final theme = ThemeController(preferences);
+    addTearDown(theme.dispose);
+    ChatMessage tile(int id) => ChatMessage(
+      id: id,
+      isOutgoing: true,
+      text: '',
+      date: 1700000000,
+      contentType: 'messageDocument',
+      senderId: 1,
+      document: MessageDocument(
+        fileName: '$id.pdf',
+        size: 10,
+        ext: 'pdf',
+        file: TdFileRef(id: id),
+      ),
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ThemeController>.value(
+        value: theme,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ImageMediaAlbumBubble(
+                messages: [tile(41), tile(42)],
+                peerTitle: 'Channel',
+                isGroup: false,
+                meId: 1,
+                onOpenImage: (message) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final timeRect = tester.getRect(
+      find.byKey(const ValueKey('messageTappedTimestamp')),
+    );
+    final tileRect = tester.getRect(
+      find.byKey(const ValueKey('messageImageAlbumTile-41')),
+    );
+    expect(
+      timeRect.top,
+      greaterThanOrEqualTo(tileRect.bottom),
+      reason: 'the time must sit outside the pictures, below them',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 2));
+  });
 }

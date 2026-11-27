@@ -24,6 +24,7 @@ import 'package:provider/provider.dart';
 import '../../call/call_elapsed_text.dart';
 import '../../components/app_icons.dart';
 import '../../components/document_file_icon.dart';
+import '../../components/full_page_back_swipe.dart';
 import '../../components/photo_avatar.dart';
 import '../../components/toast.dart';
 import '../../components/ui_components.dart';
@@ -2111,10 +2112,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// Gram transfer): their footer owns the message's meta line.
   Widget _withBubbleMeta(Widget child, bool outgoing, {bool meta = true}) {
     if (!meta) return child;
-    // Only a real bubble carries its time in the corner. Media and stickers
-    // have no bubble to sit in, and stamping the time over the artwork hides
-    // the picture — the band below (`_withFloatingBand`) draws it instead.
-    if (!_showsMessageBubbleSurface) return child;
+    // Only text carries its time in the bubble's corner. A bubble-less message
+    // (album, round video) and a media/sticker message without a caption would
+    // paint the stamp ON the picture — the band below (`_withFloatingBand`)
+    // draws those instead.
+    if (_stampsTimeOutside) return child;
     // A short bubble still has to hold its time on one line, so the meta's own
     // width is a floor for the bubble: the reference client widens
     // `backgroundWidth` to fit `timeWidth` the same way.
@@ -2171,6 +2173,25 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       ? DateText.messageDetailLabel(message.date)
       : DateText.bubbleLabel(message.date);
 
+  /// Whether the send time lives in the band under the message rather than in
+  /// a bubble corner.
+  ///
+  /// True without a bubble surface, and true for a media or sticker message
+  /// with no caption: that card is filled by the artwork, so a corner stamp
+  /// would sit on the picture itself.
+  bool get _stampsTimeOutside {
+    if (!_showsMessageBubbleSurface) return true;
+    if (message.text.trim().isNotEmpty) return false;
+    return switch (message.contentType) {
+      'messagePhoto' ||
+      'messageVideo' ||
+      'messageAnimation' ||
+      'messageSticker' ||
+      'messageVideoNote' => true,
+      _ => false,
+    };
+  }
+
   /// The band under the bubble's outside edge: one chip language for the
   /// whole band, and its right edge is the bubble's own right edge.
   Widget _withFloatingBand(Widget child, bool outgoing, {bool meta = true}) {
@@ -2226,7 +2247,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         : null;
     // Bubble-less content (photo, sticker, round video) keeps its send time in
     // this band: the reference puts it under the media, never on top of it.
-    final timeChip = meta && !_showsMessageBubbleSurface && !message.isService
+    final timeChip = meta && _stampsTimeOutside && !message.isService
         ? Row(
             key: ValueKey('messageBandTime-${message.id}'),
             mainAxisSize: MainAxisSize.min,
@@ -3927,12 +3948,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               : c.divider.withValues(alpha: 0.8),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: _LatexView(
-          expression: expression,
-          style: TextStyle(fontSize: 15, color: base),
-          display: true,
+      child: ExcludeFromBackSwipe(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _LatexView(
+            expression: expression,
+            style: TextStyle(fontSize: 15, color: base),
+            display: true,
+          ),
         ),
       ),
     );
@@ -4070,14 +4093,16 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         ],
         ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Table(
-              defaultColumnWidth: const IntrinsicColumnWidth(),
-              border: block.isBordered
-                  ? TableBorder.all(color: border, width: 0.8)
-                  : null,
-              children: rows,
+          child: ExcludeFromBackSwipe(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                defaultColumnWidth: const IntrinsicColumnWidth(),
+                border: block.isBordered
+                    ? TableBorder.all(color: border, width: 0.8)
+                    : null,
+                children: rows,
+              ),
             ),
           ),
         ),
@@ -5459,19 +5484,21 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                   ),
                 ),
               ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-              child: _richText(
-                text,
-                base,
-                link,
-                start,
-                end,
-                false,
-                false,
-                entities: entities,
-                fontSize: codeSize,
+            ExcludeFromBackSwipe(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+                child: _richText(
+                  text,
+                  base,
+                  link,
+                  start,
+                  end,
+                  false,
+                  false,
+                  entities: entities,
+                  fontSize: codeSize,
+                ),
               ),
             ),
           ],

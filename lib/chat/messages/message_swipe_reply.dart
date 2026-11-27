@@ -10,6 +10,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:mithka/platform/app_haptics.dart';
 import '../../components/app_icons.dart';
@@ -202,6 +203,48 @@ class MessageSwipeReplyController {
   }
 }
 
+/// The row's swipe recognizer, axis-locked to horizontal travel.
+///
+/// A plain [HorizontalDragGestureRecognizer] accepts the moment |dx| crosses
+/// the touch slop, so a finger that is really scrolling often owns more
+/// diagonal than horizontal distance and the row steals the transcript's
+/// vertical drag — the scroll stutters and dies. This recognizer refuses to
+/// accept while the vertical travel is at least the horizontal one, leaving
+/// the contact to the scrollable; a sideways swipe is unaffected.
+class _SwipeReplyHorizontalDragRecognizer
+    extends HorizontalDragGestureRecognizer {
+  Offset _down = Offset.zero;
+  Offset _last = Offset.zero;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    _down = event.position;
+    _last = event.position;
+    super.addAllowedPointer(event);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event is PointerMoveEvent) _last = event.position;
+    super.handleEvent(event);
+  }
+
+  @override
+  bool hasSufficientGlobalDistanceToAccept(
+    PointerDeviceKind pointerDeviceKind,
+    double? deviceTouchSlop,
+  ) {
+    final travel = _last - _down;
+    // The same 1.2 lean the video surface uses: a finger has to mean sideways
+    // before the row takes the contact from the scrollable.
+    if (travel.dx.abs() < travel.dy.abs() * 1.2) return false;
+    return super.hasSufficientGlobalDistanceToAccept(
+      pointerDeviceKind,
+      deviceTouchSlop,
+    );
+  }
+}
+
 /// Wraps [child] in the swipe affordance: a row-wide recognizer, the trailing
 /// glyph, and the travel transform.
 ///
@@ -233,16 +276,25 @@ Widget buildMessageSwipeReply({
     WidgetsBinding.instance.addPostFrameCallback((_) => controller.cancel());
   }
   final row = interactive
-      ? GestureDetector(
+      ? RawGestureDetector(
           behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: (_) => controller.beginDrag(),
-          onHorizontalDragUpdate: (details) =>
-              controller.dragBy(details.delta.dx),
-          onHorizontalDragEnd: (details) => controller.finish(
-            onReply: onReply,
-            primaryVelocity: details.primaryVelocity,
-          ),
-          onHorizontalDragCancel: controller.cancel,
+          gestures: {
+            _SwipeReplyHorizontalDragRecognizer:
+                GestureRecognizerFactoryWithHandlers<
+                  _SwipeReplyHorizontalDragRecognizer
+                >(
+                  _SwipeReplyHorizontalDragRecognizer.new,
+                  (recognizer) => recognizer
+                    ..onStart = ((_) => controller.beginDrag())
+                    ..onUpdate = ((details) =>
+                        controller.dragBy(details.delta.dx))
+                    ..onEnd = ((details) => controller.finish(
+                      onReply: onReply,
+                      primaryVelocity: details.primaryVelocity,
+                    ))
+                    ..onCancel = controller.cancel,
+                ),
+          },
           child: child,
         )
       : child;
