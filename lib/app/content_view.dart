@@ -72,29 +72,46 @@ class ContentView extends StatefulWidget {
 
 class _ContentViewState extends State<ContentView> {
   bool _seenLoginSurface = false;
+  bool _showedReadySurface = false;
 
   @override
   Widget build(BuildContext context) {
     final step = context.watch<AuthManager>().step;
+    final account = context.watch<AccountStore>();
+    final readyDuringReload =
+        step is AuthReloading &&
+        !account.hasPendingAdd &&
+        account.activeUserId != null;
+    final showsReadySurface = step is AuthReady || readyDuringReload;
     // Only a login → main hand-off earns the crossfade: a login-family step
     // was on screen and then auth completed. A cold start goes splash → main
-    // without ever showing login, keeping its deliberate jump cut.
-    final animated = gateAnimatesHandOff(
-      step,
-      seenLoginSurface: _seenLoginSurface,
-    );
+    // without ever showing login, keeping its deliberate jump cut. A switch
+    // between two READY surfaces (sidebar account switch) is a jump cut too:
+    // cross-fading two full shells left elements of both accounts stacked
+    // for 250 ms — the flicker the switcher showed.
+    final animated =
+        !(showsReadySurface && _showedReadySurface) &&
+        gateAnimatesHandOff(step, seenLoginSurface: _seenLoginSurface);
     _seenLoginSurface = AuthGateTracker.sawLoginSurface(step);
+    _showedReadySurface = showsReadySurface;
     // The account identity gates what the ready surface shows (and the
     // upstream shell keys on it via main.dart's KeyedSubtree); rebinding the
     // ready surface per identity keeps its inner state scoped to one account
     // WITHOUT tearing down this gate — the AnimatedSwitcher below must
     // survive the slot change to crossfade the add-account hand-off.
-    final account = context.watch<AccountStore>();
+    final Widget readyChild = KeyedSubtree(
+      key: ValueKey((account.activeSlot, account.activeUserId)),
+      child: const MainTabView(),
+    );
     final Widget child = switch (step) {
-      AuthReady() => KeyedSubtree(
-        key: ValueKey((account.activeSlot, account.activeUserId)),
-        child: const MainTabView(),
-      ),
+      AuthReady() => readyChild,
+      // A reload of an ALREADY-SIGNED-IN account (account switch, cancel of a
+      // pending add) is not a form change: TDLib is re-reading the same
+      // ready client. Painting LoginView for those frames flashed the phone
+      // form (and tore the shell down) on every sidebar switch. Keep the
+      // ready surface; an add-account reload has a pending slot and falls
+      // through to the login surface as before.
+      AuthReloading() when readyDuringReload => readyChild,
       // A real cold start (and a logout) paints the splash. AuthReloading is a
       // re-read of an already-running client — account switch or add account —
       // and the login surface is what the user asked for, so it stays on screen.

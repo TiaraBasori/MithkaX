@@ -53,6 +53,7 @@ class BotButtonLabel extends StatelessWidget {
     required this.fontSize,
     required this.fontWeight,
     this.iconSize = 18,
+    this.badgeIcon,
   });
 
   final MessageButton button;
@@ -60,6 +61,10 @@ class BotButtonLabel extends StatelessWidget {
   final double fontSize;
   final FontWeight fontWeight;
   final double iconSize;
+
+  /// A compact type badge (link / copy / web app) after the label, matching
+  /// the corner badge chat inline buttons use.
+  final AppIconData? badgeIcon;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -87,6 +92,10 @@ class BotButtonLabel extends StatelessWidget {
           ),
         ),
       ),
+      if (badgeIcon case final icon?) ...[
+        const SizedBox(width: 4),
+        AppIcon(icon, size: iconSize - 4, color: color.withValues(alpha: 0.72)),
+      ],
     ],
   );
 }

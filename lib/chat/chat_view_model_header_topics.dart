@@ -150,6 +150,7 @@ extension ChatViewModelHeaderTopics on ChatViewModel {
             }
             _applyPeerBotCapabilities(user, notify: false);
             peerOnline = TDParse.isUserOnline(user);
+            peerPresence = TDParse.userAvatarPresence(user);
             peerStatusText = TDParse.userStatus(user);
             firstContactInfo = firstContactInfo?.withUser(user);
           } catch (error) {
@@ -257,12 +258,18 @@ extension ChatViewModelHeaderTopics on ChatViewModel {
   /// topic transcript of the same chat can paint a full-height header on its
   /// first frame instead of growing one async query later.
   void _storeHeaderSnapshot() {
-    if (!isForum) return;
+    // Forums and bot topic chats both rebuild their transcript on a topic
+    // switch; only ordinary chats have nothing to carry across.
+    if (!supportsTopics) return;
     final existing = ChatHeaderStateCache.read(_accountSlot, chatId);
     ChatHeaderStateCache.write(
       ChatHeaderSnapshot(
         accountSlot: _accountSlot,
         chatId: chatId,
+        isForum: isForum,
+        hasForumTabs: hasForumTabs,
+        supportsBotTopics: supportsBotTopics,
+        botTopicsManageable: botTopicsManageable,
         isGroup: isGroup,
         isChannel: isChannel,
         isBotApiAccount: isBotApiAccount,
@@ -1672,13 +1679,17 @@ extension ChatViewModelHeaderTopics on ChatViewModel {
     notifyListeners();
   }
 
-  Future<void> pinTodo(ChatMessage message) async {
+  Future<void> pinTodo(
+    ChatMessage message, {
+    bool notify = false,
+    bool onlyForSelf = false,
+  }) async {
     await _topicAccountQuery({
       '@type': 'pinChatMessage',
       'chat_id': chatId,
       'message_id': message.id,
-      'disable_notification': true,
-      'only_for_self': false,
+      'disable_notification': !notify,
+      'only_for_self': onlyForSelf,
     });
     pinnedMessage = message;
     pinnedMessages = [

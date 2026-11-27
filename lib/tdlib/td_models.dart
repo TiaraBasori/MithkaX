@@ -385,7 +385,7 @@ class RichMessageBlock {
 
   const RichMessageBlock.buttonRow(
     List<MessageButton> buttons, {
-    String horizontalAlignment = 'left',
+    String horizontalAlignment = 'fill',
   }) : this._(
          kind: RichMessageBlockKind.buttonRow,
          buttons: buttons,
@@ -579,6 +579,7 @@ class ChatSummary {
     this.peerIsPremium = false,
     this.peerAccentColorId = -1,
     this.peerEmojiStatusId = 0,
+    this.peerPresence = AvatarPresence.none,
     this.isForum = false,
     this.supportsBotTopics = false,
     this.lastChatMessage,
@@ -624,6 +625,10 @@ class ChatSummary {
   bool peerIsPremium;
   int peerAccentColorId;
   int peerEmojiStatusId;
+
+  /// Private-chat peer's avatar-dot presence. Groups and channels never have
+  /// one: a chat has no status of its own.
+  AvatarPresence peerPresence;
   bool isForum;
   bool supportsBotTopics;
   ChatMessage? lastChatMessage;
@@ -770,6 +775,7 @@ class ChatMessage {
     this.senderIsDeleted = false,
     this.senderAccentColorId = -1,
     this.senderEmojiStatusId = 0,
+    this.senderPresence = AvatarPresence.none,
     this.mediaAlbumId = 0,
     this.animatedSticker,
     this.videoSticker,
@@ -807,6 +813,9 @@ class ChatMessage {
     this.replyToImage,
     this.replyToImageWidth,
     this.replyToImageHeight,
+    this.replyToSenderAccentColorId = -1,
+    this.replyToSenderEmojiStatusId = 0,
+    this.replyToSenderIsPremium = false,
     this.serviceUserIds = const [],
     this.appearancePreview,
     this.communityPreview,
@@ -897,6 +906,10 @@ class ChatMessage {
   bool senderIsDeleted;
   int senderAccentColorId;
   int senderEmojiStatusId;
+
+  /// The sender's avatar-dot presence at resolve time; refreshed in place by
+  /// `updateUserStatus` through the sender cache.
+  AvatarPresence senderPresence;
   int mediaAlbumId;
   TdFileRef? animatedSticker; // .tgs (Lottie) sticker file
   TdFileRef? videoSticker; // .webm video sticker file
@@ -960,6 +973,13 @@ class ChatMessage {
   TdFileRef? replyToImage; // thumbnail/photo shown inside the quote block
   int? replyToImageWidth;
   int? replyToImageHeight;
+
+  /// The quoted author's identity styling, so a reply marker can use the
+  /// ORIGINAL sender's colour and custom emoji instead of the current
+  /// message's. -1 / 0 mean the quote has no resolved peer styling.
+  int replyToSenderAccentColorId;
+  int replyToSenderEmojiStatusId;
+  bool replyToSenderIsPremium;
 
   // Service messages such as member joins may carry affected user ids, resolved
   // by the chat view model once TDLib can provide display names.
@@ -1600,6 +1620,21 @@ class MessageSummaryCard {
   final String detail;
   final TdFileRef? image;
   final TdFileRef? video;
+}
+
+/// A peer's presence as the avatar corner dot draws it.
+///
+/// exteraless derives four colours from the user's status
+/// (`AndroidUtil.getOnlineColor`): online, and offline for under 15 / 30 / 60
+/// minutes. TDLib's coarser `userStatusRecently` / `LastWeek` / `LastMonth`
+/// carry no minute, so they draw nothing — the same way exteraless draws
+/// nothing for a status without an expiry.
+enum AvatarPresence {
+  none,
+  online,
+  within15Minutes,
+  within30Minutes,
+  within60Minutes,
 }
 
 class Contact {

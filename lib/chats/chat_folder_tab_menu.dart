@@ -33,6 +33,10 @@ Future<void> showChatFolderReorderSheet({
   context: context,
   isScrollControlled: true,
   backgroundColor: Colors.transparent,
+  // The tab's own Navigator lives INSIDE the shell whose glass bottom bar is
+  // painted over it; a sheet pushed there is always under the bar. The root
+  // navigator puts the reorder panel in the overlay above the whole shell.
+  useRootNavigator: true,
   builder: (_) => ChatFolderReorderSheet(
     folders: folders,
     mainListPosition: mainListPosition,

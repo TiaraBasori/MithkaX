@@ -1474,53 +1474,15 @@ class _DesktopCompactSearchThumb extends StatelessWidget {
   final _SearchHit hit;
 
   @override
-  Widget build(BuildContext context) {
-    final image = hit.thumbnail ?? hit.photo;
-    if (hit.chat != null || hit.userId != null && hit.message == null) {
-      return PhotoAvatar(title: hit.title, photo: hit.photo, size: 40);
-    }
-    if (image != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.control),
-        child: SizedBox.square(
-          dimension: 40,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              TDImage(photo: image),
-              if (hit.message?.video != null)
-                Center(
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF000000).withValues(alpha: 0.50),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const AppIcon(
-                      HeroAppIcons.play,
-                      size: 11,
-                      color: Color(0xFFFFFFFF),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      );
-    }
-    return Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: hit.tint.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppRadius.control),
-      ),
-      child: AppIcon(hit.icon, size: 20, color: hit.tint),
-    );
-  }
+  Widget build(BuildContext context) => SearchHitLeadingImage(
+    title: hit.avatarTitle,
+    isPeer: hit.isPeerResult,
+    size: 40,
+    photo: hit.photo,
+    media: hit.media,
+    icon: hit.icon,
+    tint: hit.tint,
+  );
 }
 
 class SearchView extends StatefulWidget {
@@ -2089,54 +2051,15 @@ class _SearchViewState extends State<SearchView> {
     );
   }
 
-  Widget _hitThumb(_SearchHit hit) {
-    final image = hit.thumbnail ?? hit.photo;
-    if (hit.chat != null || hit.userId != null && hit.message == null) {
-      return PhotoAvatar(title: hit.title, photo: hit.photo, size: 54);
-    }
-    if (image != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.control),
-        child: SizedBox(
-          width: 54,
-          height: 54,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              TDImage(photo: image),
-              if (hit.message?.video != null)
-                Center(
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF000000).withValues(alpha: 0.50),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const AppIcon(
-                      HeroAppIcons.play,
-                      size: 13,
-                      color: Color(0xFFFFFFFF),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      );
-    }
-    return Container(
-      width: 54,
-      height: 54,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: hit.tint.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppRadius.control),
-      ),
-      child: AppIcon(hit.icon, size: 24, color: hit.tint),
-    );
-  }
+  Widget _hitThumb(_SearchHit hit) => SearchHitLeadingImage(
+    title: hit.avatarTitle,
+    isPeer: hit.isPeerResult,
+    size: 54,
+    photo: hit.photo,
+    media: hit.media,
+    icon: hit.icon,
+    tint: hit.tint,
+  );
 
   Widget _empty(String text) {
     final c = context.colors;
@@ -2599,10 +2522,10 @@ class _SearchViewModel extends ChangeNotifier {
           (a, b) => (b.integer('date') ?? 0).compareTo(a.integer('date') ?? 0),
         );
       final seen = <String>{};
-      final out = <_SearchHit>[];
+      final parsed = <(ChatMessage, int, _SearchSource)>[];
       final sourceCache = <int, _SearchSource>{};
       for (final object in raw) {
-        if (!_isCurrent(tab, runId, trimmed) || out.length >= resultLimit) {
+        if (!_isCurrent(tab, runId, trimmed) || parsed.length >= resultLimit) {
           break;
         }
         final chatId = object.int64('chat_id');
@@ -2612,8 +2535,19 @@ class _SearchViewModel extends ChangeNotifier {
         if (message == null) continue;
         final key = '$chatId:${message.id}';
         if (!seen.add(key)) continue;
-        out.add(_SearchHit.message(message, chatId: chatId, source: source));
+        parsed.add((message, chatId, source));
       }
+      final senderPhotos = await _senderPhotosFor(parsed);
+      if (!_isCurrent(tab, runId, trimmed)) return;
+      final out = <_SearchHit>[
+        for (final (message, chatId, source) in parsed)
+          _SearchHit.message(
+            message,
+            chatId: chatId,
+            source: source,
+            senderPhoto: senderPhotos[message.senderId],
+          ),
+      ];
       _finish(tab, runId, trimmed, out);
     } catch (_) {
       _finish(tab, runId, trimmed, const []);
@@ -2693,6 +2627,31 @@ class _SearchViewModel extends ChangeNotifier {
     }
   }
 
+  /// Resolves the avatar of each message's actual author. A search hit used to
+  /// lead with the chat photo, which names the wrong person for a group search
+  /// result; one request per distinct sender fills every row.
+  Future<Map<int, TdFileRef?>> _senderPhotosFor(
+    List<(ChatMessage, int, _SearchSource)> messages,
+  ) async {
+    final photos = <int, TdFileRef?>{};
+    final pending = <int, Future<TdFileRef?>>{};
+    for (final (message, _, source) in messages) {
+      // A media/music hit paints its own picture, so it needs no avatar.
+      if (_SearchHit._messageMediaThumb(message) != null) continue;
+      final id = message.senderId;
+      if (id == null) continue;
+      pending.putIfAbsent(
+        id,
+        () => messageSenderPhoto(message, chatPhoto: source.photo),
+      );
+    }
+    await Future.wait([
+      for (final entry in pending.entries)
+        entry.value.then((photo) => photos[entry.key] = photo),
+    ]);
+    return photos;
+  }
+
   Future<_SearchSource> _sourceFor(int chatId) async {
     try {
       final chat = await TdClient.shared.query({
@@ -2731,6 +2690,103 @@ class _SearchViewModel extends ChangeNotifier {
   }
 }
 
+/// The avatar a message search hit leads with: its sender's profile photo, or
+/// [chatPhoto] when the message has no user/chat author (service, anonymous).
+@visibleForTesting
+Future<TdFileRef?> messageSenderPhoto(
+  ChatMessage message, {
+  TdFileRef? chatPhoto,
+}) async {
+  if (message.senderPhoto != null) return message.senderPhoto;
+  final id = message.senderId;
+  if (id == null || id == 0) return chatPhoto;
+  try {
+    final object = id > 0
+        ? await TdClient.shared.query({'@type': 'getUser', 'user_id': id})
+        : await TdClient.shared.query({'@type': 'getChat', 'chat_id': id});
+    if (id > 0) {
+      message.senderName ??= TDParse.userName(object);
+    } else {
+      message.senderName ??= object.str('title');
+    }
+    return TDParse.smallPhoto(
+      id > 0 ? object.obj('profile_photo') : object.obj('photo'),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/// The leading image of a search row.
+///
+/// Text, link, file and voice hits identify the message's SENDER with the same
+/// round avatar the chat list uses (not the chat the search found them in). A
+/// media hit shows its own thumbnail, and a music hit shows the track cover,
+/// both in a rounded square: the picture IS the result. Hits with no identity (a `tg://` link suggestion) keep their
+/// glyph in the same circle.
+class SearchHitLeadingImage extends StatelessWidget {
+  const SearchHitLeadingImage({
+    super.key,
+    required this.title,
+    required this.isPeer,
+    required this.size,
+    required this.icon,
+    required this.tint,
+    this.photo,
+    this.media,
+  });
+
+  /// The peer's name; the monogram falls back to it when there is no photo.
+  final String title;
+
+  /// True for a chat / user / message hit, whose leading image is an identity.
+  final bool isPeer;
+  final double size;
+  final TdFileRef? photo;
+
+  /// A media thumbnail (`message.image` for photo/video/animation) or a
+  /// music cover. Non-null wins over the peer avatar and draws as a rounded
+  /// square instead of a circle.
+  final TdFileRef? media;
+  final AppIconData icon;
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = this.media;
+    if (media != null) {
+      return ClipRRect(
+        key: const ValueKey('search-hit-media-thumb'),
+        borderRadius: BorderRadius.circular(size * 0.15),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: TDImage(
+            photo: media.thumbnail ?? media,
+            cornerRadius: 0,
+            cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+            cacheHeight: (size * MediaQuery.devicePixelRatioOf(context))
+                .round(),
+          ),
+        ),
+      );
+    }
+    if (isPeer || photo != null) {
+      return PhotoAvatar(title: title, photo: photo, size: size);
+    }
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.14),
+        shape: BoxShape.circle,
+      ),
+      child: AppIcon(icon, size: size * 0.44, color: tint),
+    );
+  }
+}
+
 class _SearchHit {
   _SearchHit({
     required this.title,
@@ -2738,7 +2794,6 @@ class _SearchHit {
     this.timeLabel = '',
     this.date = 0,
     this.sourceTitle = '',
-    this.thumbnail,
     AppIconData? icon,
     this.tint = const Color(0xFF12B7F5),
     this.photo,
@@ -2747,6 +2802,7 @@ class _SearchHit {
     this.chatId,
     this.message,
     this.telegramLink,
+    this.media,
   }) : icon = icon ?? HeroAppIcons.message;
 
   factory _SearchHit.chat(ChatSummary chat, {String? subtitle}) => _SearchHit(
@@ -2792,23 +2848,27 @@ class _SearchHit {
     ChatMessage message, {
     required int chatId,
     required _SearchSource source,
+    TdFileRef? senderPhoto,
   }) {
     final document = message.document;
     final music = message.music;
     final title = document?.fileName ?? music?.title ?? _messageTitle(message);
     final subtitle = _messageSubtitle(message, source.title);
+    final media = _messageMediaThumb(message);
     return _SearchHit(
       title: title,
       subtitle: subtitle,
       timeLabel: DateText.listLabel(message.date),
       date: message.date,
       sourceTitle: source.title,
-      photo: source.photo,
-      thumbnail: message.previewImage ?? music?.cover,
+      // A message hit identifies the person who wrote it, not the chat the
+      // search found it in. Media/music hits replace this with their picture.
+      photo: senderPhoto ?? source.photo,
       chatId: chatId,
       message: message,
       icon: _messageIcon(message),
       tint: _messageTint(message),
+      media: media,
     );
   }
 
@@ -2818,12 +2878,27 @@ class _SearchHit {
   final int date;
   final String sourceTitle;
   final TdFileRef? photo;
-  final TdFileRef? thumbnail;
   final ChatSummary? chat;
+
+  /// The name the leading avatar's monogram draws from: the message's sender
+  /// when known, otherwise the chat it was found in, never the message text.
+  String get avatarTitle {
+    final sender = message?.senderName?.trim();
+    if (sender != null && sender.isNotEmpty) return sender;
+    return sourceTitle.isNotEmpty ? sourceTitle : title;
+  }
+
+  /// Chat, user and message hits all identify a peer; a bare link suggestion
+  /// does not.
+  bool get isPeerResult => chat != null || userId != null || message != null;
   final int? userId;
   final int? chatId;
   final ChatMessage? message;
   final String? telegramLink;
+
+  /// The result's own picture for a media/music hit; null keeps the peer
+  /// avatar (text, link, file, voice).
+  final TdFileRef? media;
   final AppIconData icon;
   final Color tint;
 
@@ -2888,6 +2963,22 @@ class _SearchHit {
       pieces.add(text.replaceAll('\n', ' '));
     }
     return pieces.join(' · ');
+  }
+
+  /// The picture a message hit leads with: a music track's cover, or a
+  /// photo/video/GIF's own thumbnail. Everything else identifies its sender.
+  static TdFileRef? _messageMediaThumb(ChatMessage message) {
+    final music = message.music;
+    if (music != null) return music.cover;
+    if (message.image == null) return null;
+    return switch (message.contentType) {
+      'messagePhoto' ||
+      'messageVideo' ||
+      'messageAnimation' ||
+      'messageSticker' ||
+      'messageAnimatedEmoji' => message.image,
+      _ => null,
+    };
   }
 
   static AppIconData _messageIcon(ChatMessage message) {

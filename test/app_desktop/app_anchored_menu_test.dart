@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mithka/app/bottom_bar_layout.dart';
 import 'package:mithka/components/app_anchored_menu.dart';
 import 'package:mithka/components/app_icons.dart';
 import 'package:mithka/l10n/app_localizations.dart';
@@ -161,6 +162,20 @@ void main() {
         menuSize: menu,
       );
       expect(clamped.dx + menu.width, lessThanOrEqualTo(800 - 8));
+
+      // Chrome painted over the body's bottom edge (the liquid-glass tab
+      // bar) owns that strip: a menu that would reach under it flips above.
+      final aboveBar = appAnchoredMenuOriginFor(
+        anchor: const Rect.fromLTWH(40, 400, 120, 44),
+        viewport: const Size(800, 600),
+        menuSize: menu,
+        bottomInset: 120,
+      );
+      expect(
+        aboveBar.dy + menu.height,
+        lessThanOrEqualTo(600 - 120 - 8),
+        reason: 'the menu must clear the glass bar, not sit under it',
+      );
     },
   );
 
@@ -263,6 +278,41 @@ void main() {
     expect(
       find.byKey(const ValueKey('app-anchored-menu-scrim')).evaluate(),
       isNotEmpty,
+    );
+  });
+
+  testWidgets('a menu under the glass tab bar opens above it', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(extensions: [AppColors.light]),
+        home: const BottomBarInset(
+          bottom: 120,
+          child: Scaffold(body: SizedBox.shrink()),
+        ),
+      ),
+    );
+    final ctx = tester.element(find.byType(Scaffold));
+    unawaited(
+      showAppAnchoredMenu(
+        context: ctx,
+        anchor: const Rect.fromLTWH(40, 400, 120, 44),
+        actions: [
+          for (var i = 0; i < 4; i++)
+            AppMenuAction(key: 'row$i', label: 'Row $i', onSelected: () {}),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final menu = tester.getRect(
+      find.byKey(const ValueKey('app-anchored-menu')),
+    );
+    expect(
+      menu.bottom,
+      lessThanOrEqualTo(600 - 120 - 8),
+      reason: 'the card must clear the chrome drawn over the body',
     );
   });
 }

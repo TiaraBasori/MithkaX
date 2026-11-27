@@ -120,11 +120,94 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
     return _imagePreviewGeometry().frameSize;
   }
 
+  /// A GIF's box: the same 320pt media budget as a photo, scaled by the one
+  /// sticker/GIF size preference exteraless exposes. The lane caps the width so
+  /// a larger setting grows tall GIFs instead of overflowing the bubble.
+  Size _gifDisplaySize() {
+    final lane = _mediaMaxWidth();
+    final scale = _theme.stickerMediaScale;
+    return telegramDesktopMediaPreviewGeometry(
+      sourceWidth: message.imageWidth,
+      sourceHeight: message.imageHeight,
+      availableWidth: math.min(lane, lane * scale),
+      maxHeight: telegramChatMediaPreviewMaxHeight * scale,
+    ).frameSize;
+  }
+
+  /// A kept sticker renders as the sticker it was: `.tgs` lottie, `.webm`
+  /// video or a static webp/png, at the sticker size, with no bubble surface.
+  /// The mirror's snapshot is a local file, so the ghost shows the original
+  /// sticker instead of a still image or a generic file row.
+  Widget _keptStickerBubble(MessageHistoryEntry entry, bool outgoing) {
+    final path = entry.mediaPath;
+    final lower = path.toLowerCase();
+    final box = _ghostStickerSize(entry);
+    final ref = TdFileRef(
+      id: _ghostFileId(path),
+      localPath: path,
+      fileName: entry.mediaFileName,
+    );
+    final Widget sticker;
+    if (lower.endsWith('.tgs')) {
+      sticker = AnimatedStickerView(
+        key: ValueKey('ghostSticker-${message.id}'),
+        file: ref,
+      );
+    } else if (lower.endsWith('.webm')) {
+      final poster = entry.mediaPosterPath;
+      sticker = VideoStickerView(
+        key: ValueKey('ghostSticker-${message.id}'),
+        file: ref,
+        fallback: poster.isEmpty
+            ? null
+            : TdFileRef(id: _ghostFileId(poster), localPath: poster),
+      );
+    } else {
+      sticker = Image.file(
+        File(path),
+        key: ValueKey('ghostSticker-${message.id}'),
+        fit: BoxFit.contain,
+        cacheWidth: _cachePx(box.width),
+        cacheHeight: _cachePx(box.height),
+        errorBuilder: (context, _, _) => Center(
+          child: Text(
+            localizedHistoryKindLabel(context, entry.kindKey),
+            style: TextStyle(fontSize: 13, color: _colors.textSecondary),
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => unawaited(openDownloadedFile(context, path)),
+      onLongPress: _handleLongPress,
+      onSecondaryTapUp: _handleSecondaryTapUp,
+      child: SizedBox(width: box.width, height: box.height, child: sticker),
+    );
+  }
+
+  /// A mirrored file has no TDLib id. Caches key on the id, so derive a stable
+  /// negative one from the path — real ids are positive, so they never clash.
+  int _ghostFileId(String path) => -((path.hashCode & 0x3fffffff) + 1);
+
+  Size _ghostStickerSize(MessageHistoryEntry entry) {
+    final maxSide = 120.0 * _theme.stickerMediaScale;
+    final w = entry.mediaWidth, h = entry.mediaHeight;
+    if (w <= 0 || h <= 0) return Size(maxSide, maxSide);
+    final aspect = w / h;
+    return aspect >= 1
+        ? Size(maxSide, maxSide / aspect)
+        : Size(maxSide * aspect, maxSide);
+  }
+
   /// A kept copy whose media snapshot exists: a photo renders as the photo
   /// bubble (real aspect ratio, capped), every other kind as a file row on the
   /// message surface. Tapping opens the snapshot through the OS; long-press
   /// still opens the message menu (edit history, remove from mirror).
   Widget _keptMediaBubble(MessageHistoryEntry entry, bool outgoing) {
+    if (entry.kindKey == 'historyKindSticker') {
+      return _keptStickerBubble(entry, outgoing);
+    }
     final kindLabel = localizedHistoryKindLabel(context, entry.kindKey);
     final caption = _caption();
     // Photos, static stickers and any kind with a poster paint as a still at
@@ -216,10 +299,12 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
   }
 
   Size _stickerSize() {
-    const maxSide = 120.0;
+    // 120pt at the stock setting; the sticker/GIF size preference scales it
+    // (exteraless's stickerSize 4..20, default 14).
+    final maxSide = 120.0 * _theme.stickerMediaScale;
     final w = message.imageWidth, h = message.imageHeight;
     if (w == null || h == null || w <= 0 || h <= 0) {
-      return const Size(maxSide, maxSide);
+      return Size(maxSide, maxSide);
     }
     final aspect = w / h;
     return aspect >= 1

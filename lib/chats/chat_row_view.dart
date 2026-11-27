@@ -314,6 +314,12 @@ class ChatRowView extends StatelessWidget {
                   size: avatarSize,
                   square: chat.usesSquareAvatar && !circleGroups,
                   allowAnimation: false,
+                  // exteraless draws the private peer's presence dot in the
+                  // dialog cell; the setting is off by default.
+                  onlinePresence:
+                      theme.showAvatarOnlineStatus && !showSavedMessagesIdentity
+                      ? chat.peerPresence
+                      : AvatarPresence.none,
                 ),
           if (chat.unreadCount > 0)
             Positioned(

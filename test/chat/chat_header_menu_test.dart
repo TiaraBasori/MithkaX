@@ -355,12 +355,13 @@ void main() {
     int? forumTopicId,
     VoidCallback? onBack,
     Size size = const Size(390, 844),
+    Map<String, Object> initialPrefs = const {},
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    SharedPreferences.setMockInitialValues(const {});
+    SharedPreferences.setMockInitialValues(initialPrefs);
     final prefs = await SharedPreferences.getInstance();
     final theme = ThemeController(prefs);
     final locale = AppLocaleController(prefs);
@@ -1060,6 +1061,102 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PinnedMessagesView), findsOneWidget);
 
+    await closeChat(tester);
+  });
+
+  testWidgets('a long press on the pinned bar opens all pinned messages', (
+    tester,
+  ) async {
+    _hasPinnedMessage = true;
+    await openChat(tester);
+
+    final bar = find.byKey(const ValueKey('chatPinnedBar'));
+    expect(bar, findsOneWidget);
+    await tester.longPress(bar);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PinnedMessagesView), findsOneWidget);
+
+    await closeChat(tester);
+  });
+
+  testWidgets('pinning a group message asks whether to notify everyone', (
+    tester,
+  ) async {
+    _kind = _Kind.group;
+    await openChat(tester);
+
+    await tester.longPress(find.text('hello', findRichText: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('app-confirm-dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pin-dialog-notify')), findsOneWidget);
+
+    _queries.clear();
+    await tester.tap(find.byKey(const ValueKey('app-confirm-accept')));
+    await tester.pumpAndSettle();
+
+    final pin = _queries.where((q) => q['@type'] == 'pinChatMessage');
+    expect(pin, isNotEmpty);
+    expect(pin.last['disable_notification'], isFalse);
+    expect(pin.last['only_for_self'], isFalse);
+
+    await closeChat(tester);
+  });
+
+  testWidgets('a private-chat pin stays on this account by default', (
+    tester,
+  ) async {
+    await openChat(tester);
+
+    await tester.longPress(find.text('hello', findRichText: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('pin-dialog-also-for')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pin-dialog-notify')), findsNothing);
+
+    _queries.clear();
+    await tester.tap(find.byKey(const ValueKey('app-confirm-accept')));
+    await tester.pumpAndSettle();
+
+    final pin = _queries.where((q) => q['@type'] == 'pinChatMessage');
+    expect(pin, isNotEmpty);
+    expect(pin.last['only_for_self'], isTrue);
+    expect(pin.last['disable_notification'], isTrue);
+
+    await closeChat(tester);
+  });
+
+  testWidgets('a double tap runs the configured action, and none disables it', (
+    tester,
+  ) async {
+    await openChat(
+      tester,
+      initialPrefs: const {'doubleTapAction.incoming.v1': 'reply'},
+    );
+
+    await tester.tap(find.text('hello', findRichText: true));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('hello', findRichText: true));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('composerReplyBanner')), findsOneWidget);
+    await closeChat(tester);
+
+    await openChat(
+      tester,
+      initialPrefs: const {'doubleTapAction.incoming.v1': 'none'},
+    );
+    await tester.tap(find.text('hello', findRichText: true));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('hello', findRichText: true));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('composerReplyBanner')), findsNothing);
     await closeChat(tester);
   });
 

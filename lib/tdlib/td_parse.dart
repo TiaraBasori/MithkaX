@@ -925,8 +925,13 @@ abstract final class TDParse {
     };
   }
 
+  /// A missing `align` is Telegram's FILL: the row stretches its buttons
+  /// across the message width (pageBlockButtonRow's flagless default). Only
+  /// an explicit left/center/right keeps content-sized buttons.
   static String _richHorizontalAlignment(Object? value) {
+    if (value == null) return 'fill';
     final type = value is Map<String, dynamic> ? value.type : value;
+    if (type == null || '$type'.isEmpty) return 'fill';
     if (type == 'center' || '$type'.toLowerCase().contains('center')) {
       return 'center';
     }
@@ -3413,6 +3418,44 @@ abstract final class TDParse {
 
   static bool isUserOnline(Map<String, dynamic> user) =>
       user.obj('status')?.type == 'userStatusOnline';
+
+  /// The avatar-dot presence of a TDLib `User.status`, optionally at a given
+  /// unix time (tests pin [now]).
+  ///
+  /// Mirrors exteraless `AndroidUtil.getOnlineColor`: online now, then a
+  /// yellow / orange / red dot for a last-seen within 15 / 30 / 60 minutes.
+  /// The avatar-dot presence of a TDLib user. Bots never carry one — the
+  /// reference client returns no colour for `user.bot` before it even reads the
+  /// status, so a bot cannot show up as "online" next to the chat list badge.
+  static AvatarPresence userAvatarPresence(
+    Map<String, dynamic>? user, {
+    int? now,
+  }) {
+    if (user == null || isBotUser(user)) return AvatarPresence.none;
+    return avatarPresence(user.obj('status'), now: now);
+  }
+
+  static AvatarPresence avatarPresence(
+    Map<String, dynamic>? status, {
+    int? now,
+  }) {
+    switch (status?.type) {
+      case 'userStatusOnline':
+        return AvatarPresence.online;
+      case 'userStatusOffline':
+        final wasOnline = status?.integer('was_online') ?? 0;
+        if (wasOnline <= 0) return AvatarPresence.none;
+        final seconds =
+            (now ?? DateTime.now().millisecondsSinceEpoch ~/ 1000) - wasOnline;
+        if (seconds < 0) return AvatarPresence.online;
+        if (seconds < 15 * 60) return AvatarPresence.within15Minutes;
+        if (seconds < 30 * 60) return AvatarPresence.within30Minutes;
+        if (seconds < 60 * 60) return AvatarPresence.within60Minutes;
+        return AvatarPresence.none;
+      default:
+        return AvatarPresence.none;
+    }
+  }
 
   static String _lastOnlineText(int unixSeconds) {
     if (unixSeconds <= 0) {

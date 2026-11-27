@@ -13,6 +13,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:mithka/platform/app_haptics.dart';
 import '../../components/app_icons.dart';
+import '../../components/full_page_back_swipe.dart';
 import '../../platform/adaptive_platform.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_theme.dart';
@@ -81,6 +82,7 @@ class MessageSwipeReplyController {
   final AnimationController _travel;
   bool _tickArmed = true;
   bool _disposed = false;
+  bool _ownsContact = false;
   int _tickCount = 0;
 
   /// Set by the host's build so a reduced-motion setting shortens the spring
@@ -97,23 +99,61 @@ class MessageSwipeReplyController {
   @visibleForTesting
   int get tickCount => _tickCount;
 
+  /// True while the page's full-screen back swipe owns the contact. The back
+  /// swipe is a raw listener outside the gesture arena, so without this a
+  /// right-then-left swipe would peel the page AND reply to the message.
+  bool get _pageGestureOwnsPointer => FullPageBackSwipeClaim.active;
+
+  /// Holds the contact for the page gesture listener: from now until the
+  /// pointer is released, the back swipe must not arm on the same finger.
+  void _claimContact() {
+    if (_ownsContact) return;
+    _ownsContact = true;
+    MessageReplySwipeClaim.begin();
+  }
+
+  void _releaseContact() {
+    if (!_ownsContact) return;
+    _ownsContact = false;
+    MessageReplySwipeClaim.clear();
+  }
+
   /// Claims a fresh drag: stops a running spring and re-arms the tick.
   void beginDrag() {
     if (_disposed) return;
+    if (_pageGestureOwnsPointer) {
+      cancel();
+      return;
+    }
     _travel.stop();
     _tickArmed = _travel.value > -messageSwipeReplyTrigger;
   }
 
   /// Moves by one drag delta.
-  void dragBy(double delta) => _apply(_travel.value + delta);
+  void dragBy(double delta) {
+    if (_pageGestureOwnsPointer) {
+      if (_travel.value != 0) cancel();
+      return;
+    }
+    _apply(_travel.value + delta);
+  }
 
   /// Moves to an absolute travel from the gesture origin.
-  void dragTo(double travel) => _apply(travel);
+  void dragTo(double travel) {
+    if (_pageGestureOwnsPointer) {
+      if (_travel.value != 0) cancel();
+      return;
+    }
+    _apply(travel);
+  }
 
   void _apply(double requested) {
     if (_disposed) return;
     final next = messageSwipeReplyOffset(requested);
     if (next == _travel.value) return;
+    // Only a leftward travel is a reply: a rightward drag belongs to the
+    // back gesture and must not be claimed by the row.
+    if (next < 0) _claimContact();
     _travel.value = next;
     if (next <= -messageSwipeReplyTrigger) {
       if (_tickArmed) {
@@ -131,17 +171,23 @@ class MessageSwipeReplyController {
   /// springs the row home either way.
   void finish({required VoidCallback? onReply, double? primaryVelocity}) {
     if (_disposed) return;
+    if (_pageGestureOwnsPointer) {
+      cancel();
+      return;
+    }
     if (messageSwipeReplyCommits(
       offset: _travel.value,
       primaryVelocity: primaryVelocity,
     )) {
       onReply?.call();
     }
+    _releaseContact();
     cancel();
   }
 
   /// Springs the row home without replying.
   void cancel() {
+    _releaseContact();
     _tickArmed = true;
     // A scheduled put-back can outlive the row that scheduled it.
     if (_disposed) return;
@@ -151,6 +197,7 @@ class MessageSwipeReplyController {
 
   void dispose() {
     _disposed = true;
+    _releaseContact();
     _travel.dispose();
   }
 }

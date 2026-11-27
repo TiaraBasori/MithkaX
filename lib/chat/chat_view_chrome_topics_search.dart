@@ -74,9 +74,11 @@ extension _ChatViewChrome on _ChatViewState {
       replaceWithAppChatRoute<void, void>(
         context,
         AppChatPageRoute<void>(
-          // An in-place topic swap: the new transcript replaces this one in a
-          // single frame so the header and tab strip never flash or slide.
-          transitionDuration: Duration.zero,
+          // An in-place topic swap: the new transcript dissolves over this one
+          // while both pages paint the same header and tab strip, so the
+          // chrome stays pinned and only the conversation changes.
+          contentSwap: true,
+          transitionDuration: AppMotion.swap,
           reverseTransitionDuration: Duration.zero,
           builder: (_) => ChatView(
             chatId: widget.chatId,

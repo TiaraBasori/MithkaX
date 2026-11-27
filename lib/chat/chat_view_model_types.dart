@@ -49,6 +49,8 @@ class _SenderInfo {
     this.isDeleted = false,
     this.accentColorId = -1,
     this.emojiStatusId = 0,
+    this.presence = AvatarPresence.none,
+    this.isBot = false,
   });
   final String name;
   final TdFileRef? photo;
@@ -61,6 +63,24 @@ class _SenderInfo {
   final bool isDeleted;
   final int accentColorId;
   final int emojiStatusId;
+  final AvatarPresence presence;
+
+  /// Bots never carry a presence dot, and their `updateUserStatus` must not
+  /// give them one after the fact.
+  final bool isBot;
+
+  _SenderInfo withPresence(AvatarPresence value) => _SenderInfo(
+    name,
+    photo,
+    role,
+    title,
+    isPremium: isPremium,
+    isDeleted: isDeleted,
+    accentColorId: accentColorId,
+    emojiStatusId: emojiStatusId,
+    presence: value,
+    isBot: isBot,
+  );
 }
 
 @visibleForTesting

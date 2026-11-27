@@ -445,6 +445,12 @@
     <string name="appearanceAddFont">Add Font</string>
     <string name="appearanceAddTextFont">Add Text Font</string>
     <string name="appearanceAlwaysShowMessageTime">Always show message time</string>
+    <string name="appearanceAvatarOnlineStatus">Online status on avatars</string>
+    <string name="appearanceAvatarOnlineStatusNote">Shows a coloured dot at the bottom-right of a private chat’s avatar: green while online, then yellow, orange and red for a last seen within 15, 30 and 60 minutes.</string>
+    <string name="doubleTapActionNone">None</string>
+    <string name="doubleTapActionSendReaction">Send reaction</string>
+    <string name="doubleTapIncoming">Double-tap incoming messages</string>
+    <string name="doubleTapOutgoing">Double-tap outgoing messages</string>
     <string name="appearanceAnimateAvatars">Play Animated Avatars</string>
     <string name="appearanceAnimateStatusEmoji">Play Animated Status Emoji</string>
     <string name="appearanceArchivedChats">Archived Chats</string>
@@ -531,6 +537,8 @@
     <string name="appearanceSenderNameReadabilityBackground">Add Background</string>
     <string name="appearanceSenderNameReadabilityBlend">Blend Color</string>
     <string name="appearanceSenderNameReadabilityNone">None</string>
+    <string name="appearanceReplySenderStyle">Sender style in replies</string>
+    <string name="appearanceReplySenderStyleNote">When off, reply markers use a plain accent colour without the sender's custom colour and emoji.</string>
     <string name="appearanceShowChatListSearch">Chat list search</string>
     <string name="appearanceShowEditAndReadMarks">Show Edit and Read Marks</string>
     <string name="appearanceShowFolderBadges">Folder badges</string>
@@ -1049,6 +1057,10 @@
     <string name="chatInfoPinLimit">Limit</string>
     <string name="chatInfoPinLimitReachedError">Pin failed: pin limit reached</string>
     <string name="chatInfoPinnedHighlights">Pinned Messages</string>
+    <string name="chatPinDialogTitle">Pin Message</string>
+    <string name="chatPinDialogMessage">This message will be pinned in this chat.</string>
+    <string name="chatPinNotifyMembers">Notify all members</string>
+    <string name="chatPinAlsoFor">Also pin for {value1}</string>
     <string name="chatInfoRemove">Remove</string>
     <string name="chatInfoSearchHistory">Search chat history</string>
     <string name="chatInfoStories">Stories</string>
@@ -2727,8 +2739,14 @@
     <string name="passkeysTitle">Passkeys</string>
     <string name="passkeysUnknownName">Unnamed passkey</string>
     <string name="pickerSystemPicker">System Picker</string>
+<plurals name="pinnedMessagesCountTitle">
+        <item quantity="one">{count} Pinned Message</item>
+        <item quantity="other">{count} Pinned Messages</item>
+    </plurals>
     <string name="pinnedMessagesEmpty">No pinned messages yet</string>
+    <string name="pinnedMessagesHide">Hide pinned Messages</string>
     <string name="pinnedMessagesSentBy">Sent by {value1}</string>
+    <string name="pinnedMessagesUnpinAll">Unpin all Messages</string>
     <string name="pollComposerAddOption">Add option</string>
     <string name="pollComposerAddPollMedia">Add poll media</string>
     <string name="pollComposerAllowAddingOptions">Allow people to add options</string>
@@ -4197,4 +4215,9 @@
     <string name="mithkaxTopicTabsMoveToBottom">Move tab bar to the bottom</string>
     <string name="mithkaxTopicTabsMoveToSide">Move tab bar to the side</string>
     <string name="mithkaxTopicTabsMoveToTop">Move tab bar to the top</string>
+    <string name="mithkaxStickerSizeTitle">Sticker and GIF size</string>
+    <string name="mithkaxStickerSizeNote">One size for both stickers and GIFs in chats. Drag the slider; the preview follows.</string>
+    <string name="mithkaxStickerSizeSmall">Small</string>
+    <string name="mithkaxStickerSizeLarge">Large</string>
+    <string name="mithkaxStickerSizeReset">Reset</string>
 </resources>

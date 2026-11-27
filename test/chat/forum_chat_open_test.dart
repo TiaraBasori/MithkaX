@@ -19,6 +19,7 @@ import 'package:mithka/chats/chat_list_view.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/settings/ai_translation/translation_controller.dart';
 import 'package:mithka/tdlib/td_client.dart';
+import 'package:mithka/theme/app_motion.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
 import 'package:provider/provider.dart';
@@ -175,19 +176,21 @@ void main() {
     expect(find.byKey(const ValueKey('topic-tab-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('topic-tab-50')), findsOneWidget);
 
-    // Tapping a tab swaps the transcript in place: the replacement route is
-    // instant (no fade/slide flash) and the strip keeps its scroll offset.
+    // Tapping a tab swaps the transcript in place: a content-swap route
+    // crossfades the conversation while the header and tab strip stay pinned,
+    // so the chrome never slides and the strip keeps its scroll offset.
     await tester.tap(find.byKey(const ValueKey('topic-tab-50')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
     expect(find.byType(ChatView), findsOneWidget);
     final route = ModalRoute.of(tester.element(find.byType(ChatView)));
     expect(route, isA<AppChatPageRoute<void>>());
+    final chatRoute = route as AppChatPageRoute<void>;
     expect(
-      (route as AppChatPageRoute<void>).transitionDuration,
-      Duration.zero,
-      reason: 'a topic switch must not animate the whole page',
+      chatRoute.contentSwap,
+      isTrue,
+      reason: 'a topic switch must fade its content, not slide the page',
     );
+    expect(chatRoute.transitionDuration, AppMotion.swap);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 6));

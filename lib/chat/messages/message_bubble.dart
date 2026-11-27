@@ -9,6 +9,7 @@
 //
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show precisionErrorTolerance;
@@ -101,6 +102,15 @@ const EdgeInsets messageTextBubblePadding = EdgeInsets.symmetric(
 /// Corner radius of an ordinary text message bubble.
 const double messageTextBubbleRadius = 6;
 
+/// Line cap for a link preview's description.
+///
+/// exteraless lays the description out with `maxLines = 6` (3 in its compact
+/// layout). Its Twitter escape hatch compares the site name to the literal
+/// "twitter", which a fixupx/fxtwitter mirror card is not — so a mirrored
+/// tweet is capped like everything else. Without the cap a Telegraph article
+/// or a long tweet stretched the preview card over half the transcript.
+const int messageLinkPreviewDescriptionMaxLines = 6;
+
 /// Decoded side, in pixels, of the softened fill around a letterboxed photo.
 const int _letterboxFillPx = 12;
 
@@ -159,6 +169,7 @@ class MessageBubble extends StatelessWidget {
     this.forceShowTimestamp = false,
     this.onRepeat,
     this.onLongPress,
+    this.onDoubleTap,
     this.mobileTextSelectionAreaKey,
     this.onMobileTextSelectionChanged,
     this.onMobileTextSelectionDisposed,
@@ -173,6 +184,7 @@ class MessageBubble extends StatelessWidget {
     this.onOpenImageGallery,
     this.onApplyMessageBubble,
     this.onOpenSticker,
+    this.onOpenAnimation,
     this.onPlayVideo,
     this.onPlayMusic,
     this.onButtonTap,
@@ -182,6 +194,8 @@ class MessageBubble extends StatelessWidget {
     this.showCommentAttachment = false,
     this.channelHasLinkedDiscussion = false,
     this.showChannelPostStats = false,
+    this.showAvatarOnlineStatus = false,
+    this.peerPresence = AvatarPresence.none,
     this.onToggleReaction,
     this.onShowReactionUsers,
     this.onRedial,
@@ -227,6 +241,12 @@ class MessageBubble extends StatelessWidget {
   final bool showRepeat;
   final bool forceShowTimestamp;
   final VoidCallback? onRepeat;
+
+  /// Runs the user's configured double-tap action. Null when the action is
+  /// off or this message cannot run it, which also keeps the single tap
+  /// immediate: a double-tap recognizer delays the first tap until the
+  /// double-tap timeout expires.
+  final VoidCallback? onDoubleTap;
   final void Function(
     ChatMessage message,
     Rect? bounds,
@@ -247,6 +267,10 @@ class MessageBubble extends StatelessWidget {
   final ImageGalleryOpenCallback? onOpenImageGallery;
   final ValueChanged<ChatMessage>? onApplyMessageBubble;
   final ValueChanged<ChatMessage>? onOpenSticker;
+
+  /// Opens a GIF/motion message in the image viewer, which loops it over its
+  /// still without video chrome. Falls back to [onPlayVideo] when unset.
+  final ValueChanged<ChatMessage>? onOpenAnimation;
   final ValueChanged<ChatMessage>? onPlayVideo;
   final ValueChanged<ChatMessage>? onPlayMusic;
   final void Function(ChatMessage message, MessageButton button)? onButtonTap;
@@ -260,6 +284,13 @@ class MessageBubble extends StatelessWidget {
   /// under the bubble. Passed by the transcript: a broadcast channel sets it
   /// for every non-service post, other chats never do.
   final bool showChannelPostStats;
+
+  /// Whether the avatar's bottom-right corner carries the sender's presence
+  /// dot (off by default; 外观 → 聊天视图).
+  final bool showAvatarOnlineStatus;
+
+  /// Private-chat peer's presence; group messages read the sender's own.
+  final AvatarPresence peerPresence;
   final ValueChanged<MessageReaction>? onToggleReaction;
   final void Function(ChatMessage message, MessageReaction reaction)?
   onShowReactionUsers;
@@ -298,8 +329,31 @@ class _ScopedMessageBubble extends StatefulWidget {
   State<_ScopedMessageBubble> createState() => _MessageBubbleState();
 }
 
+/// exteraless `DoubleTap`: a second press within the double-tap window and
+/// close to the first one runs the configured action. Kept pure so the window
+/// and slop can be asserted without a widget.
+@visibleForTesting
+bool isMessageDoubleTap({
+  required Duration firstUp,
+  required Duration secondDown,
+  required double travel,
+}) {
+  final gap = secondDown - firstUp;
+  return !gap.isNegative &&
+      gap <= kDoubleTapTimeout &&
+      travel <= kTouchSlop * 2;
+}
+
 class _MessageBubbleState extends State<_ScopedMessageBubble>
     with TickerProviderStateMixin {
+  /// The previous tap, as seen by the raw [Listener]: the bubble's own tap
+  /// recognizer stays instant, and a second press inside the window runs the
+  /// configured double-tap action.
+  Duration? _lastTapUpStamp;
+  Offset? _lastTapUpPosition;
+  Duration? _tapDownStamp;
+  Offset? _tapDownPosition;
+
   void _updateState(VoidCallback fn) => setState(fn);
 
   final VoicePlayer _voice = VoicePlayer();
@@ -802,6 +856,38 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     }
   }
 
+  void _trackDoubleTapDown(PointerDownEvent event) {
+    _tapDownStamp = event.timeStamp;
+    _tapDownPosition = event.position;
+    final action = widget.bubble.onDoubleTap;
+    final firstUp = _lastTapUpStamp;
+    final firstPosition = _lastTapUpPosition;
+    if (action == null || firstUp == null || firstPosition == null) return;
+    if (!isMessageDoubleTap(
+      firstUp: firstUp,
+      secondDown: event.timeStamp,
+      travel: (event.position - firstPosition).distance,
+    )) {
+      return;
+    }
+    _lastTapUpStamp = null;
+    _lastTapUpPosition = null;
+    action();
+  }
+
+  void _trackDoubleTapUp(PointerUpEvent event) {
+    final downStamp = _tapDownStamp;
+    final downPosition = _tapDownPosition;
+    _tapDownStamp = null;
+    _tapDownPosition = null;
+    if (downStamp == null || downPosition == null) return;
+    final isTap =
+        event.timeStamp - downStamp <= kDoubleTapTimeout &&
+        (event.position - downPosition).distance <= kTouchSlop;
+    _lastTapUpStamp = isTap ? event.timeStamp : null;
+    _lastTapUpPosition = isTap ? event.position : null;
+  }
+
   void _handleTap(bool alwaysShowTime) {
     if (!alwaysShowTime) {
       setState(() => _showTappedTimestamp = !_showTappedTimestamp);
@@ -963,16 +1049,26 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     return outgoing ? colors.outgoingReplyLine : colors.incomingReplyLine;
   }
 
-  Color _messageReplyNameColor(bool outgoing) {
-    if (_usesDecorativeBubbleBackground) {
-      return outgoing ? _outgoingTextColor : _incomingTextColor;
-    }
-    final colors = _messageColors;
-    if (colors == null) {
-      return outgoing ? _outgoingTextColor : _colors.textPrimary;
-    }
-    return outgoing ? colors.outgoingReplyName : colors.incomingReplyName;
+  /// The reply line/name colour: the quoted author's accent colour when the
+  /// setting is on and the quote resolved one, else the theme's reply line.
+  Color _replyAccentColor(bool outgoing) {
+    final fallback = _messageReplyLineColor(outgoing);
+    if (!_theme.replyQuoteSenderStyle) return fallback;
+    final accentColorId = message.replyToSenderAccentColorId;
+    if (accentColorId < 0) return fallback;
+    final cloudTheme = _theme.cloudThemeFor(_brightness);
+    return messageNameColorForSender(
+      theme: cloudTheme,
+      accentColorId: accentColorId,
+      showNameColors: _theme.chatNameColorAudience.shows(
+        isPremium: message.replyToSenderIsPremium,
+      ),
+      nameColorsDisabledFallback: cloudTheme?.senderNameColor ?? fallback,
+    );
   }
+
+  bool get _replyShowsSenderEmoji =>
+      _theme.replyQuoteSenderStyle && message.replyToSenderEmojiStatusId != 0;
 
   Color _messageReplyTextColor(bool outgoing) {
     if (_usesDecorativeBubbleBackground) {
@@ -1230,38 +1326,46 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final body = FadeTransition(
       key: ValueKey('messageUpdateFlash-${message.id}'),
       opacity: _contentFlashOpacity,
-      child: GestureDetector(
-        key: _bubbleKey,
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _handleTap(alwaysShowTime),
-        // A long press on a link opens the link's own menu; everywhere else it
-        // is the message's menu (exteraless checks the pressed span first).
-        onLongPressStart:
-            !desktopTouchInteraction &&
-                widget.bubble.mobileTextSelectionAreaKey == null
-            ? _handleLongPressStart
-            : null,
-        onSecondaryTapUp: desktopInteraction ? null : _handleSecondaryTapUp,
-        child: KeyedSubtree(
-          key: ValueKey('messageTapTarget-${message.id}'),
-          child: desktopInteraction
-              ? Listener(
-                  onPointerDown: (event) => _handleDesktopPointerDown(
-                    event,
-                    touchGesturesEnabled: desktopTouchInteraction,
-                  ),
-                  onPointerMove: _handleDesktopPointerMove,
-                  onPointerUp: _handleDesktopPointerUp,
-                  onPointerCancel: _handleDesktopPointerCancel,
-                  child: KeyedSubtree(
-                    key: ValueKey('messageTextSelectionArea-${message.id}'),
-                    child: DesktopMessageTextSelectionArea(
-                      selectionAreaKey: _desktopSelectionAreaKey,
-                      child: contentBody,
+      // The double tap is detected here, outside the gesture arena: a
+      // `GestureDetector.onDoubleTap` holds the arena for the double-tap
+      // window, which starves every tap target nested in the bubble (a link
+      // preview, a document card, a vote button) even after the window.
+      child: Listener(
+        onPointerDown: _trackDoubleTapDown,
+        onPointerUp: _trackDoubleTapUp,
+        child: GestureDetector(
+          key: _bubbleKey,
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _handleTap(alwaysShowTime),
+          // A long press on a link opens the link's own menu; everywhere else it
+          // is the message's menu (exteraless checks the pressed span first).
+          onLongPressStart:
+              !desktopTouchInteraction &&
+                  widget.bubble.mobileTextSelectionAreaKey == null
+              ? _handleLongPressStart
+              : null,
+          onSecondaryTapUp: desktopInteraction ? null : _handleSecondaryTapUp,
+          child: KeyedSubtree(
+            key: ValueKey('messageTapTarget-${message.id}'),
+            child: desktopInteraction
+                ? Listener(
+                    onPointerDown: (event) => _handleDesktopPointerDown(
+                      event,
+                      touchGesturesEnabled: desktopTouchInteraction,
                     ),
-                  ),
-                )
-              : contentBody,
+                    onPointerMove: _handleDesktopPointerMove,
+                    onPointerUp: _handleDesktopPointerUp,
+                    onPointerCancel: _handleDesktopPointerCancel,
+                    child: KeyedSubtree(
+                      key: ValueKey('messageTextSelectionArea-${message.id}'),
+                      child: DesktopMessageTextSelectionArea(
+                        selectionAreaKey: _desktopSelectionAreaKey,
+                        child: contentBody,
+                      ),
+                    ),
+                  )
+                : contentBody,
+          ),
         ),
       ),
     );
@@ -1351,6 +1455,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                         : widget.bubble.peerPhoto,
                     size: 38 * ContentSizeScope.of(context).appScale,
                     isDeleted: widget.bubble.isGroup && message.senderIsDeleted,
+                    onlinePresence: widget.bubble.showAvatarOnlineStatus
+                        ? widget.bubble.isGroup
+                              ? message.senderPresence
+                              : widget.bubble.peerPresence
+                        : AvatarPresence.none,
                   ),
                   withLongPress: true,
                 ),
@@ -2769,26 +2878,219 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   bool _emojiOnlyValue = false;
 
+  /// Rich-message page buttons, drawn the way exteraless lays out
+  /// `RichButtonRowBlock`: pill-shaped buttons on one line, 7pt apart, the
+  /// label's natural width plus 20pt each side, and a missing alignment (the
+  /// page block's FILL default) stretching them across the post. The old Wrap
+  /// of bordered chips wrapped three buttons into ragged rows and read as
+  /// separate cards instead of one Telegram button row.
   Widget _richButtonRowBlock(RichMessageBlock block, bool outgoing) {
-    final alignment = switch (block.horizontalAlignment) {
-      'center' => WrapAlignment.center,
-      'right' => WrapAlignment.end,
-      _ => WrapAlignment.start,
-    };
+    final buttons = block.buttons;
+    if (buttons.isEmpty) return const SizedBox.shrink();
+    final fontSize = _chatFontSize(AppTextSize.messageBody());
+    final height = 18 + fontSize;
+    const gap = 7.0;
+    final alignment = block.horizontalAlignment;
+    final fill =
+        alignment != 'left' && alignment != 'center' && alignment != 'right';
     return SizedBox(
-      key: const ValueKey('rich-message-button-row'),
-      width: _bubbleMaxWidth(),
-      child: Wrap(
-        alignment: alignment,
-        spacing: 6,
-        runSpacing: 6,
-        children: [
-          for (final button in block.buttons)
-            ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 88, maxWidth: 220),
-              child: _buttonCell(button, outgoing),
+      width: double.infinity,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : _bubbleMaxWidth();
+          final metrics = [
+            for (final button in buttons)
+              _richButtonMetrics(
+                button,
+                fontSize: fontSize,
+                height: height,
+                maxWidth: maxWidth,
+              ),
+          ];
+          final widths = _richButtonWidths(
+            metrics,
+            maxWidth: maxWidth,
+            gap: gap,
+            fill: fill,
+          );
+          final row = Row(
+            key: const ValueKey('rich-message-button-row'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                if (i > 0) const SizedBox(width: gap),
+                _richButtonPill(
+                  buttons[i],
+                  outgoing,
+                  width: widths[i],
+                  height: height,
+                  fontSize: fontSize,
+                ),
+              ],
+            ],
+          );
+          if (fill) return SizedBox(width: maxWidth, child: row);
+          return Align(
+            alignment: switch (alignment) {
+              'center' => Alignment.center,
+              'right' => Alignment.centerRight,
+              _ => Alignment.centerLeft,
+            },
+            child: row,
+          );
+        },
+      ),
+    );
+  }
+
+  /// Width a rich button wants (label + exteraless's 20pt side padding) and
+  /// the lower bound it can be squeezed to (the pill's own height, so it never
+  /// loses its rounded ends). The badge sits inside the right padding.
+  ({double preferred, double min}) _richButtonMetrics(
+    MessageButton button, {
+    required double fontSize,
+    required double height,
+    required double maxWidth,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: button.text,
+        // Measure with the same inherited family the pill's Text uses, so a
+        // long label is not given a width that then clips it.
+        style: DefaultTextStyle.of(context).style.merge(
+          TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600),
+        ),
+      ),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final textWidth = painter.width;
+    painter.dispose();
+    final iconReserve = button.iconCustomEmojiId != 0 ? fontSize + 5 : 0.0;
+    final badgeReserve = botButtonBadgeIcon(button) != null ? 17.0 : 0.0;
+    final preferred = math.min(
+      maxWidth,
+      textWidth + 40 + iconReserve + badgeReserve,
+    );
+    return (
+      preferred: preferred,
+      min: math.min(preferred, height + badgeReserve),
+    );
+  }
+
+  /// exteraless's row arithmetic: grow the flexible pills to fill the row
+  /// (over-wide pills keep their natural width), or, when the labels do not
+  /// fit, take the overflow from every pill in proportion to what it can give
+  /// up. The last resort scales the whole row so it can never paint past the
+  /// post's edge.
+  List<double> _richButtonWidths(
+    List<({double preferred, double min})> metrics, {
+    required double maxWidth,
+    required double gap,
+    required bool fill,
+  }) {
+    final count = metrics.length;
+    final available = math.max(0.0, maxWidth - gap * (count - 1));
+    final widths = [for (final metric in metrics) metric.preferred];
+    final total = widths.fold(0.0, (sum, width) => sum + width);
+    if (total > available) {
+      final shrinkable = [
+        for (var i = 0; i < count; i++)
+          math.max(0.0, widths[i] - metrics[i].min),
+      ].fold(0.0, (sum, room) => sum + room);
+      if (shrinkable > 0) {
+        final target = math.min(total - available, shrinkable);
+        var taken = 0.0;
+        for (var i = 0; i < count; i++) {
+          final room = widths[i] - metrics[i].min;
+          final cut = i == count - 1
+              ? target - taken
+              : target * room / shrinkable;
+          final applied = math.min(math.max(0.0, cut), room);
+          widths[i] -= applied;
+          taken += applied;
+        }
+      }
+      final squeezed = widths.fold(0.0, (sum, width) => sum + width);
+      if (squeezed > available && squeezed > 0) {
+        final scale = available / squeezed;
+        for (var i = 0; i < count; i++) {
+          widths[i] *= scale;
+        }
+      }
+      return widths;
+    }
+    if (!fill) return widths;
+    final fixed = List<bool>.filled(count, false);
+    var flexible = count;
+    var rest = available;
+    var share = flexible > 0 ? rest / flexible : 0.0;
+    var changed = true;
+    while (changed && flexible > 0) {
+      changed = false;
+      for (var i = 0; i < count; i++) {
+        if (!fixed[i] && widths[i] > share) {
+          fixed[i] = true;
+          rest -= widths[i];
+          flexible--;
+          changed = true;
+        }
+      }
+      share = flexible > 0 ? rest / flexible : 0;
+    }
+    for (var i = 0; i < count; i++) {
+      if (!fixed[i]) widths[i] = share;
+    }
+    return widths;
+  }
+
+  Widget _richButtonPill(
+    MessageButton button,
+    bool outgoing, {
+    required double width,
+    required double height,
+    required double fontSize,
+  }) {
+    final textColor = outgoing ? _outgoingTextColor : _incomingTextColor;
+    final palette = botButtonPalette(
+      button.style,
+      primary: AppTheme.brand,
+      standard: (
+        background: textColor.withValues(alpha: 0.08),
+        foreground: textColor,
+        border: Colors.transparent,
+      ),
+    );
+    return SizedBox(
+      key: ValueKey('rich-message-button-${button.text}'),
+      width: width,
+      height: height,
+      child: Material(
+        color: palette.background,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: () => widget.bubble.onButtonTap?.call(message, button),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: button.iconCustomEmojiId != 0 ? 10 : 8,
             ),
-        ],
+            child: Center(
+              child: BotButtonLabel(
+                button: button,
+                color: palette.foreground,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
+                iconSize: fontSize + 2,
+                badgeIcon: botButtonBadgeIcon(button),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -3990,6 +4292,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           outgoing,
           false,
           preview.descriptionEntities,
+          15,
+          true,
+          messageLinkPreviewDescriptionMaxLines,
         ),
       if (preview.displayUrl.isNotEmpty)
         mobileSelectionDisabled(
@@ -4528,9 +4833,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   }
 
   /// A background-less message (sticker, round video) that answers another
-  /// message carries its reply quote ABOVE the content, where exteraless
-  /// draws the reply panel over the sticker's empty bubble. The quote gets a
-  /// floor width so a small sticker's quote is still readable, and never
+  /// message carries its reply marker ABOVE the content, where exteraless
+  /// draws the sticker reply over the empty bubble. A sticker is not a card,
+  /// so it does not get the filled quote block: exteraless paints the sticker
+  /// reply as a thin accent line with the author and a one-line preview in the
+  /// wallpaper's reply ink. The marker keeps a readable floor width and never
   /// grows past the bubble lane.
   Widget _withReplyAboveContent(
     Widget content,
@@ -4538,31 +4845,150 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     double contentWidth,
   ) {
     if (message.replyPreviewText == null) return content;
-    final width = math.min(_bubbleMaxWidth(), math.max(contentWidth, 168.0));
+    final width = math.min(_bubbleMaxWidth(), math.max(contentWidth, 150.0));
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: outgoing
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
-        SizedBox(width: width, child: _replyQuote(outgoing)),
-        const SizedBox(height: 4),
+        SizedBox(width: width, child: _stickerReplyMarker(outgoing)),
+        const SizedBox(height: 6),
         content,
       ],
     );
   }
 
-  /// 引用 quote block shown above a reply's text.
-  Widget _replyQuote(bool outgoing) {
-    final labelColor = _messageReplyNameColor(outgoing);
+  /// exteraless's reply line for a background-less sticker: a faint rounded
+  /// wash in the quoted author's colour, a 3px rule, the author (with their
+  /// custom emoji status when enabled) and the quoted line. Tapping still
+  /// opens the original message.
+  Widget _stickerReplyMarker(bool outgoing) {
+    final line = _replyAccentColor(outgoing);
     final faded = _messageReplyTextColor(outgoing);
-    final line = _messageReplyLineColor(outgoing);
     final sender = message.replyToSender ?? '';
-    final time = DateText.quoteLabel(message.replyToDate ?? 0);
     final targetId = message.replyToMessageId;
     final openOriginal = targetId == null || widget.bubble.onOpenReply == null
         ? null
         : () => widget.bubble.onOpenReply!.call(targetId);
+    final preview = (message.replyPreviewText ?? '').trim();
+    final statusId = _replyShowsSenderEmoji
+        ? message.replyToSenderEmojiStatusId
+        : 0;
+    return GestureDetector(
+      key: const ValueKey('messageReplyOpenOriginal'),
+      behavior: HitTestBehavior.opaque,
+      onTap: openOriginal,
+      child: Container(
+        key: const ValueKey('messageReplyQuote'),
+        decoration: BoxDecoration(
+          color: line.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(4),
+          border: Border(left: BorderSide(color: line, width: 3)),
+        ),
+        padding: const EdgeInsets.fromLTRB(10, 3, 6, 4),
+        child: IgnorePointer(
+          child: Row(
+            children: [
+              if (message.replyToImage != null) ...[
+                SizedBox(
+                  key: const ValueKey('messageReplyStickerThumb'),
+                  width: 37,
+                  height: 37,
+                  child: TDImage(
+                    photo:
+                        message.replyToImage?.thumbnail ?? message.replyToImage,
+                    cornerRadius: 4,
+                    cacheWidth: _cachePx(37),
+                    cacheHeight: _cachePx(37),
+                  ),
+                ),
+                const SizedBox(width: 7),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                if (sender.isNotEmpty)
+                                  TextSpan(
+                                    text: sender,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            key: const ValueKey('messageReplyStickerAuthor'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.3,
+                              color: line,
+                            ),
+                          ),
+                        ),
+                        if (statusId != 0) ...[
+                          const SizedBox(width: 3),
+                          StatusEmojiView(
+                            key: const ValueKey(
+                              'messageReplySenderEmojiStatus',
+                            ),
+                            id: statusId,
+                            size: 14,
+                            color: line,
+                            animate: false,
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (preview.isNotEmpty)
+                      Text(
+                        preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTextSize.messageBody(),
+                          height: 1.3,
+                          color: faded,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 引用 quote block shown above a reply's text.
+  ///
+  /// exteraless's reply line, not a second bubble: a faint wash in the quoted
+  /// author's colour, a 3px rule, the author in that colour with their custom
+  /// emoji status watermark, then the quoted body at the message's own size.
+  /// The settings switch turns the author styling off and leaves one plain
+  /// theme-coloured marker.
+  Widget _replyQuote(bool outgoing) {
+    final line = _replyAccentColor(outgoing);
+    final faded = _messageReplyTextColor(outgoing);
+    final sender = message.replyToSender ?? '';
+    final targetId = message.replyToMessageId;
+    final openOriginal = targetId == null || widget.bubble.onOpenReply == null
+        ? null
+        : () => widget.bubble.onOpenReply!.call(targetId);
+    final statusId = _replyShowsSenderEmoji
+        ? message.replyToSenderEmojiStatusId
+        : 0;
     return GestureDetector(
       key: const ValueKey('messageReplyOpenOriginal'),
       behavior: HitTestBehavior.opaque,
@@ -4570,78 +4996,102 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       child: Container(
         key: const ValueKey('messageReplyQuote'),
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(12, 8, 6, 9),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: _replyQuoteBackground(outgoing),
-          borderRadius: const BorderRadius.only(
-            topRight: Radius.circular(AppRadius.control),
-            bottomRight: Radius.circular(AppRadius.control),
-          ),
-          border: _messageColors == null
-              ? null
-              : Border(left: BorderSide(color: line, width: 3)),
+          color: line.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(4),
+          border: Border(left: BorderSide(color: line, width: 3)),
         ),
-        child: IgnorePointer(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (message.replyToImage != null) ...[
-                SizedBox(
-                  key: const ValueKey('messageReplyMediaPreview'),
-                  width: 44,
-                  height: 44,
-                  child: TDImage(
-                    // A 44pt slot: the small photo size is plenty, and it
-                    // avoids downloading and decoding the full-size one.
-                    photo:
-                        message.replyToImage?.thumbnail ?? message.replyToImage,
-                    cornerRadius: 6,
-                    cacheWidth: _cachePx(44),
-                    cacheHeight: _cachePx(44),
+        child: Stack(
+          children: [
+            if (statusId != 0) ...[
+              Positioned(
+                right: -10,
+                top: -12,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.14,
+                    child: StatusEmojiView(
+                      key: const ValueKey('messageReplySenderEmojiStatus'),
+                      id: statusId,
+                      size: 46,
+                      color: line,
+                      animate: false,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 9),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          if (sender.isNotEmpty)
-                            TextSpan(
-                              text: sender,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          if (time.isNotEmpty)
-                            TextSpan(text: sender.isEmpty ? time : ' $time'),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 14, color: labelColor),
-                    ),
-                    if ((message.replyPreviewText ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      _replyPreviewText(faded, outgoing),
-                    ],
-                  ],
-                ),
               ),
-              const SizedBox(width: 6),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(6, 1, 4, 9),
-                child: AppArrowUpToLineIcon(
-                  key: const ValueKey('messageReplyNavigateUpIcon'),
-                  color: faded,
+              Positioned(
+                right: 26,
+                bottom: -12,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.10,
+                    child: StatusEmojiView(
+                      id: statusId,
+                      size: 26,
+                      color: line,
+                      animate: false,
+                    ),
+                  ),
                 ),
               ),
             ],
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 3, 6, 4),
+              child: IgnorePointer(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (message.replyToImage != null) ...[
+                      SizedBox(
+                        key: const ValueKey('messageReplyMediaPreview'),
+                        width: 37,
+                        height: 37,
+                        child: TDImage(
+                          photo:
+                              message.replyToImage?.thumbnail ??
+                              message.replyToImage,
+                          cornerRadius: 4,
+                          cacheWidth: _cachePx(37),
+                          cacheHeight: _cachePx(37),
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (sender.isNotEmpty)
+                            Text.rich(
+                              TextSpan(
+                                text: sender,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, color: line),
+                            ),
+                          if ((message.replyPreviewText ?? '').isNotEmpty) ...[
+                            const SizedBox(height: 1),
+                            _replyPreviewText(
+                              faded,
+                              outgoing,
+                              maxLines: message.replyToQuote != null ? 5 : 1,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -4657,7 +5107,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   );
 
   /// The quoted reply's two-line preview, spaced like the body it answers.
-  Widget _replyPreviewText(Color faded, bool outgoing) {
+  Widget _replyPreviewText(Color faded, bool outgoing, {int maxLines = 1}) {
     final spaced = _displaySpacing(
       message.replyPreviewText ?? '',
       message.replyPreviewEntities,
@@ -4670,9 +5120,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       spaced.text.length,
       outgoing,
       false,
-      maxLines: 2,
+      maxLines: maxLines,
       entities: spaced.entities,
-      fontSize: 14,
+      fontSize: AppTextSize.messageBody(),
     );
   }
 
@@ -5310,7 +5760,8 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final inline = _autoplaysVideoInline && message.video != null;
     final media = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => widget.bubble.onPlayVideo?.call(message),
+      onTap: () => (widget.bubble.onOpenAnimation ?? widget.bubble.onPlayVideo)
+          ?.call(message),
       onLongPress: () => _handleLongPress(MessageActionSource.video),
       onSecondaryTapUp: (details) =>
           _handleSecondaryTapUp(details, MessageActionSource.video),
@@ -5421,13 +5872,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// Telegram GIFs arrive as silent MP4 animations. Start them inline and
   /// repeat indefinitely; tapping still opens the full media viewer.
   Widget _animationContent(bool outgoing) {
-    final size = _imageDisplaySize();
+    final size = _gifDisplaySize();
     final caption = _caption();
     final grouped = _groupsMediaCaption(caption);
     final mediaRadius = grouped && _showsMessageBubbleSurface ? 0.0 : 10.0;
     final media = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => widget.bubble.onPlayVideo?.call(message),
+      onTap: () => (widget.bubble.onOpenAnimation ?? widget.bubble.onPlayVideo)
+          ?.call(message),
       onLongPress: () => _handleLongPress(MessageActionSource.video),
       onSecondaryTapUp: (details) =>
           _handleSecondaryTapUp(details, MessageActionSource.video),

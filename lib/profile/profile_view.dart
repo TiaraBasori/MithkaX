@@ -608,8 +608,14 @@ class _ProfileViewState extends State<ProfileView> {
           const InsetDivider(leadingInset: 0),
           for (final s in accounts.summaries) ...[
             AccountActionRow(
-              onTap: () =>
-                  accounts.switchTo(s.slot, context.read<AuthManager>()),
+              onTap: () {
+                // The account switch rekeys the whole shell. A drawer left
+                // open would be recreated mid-animation by the new subtree,
+                // re-fading its rows and avatars — close it first so the new
+                // surface starts settled and closed.
+                context.read<dc.DrawerController>().close();
+                accounts.switchTo(s.slot, context.read<AuthManager>());
+              },
               onLongPress: () => _confirmRemoveAccount(accounts, s),
               onRemove: () => _confirmRemoveAccount(accounts, s),
               onLogout: () => _confirmLogOutAccount(accounts, s),

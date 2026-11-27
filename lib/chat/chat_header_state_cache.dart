@@ -45,6 +45,10 @@ class ChatHeaderStateCache {
         ChatHeaderSnapshot(
           accountSlot: accountSlot,
           chatId: chatId,
+          isForum: false,
+          hasForumTabs: false,
+          supportsBotTopics: false,
+          botTopicsManageable: false,
           isGroup: false,
           isChannel: false,
           isBotApiAccount: false,
@@ -81,6 +85,10 @@ class ChatHeaderSnapshot {
   ChatHeaderSnapshot({
     required this.accountSlot,
     required this.chatId,
+    required this.isForum,
+    required this.hasForumTabs,
+    required this.supportsBotTopics,
+    required this.botTopicsManageable,
     required this.isGroup,
     required this.isChannel,
     required this.isBotApiAccount,
@@ -102,6 +110,21 @@ class ChatHeaderSnapshot {
 
   final int accountSlot;
   final int chatId;
+
+  /// Whether the chat is a forum (`view_as_topics` / supergroup forum).
+  final bool isForum;
+
+  /// The supergroup's server-side tab flag: a forum with tabs paints the
+  /// horizontal strip, one without keeps the rail.
+  final bool hasForumTabs;
+
+  /// A private chat whose bot advertises `has_topics` — the only surface that
+  /// exposes the tab-position control and the side dock.
+  final bool supportsBotTopics;
+
+  /// The bot's own topic-management flag (`allows_users_to_create_topics`).
+  final bool botTopicsManageable;
+
   final bool isGroup;
   final bool isChannel;
   final bool isBotApiAccount;
@@ -140,6 +163,10 @@ class ChatHeaderSnapshot {
     return ChatHeaderSnapshot(
       accountSlot: accountSlot,
       chatId: chatId,
+      isForum: isForum,
+      hasForumTabs: hasForumTabs,
+      supportsBotTopics: supportsBotTopics,
+      botTopicsManageable: botTopicsManageable,
       isGroup: isGroup,
       isChannel: isChannel,
       isBotApiAccount: isBotApiAccount,

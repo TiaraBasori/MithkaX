@@ -163,6 +163,7 @@ Future<void> showMessageRepliesSheet({
   ValueChanged<int>? onOpenReply,
   ValueChanged<ChatMessage>? onOpenImage,
   ValueChanged<ChatMessage>? onOpenSticker,
+  ValueChanged<ChatMessage>? onOpenAnimation,
   ValueChanged<ChatMessage>? onPlayVideo,
   ValueChanged<ChatMessage>? onPlayMusic,
   void Function(ChatMessage message, MessageButton button)? onButtonTap,
@@ -185,6 +186,7 @@ Future<void> showMessageRepliesSheet({
       onOpenReply: onOpenReply,
       onOpenImage: onOpenImage,
       onOpenSticker: onOpenSticker,
+      onOpenAnimation: onOpenAnimation,
       onPlayVideo: onPlayVideo,
       onPlayMusic: onPlayMusic,
       onButtonTap: onButtonTap,
@@ -206,6 +208,7 @@ class _MessageRepliesSheet extends StatefulWidget {
     this.onOpenReply,
     this.onOpenImage,
     this.onOpenSticker,
+    this.onOpenAnimation,
     this.onPlayVideo,
     this.onPlayMusic,
     this.onButtonTap,
@@ -223,6 +226,7 @@ class _MessageRepliesSheet extends StatefulWidget {
   final ValueChanged<int>? onOpenReply;
   final ValueChanged<ChatMessage>? onOpenImage;
   final ValueChanged<ChatMessage>? onOpenSticker;
+  final ValueChanged<ChatMessage>? onOpenAnimation;
   final ValueChanged<ChatMessage>? onPlayVideo;
   final ValueChanged<ChatMessage>? onPlayMusic;
   final void Function(ChatMessage message, MessageButton button)? onButtonTap;
@@ -349,6 +353,10 @@ class _MessageRepliesSheetState extends State<_MessageRepliesSheet> {
               .where((message) => !_isSheetRootMessage(message, replyTarget))
               .toList()
             ..sort((a, b) => a.date.compareTo(b.date));
+      // A comment answering the post itself gets no reply marker here.
+      for (final message in loaded) {
+        _dropThreadRootReply(message, replyTarget);
+      }
       await _hydrateMessageSender(widget.message);
       for (final message in loaded) {
         await _hydrateMessageSender(message);
@@ -1266,22 +1274,14 @@ class _MessageRepliesSheetState extends State<_MessageRepliesSheet> {
         message.chatId ??
         _replyTarget?.chatId ??
         widget.chatId;
-    final hasInSheetReplyTarget =
-        message.replyToMessageId != null &&
-        _messages.any(
-          (candidate) =>
-              candidate.id == message.replyToMessageId &&
-              (candidate.chatId ?? _replyTarget?.chatId ?? widget.chatId) ==
-                  replyTargetChatId,
-        );
-    // A row's reply target resolves inside the sheet when the sheet's own chat
-    // owns a row with that message id.
+    // A reply target in the sheet's own chat is always reachable: a loaded row
+    // scrolls into view, and an older one is fetched on tap. Cross-chat
+    // targets need a navigation callback to go anywhere.
     final canOpenReply =
-        (message.replyToMessageId != null &&
-            _sheetRowIndexOf(message.replyToMessageId!) >= 0) ||
-        widget.onOpenReply != null ||
-        widget.onViewInChat != null ||
-        hasInSheetReplyTarget;
+        message.replyToMessageId != null &&
+        (replyTargetChatId == _sheetChatId ||
+            widget.onOpenReply != null ||
+            widget.onViewInChat != null);
     return KeyedSubtree(
       key: rowKey,
       child: MessageReplySheetItem(
@@ -1299,6 +1299,7 @@ class _MessageRepliesSheetState extends State<_MessageRepliesSheet> {
         onOpenImage: _openImage,
         onOpenImageGallery: _openImageGallery,
         onOpenSticker: widget.onOpenSticker,
+        onOpenAnimation: widget.onOpenAnimation,
         onPlayVideo: widget.onPlayVideo,
         onPlayMusic: widget.onPlayMusic,
         onButtonTap: widget.onButtonTap,
@@ -1317,16 +1318,27 @@ class _MessageRepliesSheetState extends State<_MessageRepliesSheet> {
     // The sheet lists one chat's rows, so an in-sheet target is identified by
     // (row chat == sheet chat, message id) — never by the id alone, which a
     // cross-chat reply can collide with.
-    final targetIndex = targetChatId == _sheetChatId
-        ? _sheetRowIndexOf(targetMessageId, chatId: targetChatId)
-        : -1;
-    if (targetIndex >= 0) {
-      final reached = await _scrollToSheetReply(targetIndex, targetMessageId);
-      if (reached) return;
-      if (!mounted) return;
-      // The in-sheet sweep could not prove the target visible. Do not swallow
-      // the tap: fall through to the explicit navigation below, which opens
-      // the same (chat, message) pair through a verified route.
+    if (targetChatId == _sheetChatId) {
+      var targetIndex = _sheetRowIndexOf(targetMessageId, chatId: targetChatId);
+      if (targetIndex < 0) {
+        // The thread page holds the newest comments only. A reply to an older
+        // comment is still an in-sheet jump: fetch that one row and reveal it
+        // instead of leaving the comments for the discussion group.
+        final inserted = await _loadSheetReplyTarget(
+          _sheetChatId,
+          targetMessageId,
+        );
+        if (!mounted) return;
+        targetIndex = inserted
+            ? _sheetRowIndexOf(targetMessageId, chatId: targetChatId)
+            : -1;
+      }
+      if (targetIndex >= 0) {
+        await _scrollToSheetReply(targetIndex, targetMessageId);
+      } else if (mounted) {
+        showToast(context, AppStrings.t(AppStringKeys.historyDeletedLabel));
+      }
+      return;
     }
     if (!mounted) return;
     if (targetChatId != widget.chatId && widget.onViewInChat != null) {
@@ -1396,6 +1408,86 @@ class _MessageRepliesSheetState extends State<_MessageRepliesSheet> {
     final historyRoot = target?.historyRootMessageId;
     return historyRoot != null &&
         key == (chatId: sheetChatId, messageId: historyRoot);
+  }
+
+  /// A comment that answers the thread root (the channel post or the
+  /// discussion's first message) carries no reply marker in a comments view.
+  /// exteraless suppresses that header in a thread chat (`isThreadChat`
+  /// replies to the top message are not drawn); the sheet does the same by
+  /// clearing the quote before the bubble is built.
+  void _dropThreadRootReply(ChatMessage message, _ReplyThreadTarget? target) {
+    final rid = message.replyToMessageId;
+    if (rid == null) return;
+    final sheetChatId = target?.chatId ?? widget.chatId;
+    final rChatId = message.replyToChatId ?? message.chatId ?? sheetChatId;
+    final isPostReply = rChatId == widget.chatId && rid == widget.message.id;
+    final isHistoryRootReply =
+        target?.historyRootMessageId != null &&
+        rChatId == sheetChatId &&
+        rid == target!.historyRootMessageId;
+    final isRootReplyField =
+        target?.rootReplyToMessageId != null &&
+        rChatId == sheetChatId &&
+        rid == target!.rootReplyToMessageId;
+    if (!isPostReply && !isHistoryRootReply && !isRootReplyField) return;
+    message
+      ..replyToMessageId = null
+      ..replyToChatId = null
+      ..replyToQuote = null
+      ..replyToDate = null
+      ..replyToSender = null
+      ..replyToPreview = null
+      ..replyToEntities = const []
+      ..replyToImage = null
+      ..replyToImageWidth = null
+      ..replyToImageHeight = null;
+  }
+
+  /// Fetches one comment the current thread page does not hold, so a reply
+  /// marker to an older comment can still be revealed inside the sheet. Only a
+  /// row owned by the sheet's own chat is accepted; a cross-chat id collision
+  /// must not land another chat's message among these comments.
+  Future<bool> _loadSheetReplyTarget(int chatId, int messageId) async {
+    try {
+      final res = await TdClient.shared.query({
+        '@type': 'getMessages',
+        'chat_id': chatId,
+        'message_ids': [messageId],
+      });
+      final rows = res.objects('messages') ?? const <Map<String, dynamic>>[];
+      Map<String, dynamic>? raw;
+      for (final row in rows) {
+        if (row.int64('id') == messageId) {
+          raw = row;
+          break;
+        }
+      }
+      if (raw == null) return false;
+      final parsed = TDParse.message(raw);
+      if (parsed == null || parsed.isService) return false;
+      final rowChatId = parsed.chatId ?? chatId;
+      if (rowChatId != _sheetChatId) return false;
+      if (_isSheetRootMessage(parsed, _replyTarget)) return false;
+      _dropThreadRootReply(parsed, _replyTarget);
+      await _hydrateMessageSender(parsed);
+      if (!mounted) return false;
+      final exists = _messages.any(
+        (message) =>
+            message.id == messageId &&
+            (message.chatId ?? _sheetChatId) == _sheetChatId,
+      );
+      if (!exists) {
+        setState(() {
+          _messages
+            ..add(parsed)
+            ..sort((a, b) => a.date.compareTo(b.date));
+        });
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      return mounted;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Scrolls the sheet until the row at [targetIndex] is on screen, and
@@ -1582,6 +1674,7 @@ class MessageReplySheetItem extends StatelessWidget {
     this.onOpenImage,
     this.onOpenImageGallery,
     this.onOpenSticker,
+    this.onOpenAnimation,
     this.onPlayVideo,
     this.onPlayMusic,
     this.onButtonTap,
@@ -1605,6 +1698,7 @@ class MessageReplySheetItem extends StatelessWidget {
   final ValueChanged<ChatMessage>? onOpenImage;
   final ImageGalleryOpenCallback? onOpenImageGallery;
   final ValueChanged<ChatMessage>? onOpenSticker;
+  final ValueChanged<ChatMessage>? onOpenAnimation;
   final ValueChanged<ChatMessage>? onPlayVideo;
   final ValueChanged<ChatMessage>? onPlayMusic;
   final void Function(ChatMessage message, MessageButton button)? onButtonTap;
@@ -1628,6 +1722,7 @@ class MessageReplySheetItem extends StatelessWidget {
       onOpenImage: onOpenImage,
       onOpenImageGallery: onOpenImageGallery,
       onOpenSticker: onOpenSticker,
+      onOpenAnimation: onOpenAnimation,
       onPlayVideo: onPlayVideo,
       onPlayMusic: onPlayMusic,
       onButtonTap: onButtonTap,

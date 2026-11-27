@@ -256,6 +256,57 @@ void main() {
     }
   });
 
+  testWidgets('the selection capsule eases out instead of teleporting', (
+    tester,
+  ) async {
+    var selection = 0;
+    late StateSetter update;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(extensions: [AppColors.light]),
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              width: 400,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  update = setState;
+                  return LiquidGlassBottomBar(
+                    selection: selection,
+                    itemCount: 4,
+                    child: const SizedBox(height: 62, width: double.infinity),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final pill = find.byKey(const ValueKey('liquid-glass-selection'));
+    final initial = tester.getRect(pill).left;
+
+    update(() => selection = 3);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    final firstFrame = tester.getRect(pill).left;
+    await tester.pumpAndSettle();
+    final destination = tester.getRect(pill).left;
+
+    final travelled = firstFrame - initial;
+    final total = destination - initial;
+    expect(total, greaterThan(0));
+    expect(
+      travelled / total,
+      lessThan(0.2),
+      reason:
+          'a front-loaded curve put two thirds of a five-tab jump into the '
+          'first frame, which reads as a teleport rather than a glide',
+    );
+  });
+
   testWidgets(
     'capture patterned glass surfaces for visual review',
     (tester) async {

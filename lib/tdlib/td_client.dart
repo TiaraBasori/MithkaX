@@ -1419,7 +1419,7 @@ class TdClient {
         // each read the other's freshly registered client as "the existing
         // account", discarding one returned slot's database; resolve the
         // duplicate atomically instead.
-        return _resolveUnknownAccountImport(
+        return await _resolveUnknownAccountImport(
           newSlot,
           cid,
           dbDir,
@@ -1459,12 +1459,37 @@ class TdClient {
         _persist();
         return existingSlot;
       }
+      await _restartResolvedImportClient(slot, restoredUserId);
       setActive(slot);
       _persist();
       return slot;
     } finally {
       done.complete();
     }
+  }
+
+  /// Reopens an imported slot whose account TDLib resolved after it started.
+  ///
+  /// With no valid `my_id` in the binlog, TDLib's `AuthManager` reports the
+  /// session ready only once `users.getUsers(inputUserSelf)` answers, and that
+  /// path skips the managers' post-login `init()`: `AttachMenuManager` started
+  /// signed out and stays uninitialized, so the first attachment menu state it
+  /// reports once signed in fails a TDLib CHECK that aborts the app. TDLib
+  /// stored the real `my_id` before reporting ready, so the reopened client
+  /// starts signed in, the way the next launch would.
+  Future<void> _restartResolvedImportClient(int slot, int userId) async {
+    if (!await _closeClientForSlot(slot)) {
+      throw TimeoutException(
+        'Timed out reopening restored account session for slot $slot',
+      );
+    }
+    _ensureAcceptingNewClients();
+    final cid = _bindings.createClientId();
+    _clientForSlot[slot] = cid;
+    _slotForClient[cid] = slot;
+    unawaited(_persistLiveClientIds());
+    _bindings.send(cid, _tdActivateRequest);
+    await _waitForRestoredSessionReady(slot, cid, userId);
   }
 
   /// Closes an imported slot and removes its database. The directory is removed

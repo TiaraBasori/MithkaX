@@ -556,7 +556,11 @@ class _AiProviderEditorViewState extends State<AiProviderEditorView> {
     } on FormatException {
       if (!mounted) return;
       showToast(context, AppStringKeys.aiInvalidEndpoint.l10n(context));
-      setState(() => _saving = false);
+    } catch (error) {
+      if (!mounted) return;
+      showToast(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -601,10 +605,16 @@ class _AiProviderEditorViewState extends State<AiProviderEditorView> {
     final provider = widget.provider;
     if (provider == null || _saving) return;
     setState(() => _saving = true);
-    await context.read<AiSettingsController>().deleteServerProvider(
-      provider.id,
-    );
-    if (mounted) Navigator.of(context).pop();
+    try {
+      await context.read<AiSettingsController>().deleteServerProvider(
+        provider.id,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) showToast(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }
 
@@ -1192,6 +1202,7 @@ class _AiModelEditorViewState extends State<AiModelEditorView> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final providerId = _providerId;
     final contextWindow = int.tryParse(_contextWindow.text.trim());
     if (providerId == null || contextWindow == null) {
@@ -1213,7 +1224,11 @@ class _AiModelEditorViewState extends State<AiModelEditorView> {
     } on FormatException {
       if (!mounted) return;
       showToast(context, AppStringKeys.aiInvalidModel.l10n(context));
-      setState(() => _saving = false);
+    } catch (error) {
+      if (!mounted) return;
+      showToast(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -1221,8 +1236,14 @@ class _AiModelEditorViewState extends State<AiModelEditorView> {
     final profile = widget.profile;
     if (profile == null || _saving) return;
     setState(() => _saving = true);
-    await context.read<AiSettingsController>().deleteModelProfile(profile.id);
-    if (mounted) Navigator.of(context).pop();
+    try {
+      await context.read<AiSettingsController>().deleteModelProfile(profile.id);
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) showToast(context, error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }
 

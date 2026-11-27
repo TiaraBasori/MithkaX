@@ -15,6 +15,7 @@ import 'package:mithka/components/app_icons.dart';
 import 'package:mithka/components/app_interactive_surface.dart';
 import 'package:mithka/theme/app_motion.dart';
 import 'package:mithka/theme/app_theme.dart';
+import '../app/bottom_bar_layout.dart';
 
 /// One command in an anchored popup menu.
 ///
@@ -233,25 +234,29 @@ Offset appAnchoredMenuOriginFor({
   double margin = 8,
   double? gap,
   bool alignRight = false,
+  double bottomInset = 0,
 }) {
   // [margin] keeps the menu off the viewport edges; [gap] is the distance to
   // the pressed control itself, so a caller can hug a tab strip without also
-  // pinning the menu to the screen edge.
+  // pinning the menu to the screen edge. [bottomInset] is chrome drawn OVER
+  // the body (the liquid-glass tab bar): the usable viewport ends above it,
+  // so a menu that would reach under it flips up instead.
   final controlGap = gap ?? margin;
+  final usableBottom = math.max(margin, viewport.height - bottomInset - margin);
   final maxLeft = math.max(margin, viewport.width - menuSize.width - margin);
   final wantedLeft = alignRight ? anchor.right - menuSize.width : anchor.left;
   final left = wantedLeft.clamp(margin, maxLeft).toDouble();
   final belowTop = anchor.bottom + controlGap;
   final aboveTop = anchor.top - controlGap - menuSize.height;
   final double top;
-  if (belowTop + menuSize.height <= viewport.height - margin) {
+  if (belowTop + menuSize.height <= usableBottom) {
     top = belowTop;
   } else if (aboveTop >= margin) {
     top = aboveTop;
   } else {
-    // Neither side fits (menu taller than the viewport): pin it to the top
-    // and let the column clip inside the viewport-sized stack.
-    top = margin;
+    // Neither side fits (menu taller than the usable viewport): pin its
+    // bottom above the overlay chrome and let the column clip/scroll.
+    top = math.max(margin, usableBottom - menuSize.height);
   }
   return Offset(left, top);
 }
@@ -288,6 +293,10 @@ Future<void> showAppAnchoredMenu({
     entry?.remove();
   }
 
+  // Chrome painted over the body (the liquid-glass tab bar) claims the
+  // bottom of the screen: a tab menu must open above it instead of under it.
+  final bottomInset =
+      context.getInheritedWidgetOfExactType<BottomBarInset>()?.bottom ?? 0;
   late final AppAnchoredMenuPopup menu;
   menu = AppAnchoredMenuPopup(
     anchor: anchorInOverlay,
@@ -295,6 +304,7 @@ Future<void> showAppAnchoredMenu({
     header: header,
     actions: actions,
     style: style,
+    bottomInset: bottomInset,
     onDismissed: () {
       removeEntry(menu.entry);
       completer.complete();
@@ -321,6 +331,7 @@ class AppAnchoredMenuPopup extends StatefulWidget {
     this.header,
     this.gap = 8,
     this.style = AppAnchoredMenuStyle.compact,
+    this.bottomInset = 0,
   });
 
   /// The pressed control's rect in the enclosing overlay's coordinates.
@@ -334,6 +345,10 @@ class AppAnchoredMenuPopup extends StatefulWidget {
   final String? header;
   final List<AppMenuAction> actions;
   final AppAnchoredMenuStyle style;
+
+  /// Height of chrome drawn over the body's bottom edge (the glass tab bar),
+  /// so placement keeps the whole card above it.
+  final double bottomInset;
   final VoidCallback onDismissed;
 
   /// The overlay entry this menu renders inside; assigned by
@@ -483,7 +498,7 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
         // instead of letting the column run off the window.
         final maxHeight = math.max(
           style.rowHeight,
-          viewport.height - 2 * _menuViewportMargin,
+          viewport.height - widget.bottomInset - 2 * _menuViewportMargin,
         );
         final menuSize = Size(menuWidth, math.min(contentHeight, maxHeight));
         final origin = appAnchoredMenuOriginFor(
@@ -492,6 +507,7 @@ class _AppAnchoredMenuPopupState extends State<AppAnchoredMenuPopup>
           menuSize: menuSize,
           gap: widget.gap,
           alignRight: style.rightAligned,
+          bottomInset: widget.bottomInset,
         );
         // The menu grows from the corner nearest the pressed control,
         // matching exteraless's pivotX/pivotY on the control-adjacent corner:

@@ -1,5 +1,27 @@
 part of 'chat_view.dart';
 
+/// The GIF gallery around [target]: every motion message that may preview
+/// beside it, in transcript order. A target outside the loaded transcript (for
+/// example a rich block's synthetic message) is appended so the tap still
+/// opens the picture the user pressed.
+@visibleForTesting
+List<ChatMessage> animationGalleryFor(
+  List<ChatMessage> messages,
+  ChatMessage target,
+) {
+  final gallery = messages
+      .where(
+        (m) =>
+            m.contentType == 'messageAnimation' &&
+            m.video != null &&
+            m.image != null &&
+            canPreviewMediaAlongside(m, target),
+      )
+      .toList();
+  if (!gallery.any((m) => m.id == target.id)) gallery.add(target);
+  return gallery;
+}
+
 extension _ChatViewActions on _ChatViewState {
   void _enterSelection(ChatMessage message) {
     _updateState(() {
@@ -722,6 +744,30 @@ extension _ChatViewActions on _ChatViewState {
     unawaited(openImagePreview(context, items: items, startIndex: startIndex));
   }
 
+  /// A GIF is a looping picture, not a video: open it in the image viewer,
+  /// which plays the MP4 over its still without a seek bar or duration chrome.
+  void _openAnimation(ChatMessage message) {
+    if (message.video == null || message.image == null) {
+      _playVideo(message);
+      return;
+    }
+    final gallery = animationGalleryFor(_vm.messages, message);
+    final start = gallery.indexWhere((m) => m.id == message.id);
+    unawaited(
+      openImagePreview(
+        context,
+        items: [for (final m in gallery) m.image!],
+        animations: [for (final m in gallery) m.video],
+        startIndex: start,
+        messageActions: _imageMessageActions(gallery),
+        metadata: MediaMetadata.listFor(
+          gallery,
+          enabled: context.read<ThemeController>().mediaMetadataEnabled,
+        ),
+      ),
+    );
+  }
+
   void _openSticker(ChatMessage message) {
     final desktop = isDesktopTargetPlatform(Theme.of(context).platform);
     Navigator.of(context).push(
@@ -757,6 +803,7 @@ extension _ChatViewActions on _ChatViewState {
       onOpenReply: _openReplyMessage,
       onOpenImage: _openImage,
       onOpenSticker: _openSticker,
+      onOpenAnimation: _openAnimation,
       onPlayVideo: _playVideo,
       onPlayMusic: _playMusicMessage,
       onButtonTap: _pressMessageButton,
@@ -1131,8 +1178,14 @@ extension _ChatViewActions on _ChatViewState {
       case MessageAction.multiSelect:
         _enterSelection(message);
       case MessageAction.pinTodo:
+        final pinOptions = await _askPinOptions();
+        if (!mounted || pinOptions == null) return;
         try {
-          await _vm.pinTodo(message);
+          await _vm.pinTodo(
+            message,
+            notify: pinOptions.notify,
+            onlyForSelf: pinOptions.onlyForSelf,
+          );
           if (!mounted) return;
           showToastOverlay(
             Overlay.of(context),
@@ -1819,5 +1872,242 @@ extension _ChatViewActions on _ChatViewState {
       context,
       AppStringKeys.historyRemovedFromMirrorToast.l10n(context),
     );
+  }
+
+  /// exteraless asks before a message is pinned (ChatActivity `OPTION_PIN`):
+  /// a centred dialog whose checkbox decides whether everyone is notified.
+  ///
+  /// Groups and supergroups default to notifying all members. A broadcast
+  /// channel pins silently and has no choice to make. A private chat pins
+  /// only on this account unless "also pin for the peer" is ticked, which is
+  /// exteraless's `PinAlsoFor` checkbox mapped to TDLib `only_for_self`.
+  Future<({bool notify, bool onlyForSelf})?> _askPinOptions() async {
+    final groupPin = _vm.isGroup;
+    final privatePin = !_vm.isGroup && !_vm.isChannel;
+    final peerTitle = _vm.displayTitle.trim();
+    var notify = groupPin;
+    var alsoForPeer = false;
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: AppStrings.t(AppStringKeys.chatPinDialogTitle),
+      message: AppStrings.t(AppStringKeys.chatPinDialogMessage),
+      confirmText: AppStrings.t(AppStringKeys.messageActionSetTodo),
+      content: groupPin || (privatePin && peerTitle.isNotEmpty)
+          ? _PinDialogChoices(
+              notify: notify,
+              showNotify: groupPin,
+              alsoForLabel: privatePin && peerTitle.isNotEmpty
+                  ? AppStrings.t(AppStringKeys.chatPinAlsoFor, {
+                      'value1': peerTitle,
+                    })
+                  : null,
+              alsoForPeer: alsoForPeer,
+              onNotifyChanged: (value) => notify = value,
+              onAlsoForChanged: (value) => alsoForPeer = value,
+            )
+          : null,
+    );
+    if (!confirmed) return null;
+    return (notify: notify, onlyForSelf: privatePin && !alsoForPeer);
+  }
+}
+
+/// The two checkboxes exteraless puts inside its pin dialog. A StatefulWidget
+/// rather than a rebuild-free builder: the dialog lives in its own route, so
+/// the toggles must repaint themselves.
+class _PinDialogChoices extends StatefulWidget {
+  const _PinDialogChoices({
+    required this.notify,
+    required this.showNotify,
+    required this.alsoForPeer,
+    required this.onNotifyChanged,
+    required this.onAlsoForChanged,
+    this.alsoForLabel,
+  });
+
+  final bool notify;
+  final bool showNotify;
+  final bool alsoForPeer;
+  final ValueChanged<bool> onNotifyChanged;
+  final ValueChanged<bool> onAlsoForChanged;
+  final String? alsoForLabel;
+
+  @override
+  State<_PinDialogChoices> createState() => _PinDialogChoicesState();
+}
+
+class _PinDialogChoicesState extends State<_PinDialogChoices> {
+  late bool _notify = widget.notify;
+  late bool _alsoForPeer = widget.alsoForPeer;
+
+  void _setNotify(bool value) {
+    setState(() => _notify = value);
+    widget.onNotifyChanged(value);
+  }
+
+  void _setAlsoForPeer(bool value) {
+    setState(() => _alsoForPeer = value);
+    widget.onAlsoForChanged(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final alsoForLabel = widget.alsoForLabel;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.showNotify)
+          _choiceRow(
+            context,
+            key: const ValueKey('pin-dialog-notify'),
+            label: AppStrings.t(AppStringKeys.chatPinNotifyMembers),
+            value: _notify,
+            color: c.textPrimary,
+            onChanged: _setNotify,
+          ),
+        if (alsoForLabel != null)
+          _choiceRow(
+            context,
+            key: const ValueKey('pin-dialog-also-for'),
+            label: alsoForLabel,
+            value: _alsoForPeer,
+            color: c.textPrimary,
+            onChanged: _setAlsoForPeer,
+          ),
+      ],
+    );
+  }
+
+  Widget _choiceRow(
+    BuildContext context, {
+    required Key key,
+    required String label,
+    required bool value,
+    required Color color,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        key: key,
+        children: [
+          AppCheckbox(value: value, onChanged: onChanged),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onChanged(!value),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  label,
+                  style: AppTextStyle.body(color).copyWith(height: 1.3),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Double-tap on a message: the incoming/outgoing choice from the chat-view
+/// settings, ported from exteraless `ChatActivity.hasDoubleTap` /
+/// `onDoubleTap`.
+extension _ChatViewDoubleTap on _ChatViewState {
+  /// The recognizer's callback for [message], or null when the double tap is
+  /// off (or this message cannot run the chosen action). Null keeps the single
+  /// tap immediate — Flutter only waits out the double-tap timeout when a
+  /// recognizer exists.
+  VoidCallback? _doubleTapCallback(ChatMessage message) {
+    final theme = context.read<ThemeController>();
+    final action = message.isOutgoing
+        ? theme.doubleTapOutgoing
+        : theme.doubleTapIncoming;
+    if (action == MessageDoubleTapAction.none) return null;
+    if (!_doubleTapActionAvailable(action, message)) return null;
+    return () => unawaited(_runDoubleTap(action, message));
+  }
+
+  bool _doubleTapActionAvailable(
+    MessageDoubleTapAction action,
+    ChatMessage message,
+  ) {
+    final canForward =
+        _vm.canForwardContent || (_protectedCopyEnabled && !message.isService);
+    // exteraless refuses a double tap on service traffic except the delete
+    // path, which is the only menu item a call log offers.
+    if (message.isService || message.isCall) {
+      return action == MessageDoubleTapAction.delete;
+    }
+    return switch (action) {
+      MessageDoubleTapAction.none => false,
+      MessageDoubleTapAction.sendReaction => !message.isContentRestricted,
+      MessageDoubleTapAction.translate =>
+        _hasAvailableTranslationOption &&
+            _translationSourceText(message).trim().isNotEmpty,
+      MessageDoubleTapAction.reply =>
+        _vm.canSendMessages || (_vm.isChannel && _vm.hasLinkedDiscussion),
+      MessageDoubleTapAction.save => true,
+      MessageDoubleTapAction.repeat => canForward,
+      MessageDoubleTapAction.edit =>
+        message.isOutgoing && _doubleTapMessageIsEditable(message),
+      MessageDoubleTapAction.delete => true,
+      MessageDoubleTapAction.forward => canForward,
+      MessageDoubleTapAction.saveToPhotos =>
+        message.isPhoto || message.video != null,
+    };
+  }
+
+  bool _doubleTapMessageIsEditable(ChatMessage message) =>
+      message.contentType == 'messageText' ||
+      message.contentType == 'messageRichMessage' ||
+      message.contentType == 'messageChecklist' ||
+      _isEditableMediaMessage(message);
+
+  Future<void> _runDoubleTap(
+    MessageDoubleTapAction action,
+    ChatMessage message,
+  ) async {
+    switch (action) {
+      case MessageDoubleTapAction.none:
+        return;
+      case MessageDoubleTapAction.sendReaction:
+        // The first configured quick reaction, the same slot exteraless sends
+        // from `getDoubleTapReaction()`.
+        final configured = effectiveQuickReactions(
+          context.read<ThemeController>().quickReactions,
+          allowCustomEmoji: true,
+        );
+        final choice = configured.isEmpty
+            ? defaultQuickReactions.first
+            : configured.first;
+        unawaited(
+          _sendReaction(
+            () => choice.isCustom
+                ? _vm.addCustomReaction(message.id, choice.customEmojiId)
+                : _vm.addReaction(message.id, choice.emoji),
+          ),
+        );
+      case MessageDoubleTapAction.translate:
+        unawaited(_perform(MessageAction.translate, message));
+      case MessageDoubleTapAction.reply:
+        unawaited(_perform(MessageAction.reply, message));
+      case MessageDoubleTapAction.save:
+        unawaited(_perform(MessageAction.save, message));
+      case MessageDoubleTapAction.repeat:
+        unawaited(_perform(MessageAction.repeat, message));
+      case MessageDoubleTapAction.edit:
+        unawaited(_perform(MessageAction.edit, message));
+      case MessageDoubleTapAction.delete:
+        unawaited(_perform(MessageAction.delete, message));
+      case MessageDoubleTapAction.forward:
+        unawaited(_perform(MessageAction.forward, message));
+      case MessageDoubleTapAction.saveToPhotos:
+        unawaited(_perform(MessageAction.saveToPhotos, message));
+    }
+    await AppHaptics.tap();
   }
 }

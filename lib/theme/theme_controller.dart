@@ -16,6 +16,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/l10n/preview_texts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../chat/messages/message_double_tap_action.dart';
 import '../chat/messages/quick_reaction_choice.dart';
 import '../components/app_icons.dart';
 import '../platform/adaptive_platform.dart';
@@ -1148,6 +1149,16 @@ class ThemeController extends ChangeNotifier {
       (mode) => mode.name == _prefs.getString(_channelBottomBarModeKey),
       orElse: () => ChannelBottomBarMode.mute,
     );
+    _doubleTapIncoming = MessageDoubleTapAction.values.firstWhere(
+      (action) => action.name == _prefs.getString(_doubleTapIncomingKey),
+      orElse: () => MessageDoubleTapAction.sendReaction,
+    );
+    _doubleTapOutgoing = MessageDoubleTapAction.values.firstWhere(
+      (action) => action.name == _prefs.getString(_doubleTapOutgoingKey),
+      orElse: () => MessageDoubleTapAction.sendReaction,
+    );
+    _showAvatarOnlineStatus =
+        _prefs.getBool(_showAvatarOnlineStatusKey) ?? false;
     _showChannelPostStats = _prefs.getBool(_showChannelPostStatsKey) ?? true;
     _enterToSend = _prefs.getBool(_enterToSendKey) ?? false;
     _openChatsAtLatest = _prefs.getBool(_openChatsAtLatestKey) ?? false;
@@ -1187,6 +1198,11 @@ class ThemeController extends ChangeNotifier {
     _autoRevealRestrictedMedia =
         _prefs.getBool(_autoRevealRestrictedMediaKey) ?? false;
     _liquidGlassBottomBar = _prefs.getBool(_liquidGlassBottomBarKey) ?? false;
+    _replyQuoteSenderStyle = _prefs.getBool(_replyQuoteSenderStyleKey) ?? true;
+    _stickerMediaSize = (_prefs.getDouble(_stickerMediaSizeKey) ?? 14).clamp(
+      2.0,
+      20.0,
+    );
     _simpleMode = _prefs.getBool(_simpleModeKey) ?? false;
     _showChannelsTab = _prefs.getBool(_showChannelsTabKey) ?? false;
     _showContactsTab = _prefs.getBool(_showContactsTabKey) ?? true;
@@ -1224,6 +1240,9 @@ class ThemeController extends ChangeNotifier {
   static const _modeKey = 'appearanceMode';
   static const _mediaPanelSegmentKey = 'mediaPanelSegment';
   static const _channelBottomBarModeKey = 'channelBottomBarMode.v1';
+  static const _doubleTapIncomingKey = 'doubleTapAction.incoming.v1';
+  static const _doubleTapOutgoingKey = 'doubleTapAction.outgoing.v1';
+  static const _showAvatarOnlineStatusKey = 'avatarOnlineStatus.v1';
   static const _showChannelPostStatsKey = 'showChannelPostStats.v1';
   static const _themingEnabledKey = 'appearanceThemingEnabled';
   static const _brandKey = 'brandColor';
@@ -1305,6 +1324,8 @@ class ThemeController extends ChangeNotifier {
   static const _hideBlockedUserMessagesKey = 'hideBlockedUserMessages';
   static const _autoRevealRestrictedMediaKey = 'autoRevealRestrictedMedia';
   static const _liquidGlassBottomBarKey = 'liquidGlassBottomBar';
+  static const _replyQuoteSenderStyleKey = 'mithkax.replyQuoteSenderStyle.v1';
+  static const _stickerMediaSizeKey = 'mithkax.stickerMediaSize.v1';
   static const _simpleModeKey = 'simpleMode';
   static const _showChannelsTabKey = 'showChannelsTab';
   static const _showContactsTabKey = 'showContactsTab';
@@ -1333,6 +1354,9 @@ class ThemeController extends ChangeNotifier {
   late bool _usePerAccountTheming;
   late bool _themingEnabled;
   late ChannelBottomBarMode _channelBottomBarMode;
+  late MessageDoubleTapAction _doubleTapIncoming;
+  late MessageDoubleTapAction _doubleTapOutgoing;
+  bool _showAvatarOnlineStatus = false;
   bool _showChannelPostStats = true;
   late AppearanceMode _mode;
   late Color _brandColor;
@@ -1409,6 +1433,12 @@ class ThemeController extends ChangeNotifier {
   bool _hideBlockedUserMessages = false;
   bool _autoRevealRestrictedMedia = false;
   bool _liquidGlassBottomBar = false;
+  bool _replyQuoteSenderStyle = true;
+
+  /// exteraless's sticker-size value (4..20, default 14). One value drives both
+  /// stickers and GIFs in the transcript; [stickerMediaScale] is the relative
+  /// factor it maps to, so the stock look stays 1.0.
+  double _stickerMediaSize = 14;
   bool _simpleMode = false;
   bool _showChannelsTab = false;
   bool _showContactsTab = true;
@@ -1886,6 +1916,34 @@ class ThemeController extends ChangeNotifier {
       _mobileMessageActionMenuStyle;
   ChannelBottomBarMode get channelBottomBarMode => _channelBottomBarMode;
 
+  MessageDoubleTapAction get doubleTapIncoming => _doubleTapIncoming;
+
+  set doubleTapIncoming(MessageDoubleTapAction value) {
+    if (_doubleTapIncoming == value) return;
+    _doubleTapIncoming = value;
+    _prefs.setString(_doubleTapIncomingKey, value.name);
+    notifyListeners();
+  }
+
+  MessageDoubleTapAction get doubleTapOutgoing => _doubleTapOutgoing;
+
+  set doubleTapOutgoing(MessageDoubleTapAction value) {
+    if (_doubleTapOutgoing == value) return;
+    _doubleTapOutgoing = value;
+    _prefs.setString(_doubleTapOutgoingKey, value.name);
+    notifyListeners();
+  }
+
+  /// exteraless `showOnlineStatus`, default off: the avatar corner dot.
+  bool get showAvatarOnlineStatus => _showAvatarOnlineStatus;
+
+  set showAvatarOnlineStatus(bool value) {
+    if (_showAvatarOnlineStatus == value) return;
+    _showAvatarOnlineStatus = value;
+    _prefs.setBool(_showAvatarOnlineStatusKey, value);
+    notifyListeners();
+  }
+
   /// Whether channel posts carry their view and forward counts in the band
   /// under the bubble.
   bool get showChannelPostStats => _showChannelPostStats;
@@ -1948,6 +2006,17 @@ class ThemeController extends ChangeNotifier {
   /// the server still enforces.
   bool get autoRevealRestrictedMedia => _autoRevealRestrictedMedia;
   bool get liquidGlassBottomBar => _liquidGlassBottomBar;
+
+  /// Reply markers use the quoted author's name colour and emoji status,
+  /// exteraless's reply-line styling. Off renders a plain theme-coloured line.
+  bool get replyQuoteSenderStyle => _replyQuoteSenderStyle;
+
+  double get stickerMediaSize => _stickerMediaSize;
+
+  /// Relative size factor: 1.0 at exteraless's default 14. Its mobile formula
+  /// spans `0.5 + (size - 14) / 30` of the viewport, so the same % swing is
+  /// `1 + (size - 14) / 15` here (0.2×..1.4×, exteraless's 2..20 range).
+  double get stickerMediaScale => 1 + (_stickerMediaSize - 14) / 15;
 
   /// Collapses the phone composer to one row and moves its tools into the
   /// More panel. Local presentation pref only; never rewrites other settings.
@@ -3205,10 +3274,25 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  set replyQuoteSenderStyle(bool value) {
+    if (_replyQuoteSenderStyle == value) return;
+    _replyQuoteSenderStyle = value;
+    _prefs.setBool(_replyQuoteSenderStyleKey, value);
+    notifyListeners();
+  }
+
   set liquidGlassBottomBar(bool value) {
     if (_liquidGlassBottomBar == value) return;
     _liquidGlassBottomBar = value;
     _prefs.setBool(_liquidGlassBottomBarKey, value);
+    notifyListeners();
+  }
+
+  set stickerMediaSize(double value) {
+    final next = value.clamp(2.0, 20.0).toDouble();
+    if ((_stickerMediaSize - next).abs() < 0.001) return;
+    _stickerMediaSize = next;
+    _prefs.setDouble(_stickerMediaSizeKey, next);
     notifyListeners();
   }
 

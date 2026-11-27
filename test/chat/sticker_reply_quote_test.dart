@@ -125,9 +125,18 @@ void main() {
     final stickerRect = tester.getRect(find.byType(TDImage).first);
     expect(quoteRect.bottom, lessThanOrEqualTo(stickerRect.top));
 
-    // A 120pt sticker would make a 120pt quote unreadable; the panel keeps a
-    // readable floor while never growing past the bubble lane.
-    expect(quoteRect.width, greaterThanOrEqualTo(160));
+    // A 120pt sticker would make a 120pt quote unreadable; the marker keeps a
+    // readable floor while never growing past the bubble lane. It is a thin
+    // rule + author/preview, not the filled reply card.
+    expect(quoteRect.width, greaterThanOrEqualTo(148));
+    expect(
+      find.byKey(const ValueKey('messageReplyStickerAuthor')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('messageReplyNavigateUpIcon')),
+      findsNothing,
+    );
   });
 
   testWidgets('a sticker without a reply reserves no quote', (tester) async {

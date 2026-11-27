@@ -157,6 +157,8 @@ import 'messages/message_action_menu_presentation.dart';
 import 'messages/message_arrival.dart';
 import 'messages/message_bubble.dart';
 import 'messages/message_bubble_repository_view.dart';
+import 'messages/message_double_tap_action.dart';
+import 'messages/message_preview_label.dart';
 import 'messages/message_quote_selection_dialog.dart';
 import 'messages/message_reaction_availability.dart';
 import 'messages/message_replies_sheet.dart';
@@ -2106,6 +2108,11 @@ class _ChatViewState extends State<ChatView> {
       channelHasLinkedDiscussion: _vm.hasLinkedDiscussion,
       showChannelPostStats:
           _vm.isChannel && context.read<ThemeController>().showChannelPostStats,
+      showAvatarOnlineStatus: context
+          .read<ThemeController>()
+          .showAvatarOnlineStatus,
+      peerPresence: _vm.peerPresence,
+      onDoubleTap: _doubleTapCallback(message),
       onOpenImage: _openImage,
       onOpenImageGallery: _openImageGallery,
       onApplyMessageBubble: offersMessageBubbleApplyAction(message)
@@ -2118,6 +2125,7 @@ class _ChatViewState extends State<ChatView> {
             )
           : null,
       onOpenSticker: _openSticker,
+      onOpenAnimation: _openAnimation,
       onPlayVideo: _playVideo,
       onPlayMusic: _playMusicMessage,
       onButtonTap: _pressMessageButton,
@@ -2260,7 +2268,6 @@ class _ChatViewState extends State<ChatView> {
   Widget _chatTranslationPanel() => ChatTranslationPanel(
     active: _automaticTranslationEnabled,
     targetLanguageLabel: _translation.targetLanguageLabel.l10n(context),
-    isTranslating: _autoTranslationRunning,
     onToggle: _toggleAutomaticTranslation,
     onChooseLanguage: () => unawaited(_showChatTranslationLanguagePicker()),
     onDismiss: _dismissAutomaticTranslation,
@@ -2747,10 +2754,20 @@ class _ChatViewState extends State<ChatView> {
             ),
           ),
         ),
-        if (shouldShowTranscriptSkeleton(
-          initialTranscriptReady: transcriptReady,
-        ))
-          Positioned.fill(child: _transcriptSkeleton()),
+        // The skeleton fades out when the first page lands instead of
+        // vanishing under the transcript, so a topic swap that outlasts the
+        // route fade still resolves into the conversation smoothly.
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: AppMotion.quick,
+            child:
+                shouldShowTranscriptSkeleton(
+                  initialTranscriptReady: transcriptReady,
+                )
+                ? _transcriptSkeleton()
+                : const SizedBox.shrink(),
+          ),
+        ),
         if (showPinnedTodo)
           Positioned(
             top: 12,
@@ -4051,14 +4068,23 @@ class _ChatViewState extends State<ChatView> {
 
   Widget _pinnedBar(ChatMessage pinned) {
     final c = context.colors;
-    final text = pinned.text.trim().isEmpty
-        ? AppStrings.t(AppStringKeys.chatSearchMessageResultLabel)
-        : pinned.text.replaceAll('\n', ' ');
+    final raw = pinned.text.trim();
+    final generic = AppStrings.t(AppStringKeys.chatSearchMessageResultLabel);
+    final text = raw.isEmpty || raw == generic
+        ? messagePreviewLabel(pinned)
+        : raw.replaceAll('\n', ' ');
     final canPrevious = _vm.hasPreviousPinnedMessage;
     final canNext = _vm.hasNextPinnedMessage;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _openPinnedFromBar(pinned),
+      // exteraless opens the whole pinned list from a long press on the top
+      // bar (`pinnedMessageView` long-click → `openPinnedMessagesList`); the
+      // tap stays "scroll to the pinned message".
+      onLongPress: () {
+        unawaited(AppHaptics.longPress());
+        unawaited(_openPinnedMessages());
+      },
       child: Container(
         key: const ValueKey('chatPinnedBar'),
         height: 48,

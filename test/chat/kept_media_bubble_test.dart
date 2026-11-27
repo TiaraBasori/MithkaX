@@ -173,6 +173,10 @@ void main() {
 
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('Sticker', findRichText: true), findsNothing);
+    // A sticker keeps the sticker shape: no media card around it, and the
+    // original 512² box paints at the 120pt sticker side.
+    expect(find.byType(MediaSnapshotView), findsNothing);
+    expect(tester.getSize(find.byType(Image)), const Size(120, 120));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

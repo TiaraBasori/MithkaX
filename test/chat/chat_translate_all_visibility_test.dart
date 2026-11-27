@@ -22,6 +22,7 @@ import 'package:mithka/chat/ai_translation/chat_translation_language_cache.dart'
 import 'package:mithka/chat/chat_view.dart';
 import 'package:mithka/chat/chat_view_model.dart';
 import 'package:mithka/components/drawer_controller.dart' as dc;
+import 'package:mithka/components/ui_components.dart';
 import 'package:mithka/l10n/app_locale_controller.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/settings/ai_translation/translation_controller.dart';
@@ -354,6 +355,15 @@ void main() {
     expect(
       find.byKey(const ValueKey('chat-translation-panel')),
       findsOneWidget,
+    );
+    // Translations arrive per viewport now, so the bar carries no "working"
+    // spinner: it always keeps the language glyph.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat-translation-panel')),
+        matching: find.byType(AppActivityIndicator),
+      ),
+      findsNothing,
     );
     await openMenu(tester);
     expect(translateRow(), findsOneWidget);

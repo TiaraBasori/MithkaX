@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -80,4 +82,25 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  test(
+    'an account switch keeps the ready shell and skips the crossfade',
+    () async {
+      // A sidebar switch re-reads an already-signed-in client. Painting
+      // LoginView for those frames (the old behaviour) flashed the phone form
+      // and tore the shell down; cross-fading two ready shells left elements of
+      // both accounts stacked. Both paths are pinned in the gate source.
+      final source = await File('lib/app/content_view.dart').readAsString();
+      expect(
+        source,
+        contains('AuthReloading() when readyDuringReload => readyChild'),
+        reason: 'a ready account reload must keep the ready surface',
+      );
+      expect(
+        source,
+        contains('!(showsReadySurface && _showedReadySurface)'),
+        reason: 'ready → ready account switches are a jump cut',
+      );
+    },
+  );
 }

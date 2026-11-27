@@ -1146,7 +1146,8 @@ ChatListSwipeDecision chatListSwipeDecision({
   final centroidDelta =
       pointerDeltas.reduce((a, b) => a + b) / pointerDeltas.length.toDouble();
   if (centroidDelta.dx.abs() < distanceThreshold ||
-      centroidDelta.dx.abs() < centroidDelta.dy.abs() * 1.25) {
+      centroidDelta.dx.abs() <
+          centroidDelta.dy.abs() * chatListFolderDiagonalBias) {
     return ChatListSwipeDecision.none;
   }
   return ChatListSwipeDecision(action, centroidDelta.dx);
@@ -1161,6 +1162,51 @@ bool chatListRowSwipeActionsEnabled({
 /// means the list only starts following once a tap has already been ruled out,
 /// and it is the same distance at which a vertical drag would claim the scroll.
 const double chatListFolderDragActivation = kTouchSlop;
+
+/// How much vertical drift a folder swipe tolerates: the horizontal travel only
+/// has to reach three quarters of the vertical one, so a diagonal (45°, or a
+/// thumb drifting up to ~53°) still switches folders instead of scrolling.
+///
+/// exteraless compares `|dx| > dy` at the touch slop, which a diagonal release
+/// passes only by chance; a phone thumb almost always drifts, and the pager is
+/// the gesture users mean when they swipe sideways at all.
+const double chatListFolderDiagonalBias = 0.75;
+
+/// exteraless's flick gate for the folder pager.
+///
+/// `DialogsActivity.onTouchEvent` treats a release as a folder switch when
+/// `|velX| >= AppUtils.getSwipeVelocity()` (850 in portrait, 1250 in
+/// landscape) and `|velX| > |velY|`, even if the finger never travelled the
+/// activation distance. Those numbers are PHYSICAL pixels per second — Android
+/// MotionEvents are device pixels — while Flutter velocities are logical, so
+/// the threshold is converted by the device pixel ratio.
+double chatListFolderFlickVelocity({
+  required double devicePixelRatio,
+  required bool landscape,
+}) => (landscape ? 1250.0 : 850.0) / math.max(1.0, devicePixelRatio);
+
+/// Whether a live contact is a fast horizontal flick at the folder pager.
+///
+/// [minimumTravel] keeps a stationary press whose VelocityTracker happens to
+/// report a spike from starting the pager; exteraless gets the same protection
+/// from requiring the pointer to have moved at all.
+bool chatListFolderFlick({
+  required Offset travel,
+  required Offset velocity,
+  required double velocityThreshold,
+  double minimumTravel = 6,
+}) {
+  if (travel.dx.abs() < minimumTravel) return false;
+  // The contact itself must be a folder swipe: a mostly-vertical drag that
+  // happens to end with a sideways velocity spike still belongs to the list.
+  if (travel.dy.abs() > travel.dx.abs() / chatListFolderDiagonalBias) {
+    return false;
+  }
+  final vx = velocity.dx;
+  return travel.dx.sign == vx.sign &&
+      vx.abs() >= velocityThreshold &&
+      vx.abs() >= velocity.dy.abs() * chatListFolderDiagonalBias;
+}
 
 /// Where the list sits for a given finger travel. Inside the folder list the
 /// list tracks the finger one to one; past the first or last folder it rubber
@@ -1260,6 +1306,8 @@ class ChatListSwipeSession {
   bool _hadPointerEnd = false;
   bool _axisResolved = false;
   bool _scrolling = false;
+  VelocityTracker? _velocity;
+  int? _velocityPointer;
 
   bool get isActive => _activePositions.isNotEmpty;
   bool get suppressRowSwipes => isActive && _peakPointerCount > 1;
@@ -1282,6 +1330,37 @@ class ChatListSwipeSession {
       total += current - entry.value;
     }
     return total / _peakPointerCount.toDouble();
+  }
+
+  /// Velocity of the single tracked finger, in logical pixels per second.
+  Offset? get velocity => _velocity?.getVelocity().pixelsPerSecond;
+
+  /// Whether the live contact is a fast horizontal flick, which starts the
+  /// folder pager before it has travelled the activation distance.
+  ///
+  /// exteraless acts on the flick at release; a Flutter row's tap recognizer
+  /// has already fired by then, so the pager has to claim the contact while
+  /// the finger is still down. The release then commits through
+  /// [chatListFolderDragShouldCommit], exactly like a travelled drag.
+  bool liveFlick(
+    ChatListSwipeMode currentMode, {
+    required double velocityThreshold,
+  }) {
+    if (_mode != currentMode ||
+        _blocked ||
+        _hadPointerEnd ||
+        _scrolling ||
+        _peakPointerCount != 1) {
+      return false;
+    }
+    final travel = liveCentroidDelta;
+    final velocity = this.velocity;
+    if (travel == null || velocity == null) return false;
+    return chatListFolderFlick(
+      travel: travel,
+      velocity: velocity,
+      velocityThreshold: velocityThreshold,
+    );
   }
 
   /// Classifies the gesture while the fingers are still down, using a short
@@ -1309,6 +1388,7 @@ class ChatListSwipeSession {
     required Offset position,
     required ui.PointerDeviceKind kind,
     required ChatListSwipeMode mode,
+    required Duration timeStamp,
   }) {
     if (kind != ui.PointerDeviceKind.touch ||
         _activePositions.containsKey(pointer)) {
@@ -1317,6 +1397,11 @@ class ChatListSwipeSession {
     if (_activePositions.isEmpty) {
       _reset();
       _mode = mode;
+      // Only a single-finger contact can be a folder flick; a multi-touch
+      // centroid is not a point path a VelocityTracker can follow.
+      _velocity = VelocityTracker.withKind(kind)
+        ..addPosition(timeStamp, position);
+      _velocityPointer = pointer;
     } else if (_hadPointerEnd || _mode != mode) {
       _blocked = true;
     }
@@ -1334,9 +1419,16 @@ class ChatListSwipeSession {
     return true;
   }
 
-  void pointerMove({required int pointer, required Offset position}) {
+  void pointerMove({
+    required int pointer,
+    required Offset position,
+    required Duration timeStamp,
+  }) {
     if (!_activePositions.containsKey(pointer)) return;
     _activePositions[pointer] = position;
+    if (_velocityPointer == pointer) {
+      _velocity?.addPosition(timeStamp, position);
+    }
     if (_axisResolved) return;
     // Whichever axis clears the activation distance first owns the gesture, so
     // a list already being scrolled cannot be turned sideways halfway through.
@@ -1347,18 +1439,25 @@ class ChatListSwipeSession {
       return;
     }
     _axisResolved = true;
-    _scrolling = travel.dy.abs() > travel.dx.abs();
+    // Vertical only owns the gesture once it dominates the horizontal travel
+    // by the same bias the release gate uses, so a diagonal stays a folder
+    // swipe from the first move to the last.
+    _scrolling = travel.dy.abs() > travel.dx.abs() / chatListFolderDiagonalBias;
   }
 
   ChatListSwipeDecision? pointerEnd({
     required int pointer,
     required Offset position,
     required ChatListSwipeMode currentMode,
+    required Duration timeStamp,
     bool canceled = false,
   }) {
     if (!_activePositions.containsKey(pointer)) return null;
     _activePositions[pointer] = position;
     _finalPositions[pointer] = position;
+    if (_velocityPointer == pointer) {
+      _velocity?.addPosition(timeStamp, position);
+    }
     _activePositions.remove(pointer);
     _hadPointerEnd = true;
     if (canceled) _blocked = true;
@@ -1388,6 +1487,8 @@ class ChatListSwipeSession {
     _activePositions.clear();
     _candidateOrigins.clear();
     _finalPositions.clear();
+    _velocity = null;
+    _velocityPointer = null;
     _mode = null;
     _peakPointerCount = 0;
     _blocked = false;
@@ -2959,6 +3060,7 @@ class _ChatListViewState extends State<ChatListView>
       position: event.position,
       kind: event.kind,
       mode: context.read<ThemeController>().chatListSwipeMode,
+      timeStamp: event.timeStamp,
     );
     if (tracked &&
         wasSuppressingRows != _chatListSwipeSession.suppressRowSwipes) {
@@ -2971,6 +3073,7 @@ class _ChatListViewState extends State<ChatListView>
     _chatListSwipeSession.pointerMove(
       pointer: event.pointer,
       position: event.position,
+      timeStamp: event.timeStamp,
     );
     _trackFolderDrag(event);
   }
@@ -2997,9 +3100,20 @@ class _ChatListViewState extends State<ChatListView>
     if (travel == null ||
         _folderPagerWidth <= 0 ||
         _model.filters.length < 2 ||
-        folderMode == ChatFolderDisplayMode.hidden ||
-        _chatListSwipeSession.liveDecision(mode).action !=
-            ChatListSwipeAction.switchFolders) {
+        folderMode == ChatFolderDisplayMode.hidden) {
+      return;
+    }
+    // A travelled drag or a short fast flick. The flick has to arm here, while
+    // the finger is still down: at release the row's tap recognizer would have
+    // opened the chat already.
+    final decision = _chatListSwipeSession.liveDecision(mode);
+    final flick =
+        decision.action != ChatListSwipeAction.switchFolders &&
+        _chatListSwipeSession.liveFlick(
+          mode,
+          velocityThreshold: _folderFlickVelocity,
+        );
+    if (decision.action != ChatListSwipeAction.switchFolders && !flick) {
       return;
     }
     if (_folderSettleController.isAnimating) {
@@ -3022,6 +3136,16 @@ class _ChatListViewState extends State<ChatListView>
     _folderDragVelocity = VelocityTracker.withKind(event.kind)
       ..addPosition(event.timeStamp, travel);
     _applyFolderDragTravel(0);
+  }
+
+  /// exteraless's flick threshold in logical pixels per second for the
+  /// current orientation.
+  double get _folderFlickVelocity {
+    final size = MediaQuery.sizeOf(context);
+    return chatListFolderFlickVelocity(
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      landscape: size.width > size.height,
+    );
   }
 
   void _applyFolderDragTravel(double travel) {
@@ -3078,6 +3202,7 @@ class _ChatListViewState extends State<ChatListView>
           offset: _folderDrag.value,
           width: _folderPagerWidth,
           velocity: velocity,
+          velocityThreshold: _folderFlickVelocity,
         );
     _folderSettleTarget = commit ? peek : null;
     if (AppMotion.isReduced(context)) {
@@ -3107,6 +3232,7 @@ class _ChatListViewState extends State<ChatListView>
       pointer: event.pointer,
       position: event.position,
       currentMode: context.read<ThemeController>().chatListSwipeMode,
+      timeStamp: event.timeStamp,
       canceled: canceled,
     );
     if (wasSuppressingRows != _chatListSwipeSession.suppressRowSwipes) {
@@ -4306,7 +4432,16 @@ class _ChatListViewState extends State<ChatListView>
       rowId: chat.id,
       openRowId: _openSwipeChat,
       onOpenChanged: (id) => setState(() => _openSwipeChat = id),
-      onTap: () => _selectionMode ? _toggleSelected(chat) : _openChat(chat),
+      // A live folder drag owns this contact: the row's release must switch
+      // folders, not open the chat it happens to be over.
+      tapEnabled: !_folderDragActive,
+      onTap: () {
+        // The pager can claim the contact on the same frame as the release,
+        // before the row rebuilds without its tap recognizer; the release
+        // must still switch folders instead of opening the chat.
+        if (_folderDragActive) return;
+        _selectionMode ? _toggleSelected(chat) : _openChat(chat);
+      },
       onLongPress: desktopContextMenu
           ? null
           : () {
@@ -5655,6 +5790,7 @@ class ChatSwipeRow extends StatefulWidget {
     this.horizontalSwipeEnabled = true,
     this.pressRippleEnabled = true,
     this.suppressEndLongPress = false,
+    this.tapEnabled = true,
   });
 
   final int rowId;
@@ -5706,6 +5842,12 @@ class ChatSwipeRow extends StatefulWidget {
   /// toggle membership or drag. The host sets this on the row whose press
   /// opened the mode, for the lifetime of that one gesture.
   final bool suppressEndLongPress;
+
+  /// False while another gesture owns the contact (the folder pager): the tap
+  /// recognizer is removed so the release cannot open the chat. exteraless
+  /// gets the same effect by intercepting the touch stream; a raw listener
+  /// here cannot cancel a recognizer after the fact.
+  final bool tapEnabled;
 
   @override
   State<ChatSwipeRow> createState() => _ChatSwipeRowState();
@@ -5996,7 +6138,9 @@ class _ChatSwipeRowState extends State<ChatSwipeRow>
         !desktopTouchGestures;
     final rowGestureRaw = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _offset != 0 ? _close() : widget.onTap(),
+      onTap: !widget.tapEnabled
+          ? null
+          : () => _offset != 0 ? _close() : widget.onTap(),
       onLongPress:
           desktopTouchGestures ||
               widget.requiresLongPressDrag ||

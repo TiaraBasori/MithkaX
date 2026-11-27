@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -424,6 +425,138 @@ class ProxyConfig {
         password: current.password,
         secret: current.secret,
       ),
+    );
+  }
+}
+
+/// The app-wide saved-proxy pool.
+///
+/// TDLib keeps proxies inside each account's database, so the settings page
+/// used to show a different list per signed-in account. The pool is the one
+/// set of saved endpoints every account reads and writes; the page reconciles
+/// each account's TDLib rows against it on load. Deletions leave a tombstone
+/// so an account whose client still holds the row cannot resurrect it on its
+/// next visit.
+class ProxyPool {
+  ProxyPool({
+    List<ProxyConfig> entries = const [],
+    Set<String> tombstones = const {},
+  }) : entries = [...entries],
+       tombstones = {...tombstones};
+
+  static const _storageKey = 'mithka.proxy.pool.v2';
+  static const _maxTombstones = 200;
+
+  final List<ProxyConfig> entries;
+  final Set<String> tombstones;
+
+  /// Stable identity of a saved endpoint, including its credentials: a proxy
+  /// re-added with a corrected password is a different row.
+  static String signatureFor(ProxyConfig config) {
+    final parts = [
+      config.type,
+      config.server.trim().toLowerCase(),
+      '${config.port}',
+      config.username,
+      config.password,
+      config.secret,
+      config.path,
+    ];
+    return sha256.convert(utf8.encode(parts.join('\u0000'))).toString();
+  }
+
+  bool isTombstoned(ProxyConfig config) =>
+      tombstones.contains(signatureFor(config));
+
+  /// Whether [config] is already saved. A matching entry clears its tombstone,
+  /// so re-adding a deliberately deleted proxy works.
+  bool add(ProxyConfig config) {
+    final signature = signatureFor(config);
+    final revived = tombstones.remove(signature);
+    if (entries.any((entry) => signatureFor(entry) == signature)) {
+      return revived;
+    }
+    entries.add(config);
+    return true;
+  }
+
+  bool remove(ProxyConfig config) {
+    final signature = signatureFor(config);
+    final before = entries.length;
+    entries.removeWhere((entry) => signatureFor(entry) == signature);
+    tombstones.add(signature);
+    while (tombstones.length > _maxTombstones) {
+      tombstones.remove(tombstones.first);
+    }
+    return entries.length != before;
+  }
+
+  static Future<ProxyPool> load() async {
+    final read = ProxyConfig.debugSecureRead ?? ProxyConfig._defaultSecureRead;
+    try {
+      final raw = await read(_storageKey);
+      if (raw == null || raw.trim().isEmpty) return ProxyPool();
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return ProxyPool();
+      final entries = <ProxyConfig>[];
+      for (final item in decoded['entries'] as List? ?? const []) {
+        if (item is! Map) continue;
+        final config = _fromJson(Map<String, dynamic>.from(item));
+        if (config != null) entries.add(config);
+      }
+      final tombstones = <String>{
+        for (final item in decoded['tombstones'] as List? ?? const [])
+          if (item is String) item,
+      };
+      return ProxyPool(entries: entries, tombstones: tombstones);
+    } catch (_) {
+      return ProxyPool();
+    }
+  }
+
+  Future<void> save() async {
+    final write =
+        ProxyConfig.debugSecureWrite ?? ProxyConfig._defaultSecureWrite;
+    final payload = jsonEncode({
+      'entries': [for (final entry in entries) _toJson(entry)],
+      'tombstones': tombstones.toList(),
+    });
+    try {
+      await write(_storageKey, payload);
+    } catch (_) {
+      // Storage being temporarily unavailable must not break the settings
+      // page; the next load simply reads the previous pool.
+    }
+  }
+
+  static Map<String, dynamic> _toJson(ProxyConfig config) => {
+    'type': config.type,
+    'server': config.server,
+    'port': config.port,
+    'username': config.username,
+    'password': config.password,
+    'secret': config.secret,
+    'path': config.path,
+  };
+
+  static ProxyConfig? _fromJson(Map<String, dynamic> json) {
+    final type = json['type'];
+    final server = json['server'];
+    final port = json['port'];
+    if (type is! String || server is! String || port is! int || port <= 0) {
+      return null;
+    }
+    String text(String key) => json[key] is String ? json[key] as String : '';
+    return ProxyConfig(
+      configured: true,
+      enabled: false,
+      type: type,
+      server: server,
+      port: port,
+      username: text('username'),
+      password: text('password'),
+      secret: text('secret'),
+      path: text('path'),
     );
   }
 }

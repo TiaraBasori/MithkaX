@@ -551,12 +551,27 @@ extension ChatViewModelUpdates on ChatViewModel {
         unawaited(_applyGroupBotCommands(fullInfo));
 
       case 'updateUserStatus':
-        if (isGroup || update.int64('user_id') != peerUserId) return;
+        final statusUserId = update.int64('user_id');
         final status = update.obj('status');
-        peerOnline = status?.type == 'userStatusOnline';
-        peerStatusText = status == null
-            ? ''
-            : TDParse.userStatus({'status': status});
+        if (statusUserId == null || status == null) return;
+        if (isGroup) {
+          // A group bubble's avatar carries its sender's presence; refresh
+          // the cached identity in place instead of waiting for updateUser.
+          final cached = _senderCache[statusUserId];
+          if (cached == null || cached.isBot) return;
+          final presence = TDParse.avatarPresence(status);
+          if (cached.presence == presence) return;
+          final info = cached.withPresence(presence);
+          _senderCache[statusUserId] = info;
+          _patchSender(info, statusUserId);
+          return;
+        }
+        if (statusUserId != peerUserId) return;
+        peerOnline = status.type == 'userStatusOnline';
+        peerPresence = peerIsBot
+            ? AvatarPresence.none
+            : TDParse.avatarPresence(status);
+        peerStatusText = TDParse.userStatus({'status': status});
         _notifyComposerNeutral();
 
       case 'updateMessageEdited':
@@ -806,6 +821,10 @@ extension ChatViewModelUpdates on ChatViewModel {
     m.replyToImage = quoted.previewImage;
     m.replyToImageWidth = quoted.imageWidth;
     m.replyToImageHeight = quoted.imageHeight;
+    // The marker shows the ORIGINAL author's identity, not this message's.
+    m.replyToSenderAccentColorId = quoted.senderAccentColorId;
+    m.replyToSenderEmojiStatusId = quoted.senderEmojiStatusId;
+    m.replyToSenderIsPremium = quoted.senderIsPremium;
     if (quoted.isOutgoing) {
       m.replyToSender = meName;
       return;
@@ -1485,7 +1504,8 @@ extension ChatViewModelUpdates on ChatViewModel {
             m.senderIsPremium == info.isPremium &&
             m.senderIsDeleted == info.isDeleted &&
             m.senderAccentColorId == info.accentColorId &&
-            m.senderEmojiStatusId == info.emojiStatusId) {
+            m.senderEmojiStatusId == info.emojiStatusId &&
+            m.senderPresence == info.presence) {
           continue;
         }
         m.senderName = info.name;
@@ -1496,6 +1516,7 @@ extension ChatViewModelUpdates on ChatViewModel {
         m.senderIsDeleted = info.isDeleted;
         m.senderAccentColorId = info.accentColorId;
         m.senderEmojiStatusId = info.emojiStatusId;
+        m.senderPresence = info.presence;
         changed = true;
       }
     }
@@ -1516,7 +1537,8 @@ extension ChatViewModelUpdates on ChatViewModel {
             m.senderIsPremium != info.isPremium ||
             m.senderIsDeleted != info.isDeleted ||
             m.senderAccentColorId != info.accentColorId ||
-            m.senderEmojiStatusId != info.emojiStatusId) {
+            m.senderEmojiStatusId != info.emojiStatusId ||
+            m.senderPresence != info.presence) {
           m.senderName = info.name;
           m.senderPhoto = info.photo;
           m.senderRole = info.role;
@@ -1525,6 +1547,7 @@ extension ChatViewModelUpdates on ChatViewModel {
           m.senderIsDeleted = info.isDeleted;
           m.senderAccentColorId = info.accentColorId;
           m.senderEmojiStatusId = info.emojiStatusId;
+          m.senderPresence = info.presence;
           changed = true;
         }
       }
@@ -1711,6 +1734,7 @@ extension ChatViewModelUpdates on ChatViewModel {
       isDeleted: TDParse.isDeletedUser(user),
       accentColorId: user.integer('accent_color_id') ?? -1,
       emojiStatusId: TDParse.emojiStatusCustomEmojiId(user.obj('emoji_status')),
+      presence: TDParse.avatarPresence(user.obj('status')),
     );
   }
 
@@ -2138,7 +2162,11 @@ extension ChatViewModelUpdates on ChatViewModel {
     m.replyToPreview = body;
     m.replyToDate = entry.date;
     if (entry.senderId != 0) {
-      m.replyToSender = _senderCache[entry.senderId]?.name ?? '';
+      final info = _senderCache[entry.senderId];
+      m.replyToSender = info?.name ?? '';
+      m.replyToSenderAccentColorId = info?.accentColorId ?? -1;
+      m.replyToSenderEmojiStatusId = info?.emojiStatusId ?? 0;
+      m.replyToSenderIsPremium = info?.isPremium ?? false;
       if ((m.replyToSender ?? '').isEmpty && entry.senderId > 0) {
         unawaited(_resolveQuotedSender(m, entry.senderId));
       }

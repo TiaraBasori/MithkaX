@@ -255,6 +255,7 @@ class _ProxyViewState extends State<ProxyView> {
 
   Future<void> _load() async {
     final generation = ++_loadGeneration;
+    final ownerGeneration = _ownerGeneration;
     final owner = widget.accounts.pinActiveOwner();
     if (owner == null) {
       // No client to pin yet (the login screen before parameters). Keep the
@@ -274,7 +275,18 @@ class _ProxyViewState extends State<ProxyView> {
         return;
       }
       final list = res.objects('proxies') ?? const <Map<String, dynamic>>[];
-      final liveIds = {for (final proxy in list) proxy.integer('id') ?? 0};
+      // One pool for the whole app: this account's TDLib rows feed the pool,
+      // and pool rows this account has never seen are added here (disabled).
+      final reconciled = await _reconcileProxyPool(
+        owner,
+        list,
+        generation,
+        ownerGeneration,
+      );
+      if (reconciled == null) return;
+      final liveIds = {
+        for (final proxy in reconciled) proxy.integer('id') ?? 0,
+      };
       setState(() {
         if (_owner?.clientId != owner.clientId) {
           // Proxy ids are account-scoped, so a verdict from the previous
@@ -305,6 +317,70 @@ class _ProxyViewState extends State<ProxyView> {
       // "no proxies" here would be a lie about a list nobody has read.
       if (mounted && _clientReady) setState(() => _loading = false);
     }
+  }
+
+  /// Reconciles this account's TDLib proxy list with the app-wide pool:
+  /// rows this account already had join the pool, rows the pool knows but
+  /// this account does not are added (disabled), and rows deleted from the
+  /// pool elsewhere (tombstoned) are removed here too. Returns the list to
+  /// paint, or null when the page stopped owning this read.
+  Future<List<Map<String, dynamic>>?> _reconcileProxyPool(
+    ProxyViewOwner owner,
+    List<Map<String, dynamic>> list,
+    int generation,
+    int ownerGeneration,
+  ) async {
+    final pool = await ProxyPool.load();
+    if (!_isOwnerCurrent(owner, ownerGeneration) ||
+        generation != _loadGeneration) {
+      return null;
+    }
+    final present = <String>{};
+    final doomedIds = <int>[];
+    var poolChanged = false;
+    for (final proxy in list) {
+      final config = ProxyConfig.fromTdProxy(proxy);
+      if (pool.isTombstoned(config)) {
+        doomedIds.add(proxy.integer('id') ?? 0);
+        continue;
+      }
+      present.add(ProxyPool.signatureFor(config));
+      poolChanged = pool.add(config) || poolChanged;
+    }
+    var accountChanged = false;
+    for (final config in List<ProxyConfig>.of(pool.entries)) {
+      if (present.contains(ProxyPool.signatureFor(config))) continue;
+      if (!_isOwnerCurrent(owner, ownerGeneration)) return null;
+      try {
+        await owner.query({
+          '@type': 'addProxy',
+          'proxy': config.tdProxy,
+          'enable': false,
+        });
+        accountChanged = true;
+      } catch (_) {
+        // One rejected row must not strand the rest of the pool.
+      }
+    }
+    for (final id in doomedIds) {
+      if (!_isOwnerCurrent(owner, ownerGeneration)) return null;
+      try {
+        await owner.query({'@type': 'removeProxy', 'proxy_id': id});
+        accountChanged = true;
+      } catch (_) {}
+    }
+    if (poolChanged) await pool.save();
+    if (!accountChanged) return list;
+    if (!_isOwnerCurrent(owner, ownerGeneration) ||
+        generation != _loadGeneration) {
+      return null;
+    }
+    final res = await owner.query({'@type': 'getProxies'});
+    if (!_isOwnerCurrent(owner, ownerGeneration) ||
+        generation != _loadGeneration) {
+      return null;
+    }
+    return res.objects('proxies') ?? const <Map<String, dynamic>>[];
   }
 
   bool get _anyEnabled => _proxies.any((p) => p.boolean('is_enabled') ?? false);
@@ -380,6 +456,17 @@ class _ProxyViewState extends State<ProxyView> {
       await owner.query({'@type': 'removeProxy', 'proxy_id': id});
       removedNow = true;
     } catch (_) {}
+    if (removedNow &&
+        removed.isNotEmpty &&
+        _isOwnerCurrent(owner, ownerGeneration)) {
+      // Deletion is app-wide: drop it from the shared pool so another
+      // account's page cannot hand the same row back.
+      try {
+        final pool = await ProxyPool.load();
+        pool.remove(ProxyConfig.fromTdProxy(removed));
+        await pool.save();
+      } catch (_) {}
+    }
     if (removedNow && wasEnabled && _isOwnerCurrent(owner, ownerGeneration)) {
       try {
         await ProxyConfig.disable();
@@ -439,6 +526,15 @@ class _ProxyViewState extends State<ProxyView> {
         // One failed removal must not abandon the rest of the batch.
       }
     }
+    // The batch is app-wide as well: tombstone every confirmed row so another
+    // account cannot re-add it from its own TDLib copy.
+    try {
+      final pool = await ProxyPool.load();
+      for (final proxy in doomed) {
+        pool.remove(ProxyConfig.fromTdProxy(proxy));
+      }
+      await pool.save();
+    } catch (_) {}
     // The saved config and its re-apply belong to the account whose enabled
     // row was actually removed, never to the account now in the foreground.
     if (removedEnabled && _isOwnerCurrent(owner, ownerGeneration)) {
@@ -776,6 +872,11 @@ class _ProxyViewState extends State<ProxyView> {
     try {
       await owner.applyProxyConfig(config);
       await ProxyConfig.save(config);
+      try {
+        final pool = await ProxyPool.load();
+        pool.add(config);
+        await pool.save();
+      } catch (_) {}
       unawaited(_load());
     } catch (_) {
       if (mounted) {
@@ -951,6 +1052,13 @@ class _ProxyEditViewState extends State<ProxyEditView> {
         await TdClient.shared.applyProxyConfig(config);
         await ProxyConfig.save(config);
       }
+      // The saved list is app-wide: even an offline save must reach the pool,
+      // otherwise another account's proxy page never learns the endpoint.
+      try {
+        final pool = await ProxyPool.load();
+        pool.add(config);
+        await pool.save();
+      } catch (_) {}
       // Opened straight from a settings link this page has no ProxyView above
       // it to report the change, so the sidebar shortcut hears it here.
       ProxyStatusController.shared.proxiesChanged();

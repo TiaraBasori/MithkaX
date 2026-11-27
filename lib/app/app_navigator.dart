@@ -18,6 +18,7 @@ class AppChatPageRoute<T> extends PageRoute<T>
     super.settings,
     super.requestFocus,
     this.maintainState = true,
+    this.contentSwap = false,
     Duration? transitionDuration,
     Duration? reverseTransitionDuration,
   }) : _transitionDuration = transitionDuration ?? AppMotion.route,
@@ -27,9 +28,12 @@ class AppChatPageRoute<T> extends PageRoute<T>
 
   final WidgetBuilder builder;
 
-  /// An in-place swap (a topic switch inside one chat) passes [Duration.zero]
-  /// so the replacement transcript arrives fully in a single frame instead
-  /// of sliding over its sibling — the strip and header never animate.
+  /// Whether this route swaps content in place (a topic switch inside one
+  /// chat) rather than opening a new conversation. A content swap fades in
+  /// over its sibling while the page underneath stays put, so the header and
+  /// tab strip never slide — only the transcript dissolves.
+  final bool contentSwap;
+
   final Duration _transitionDuration;
   final Duration _reverseTransitionDuration;
 
@@ -213,6 +217,16 @@ class AppChatPageRoute<T> extends PageRoute<T>
         _fullPageBackSwipeActive ||
         animation.status == AnimationStatus.reverse ||
         animation.status == AnimationStatus.dismissed;
+    if (contentSwap && !leaving) {
+      // A topic switch dissolves the transcript over its sibling; the header
+      // and tab strip are painted by both pages at the same coordinates, so a
+      // plain fade reads as if only the conversation changed. Leaving one
+      // (a back swipe to the chat list) keeps the ordinary slide.
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: AppMotion.standard),
+        child: child,
+      );
+    }
     if (leaving) {
       final effectiveAnimation = popGestureInProgress
           ? animation

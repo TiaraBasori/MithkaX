@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import '../../l10n/app_localizations.dart';
 import '../../settings/ai_translation/ai_endpoint_style.dart';
+import '../../settings/ai_translation/ai_http_client.dart';
 import '../../settings/ai_translation/ai_stdout_logger.dart';
 import '../../settings/ai_translation/apple_pcc_api.dart';
 import '../../tdlib/td_models.dart';
@@ -1006,7 +1007,7 @@ class HostedAiReplyProvider
     AiStdoutLogger? aiLogger,
     this.requestTimeout = const Duration(seconds: 75),
     this.streamIdleTimeout = const Duration(seconds: 30),
-  }) : _httpClient = httpClient ?? http.Client(),
+  }) : _httpClient = httpClient ?? createAiHttpClient(),
        _aiLogger = aiLogger ?? aiStdoutLogger,
        _ownsHttpClient = httpClient == null;
 
