@@ -514,7 +514,12 @@ extension _ChatViewScrollSession on _ChatViewState {
 
     wanted.sort((a, b) => distance(a.$1).compareTo(distance(b.$1)));
     for (final (_, message) in wanted) {
-      unawaited(MediaPrefetch.shared.prefetchMessage(message));
+      unawaited(
+        MediaPrefetch.shared.prefetchMessage(
+          message,
+          chatKind: _reportedChatKind,
+        ),
+      );
     }
   }
 

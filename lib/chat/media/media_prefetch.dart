@@ -56,7 +56,11 @@ class MediaPrefetch {
     AutoDownloadProfile Function()? wifiProfile,
     AutoDownloadProfile Function()? mobileProfile,
     Future<PrefetchNetwork> Function()? networkProbe,
+    bool Function(ChatKind? kind)? allowsKind,
   }) : _download = download ?? _defaultDownload,
+       _allowsKind =
+           allowsKind ??
+           AutoDownloadMediaController.shared.allowsAutoDownloadForKind,
        _wifiProfile =
            wifiProfile ?? (() => AutoDownloadMediaController.shared.wifi),
        _mobileProfile =
@@ -81,6 +85,9 @@ class MediaPrefetch {
   final AutoDownloadProfile Function() _wifiProfile;
   final AutoDownloadProfile Function() _mobileProfile;
   final Future<PrefetchNetwork> Function() _networkProbe;
+
+  /// The chat-type half of the gate: the reference client's preset mask.
+  final bool Function(ChatKind? kind) _allowsKind;
 
   /// File ids already asked for in this process. A prefetch is best effort:
   /// asking twice would only spend a query, and TDLib keeps the request alive
@@ -208,14 +215,20 @@ class MediaPrefetch {
   }
 
   /// Prefetches the media of one raw content payload (the history mirror's
-  /// entry point).
+  /// entry point, where the chat kind is not known yet).
   Future<int> prefetchTdContent(Map<String, dynamic>? content) =>
       prefetch(candidatesOfTdContent(content));
 
   /// Requests whatever in [candidates] the preset allows. Returns the number
   /// of files actually asked for.
-  Future<int> prefetch(List<PrefetchCandidate> candidates) async {
+  Future<int> prefetch(
+    List<PrefetchCandidate> candidates, {
+    ChatKind? chatKind,
+  }) async {
     if (candidates.isEmpty) return 0;
+    // The reference client gates every automatic fetch on the chat-type mask
+    // as well as the network preset (`DownloadController.Preset.mask`).
+    if (!_allowsKind(chatKind)) return 0;
     if (_lastNetwork == null) await refreshNetwork();
     final profile = _currentProfile();
     if (!profile.enabled) return 0;
@@ -236,9 +249,9 @@ class MediaPrefetch {
   }
 
   /// Prefetches one message's media (the transcript's off-screen window).
-  Future<int> prefetchMessage(ChatMessage message) {
+  Future<int> prefetchMessage(ChatMessage message, {ChatKind? chatKind}) {
     if (message.isService || message.id <= 0) return Future<int>.value(0);
-    return prefetch(candidatesOf(message));
+    return prefetch(candidatesOf(message), chatKind: chatKind);
   }
 
   bool _allows(AutoDownloadProfile profile, PrefetchCandidate candidate) {

@@ -33,6 +33,7 @@ void main() {
       mobileProfile: () => mobile,
       wifiProfile: () => wifi,
       networkProbe: () async => network,
+      allowsKind: (_) => true,
     );
   }
 
@@ -81,6 +82,7 @@ void main() {
       mobileProfile: () => const AutoDownloadProfile.medium(),
       wifiProfile: () => const AutoDownloadProfile.high(),
       networkProbe: () async => PrefetchNetwork.wifi,
+      allowsKind: (_) => true,
     );
     expect(await prefetch.prefetch([_photo(16, 1024)]), 0);
     expect(await prefetch.prefetch([_photo(16, 1024)]), 1);
