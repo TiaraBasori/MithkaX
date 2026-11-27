@@ -10,6 +10,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:mithka/l10n/app_localizations.dart';
@@ -71,6 +72,7 @@ class EmojiFontManifestEntry {
     required this.license,
     required this.chatId,
     required this.channelMessageId,
+    this.channelArchiveMessageId,
     this.channelPreviewMessageId,
     this.sizeBytes,
   });
@@ -86,8 +88,17 @@ class EmojiFontManifestEntry {
   /// @mithka_metadata chat id (0 until the caller stamps the resolved id).
   final int chatId;
 
-  /// Message id of this pack's font document inside the channel.
+  /// Message id of this pack's font document inside the channel. With an
+  /// archive this is the fallback font document (older clients) and the
+  /// archive wins for this one.
   final int channelMessageId;
+
+  /// Message id of an `application/zip` document carrying this pack's font
+  /// (`font.ttf` or the first `.ttf`/`.otf` member). Null for plain-font
+  /// packs. The archive is smaller on the wire than the raw font.
+  final int? channelArchiveMessageId;
+
+  bool get isArchive => (channelArchiveMessageId ?? 0) > 0;
 
   /// Message id of this pack's preview PNG inside the channel; null when the
   /// catalog message carries no usable preview id.
@@ -112,7 +123,7 @@ class EmojiFontCatalog {
   /// Bump whenever release font binaries change without changing their keys.
   /// A new namespace prevents old glyph data from being loaded and forces the
   /// selected font to be downloaded again.
-  static const cacheRevision = 2;
+  static const cacheRevision = 3;
   static const cacheDirectoryName = 'emoji_fonts_v$cacheRevision';
 
   /// The catalog source is the @mithka_metadata Telegram channel, reached
@@ -193,6 +204,7 @@ class EmojiFontCatalog {
               'license': e.license,
               'chat_id': e.chatId,
               'message_id': e.channelMessageId,
+              'archive_message_id': e.channelArchiveMessageId,
               'preview_message_id': e.channelPreviewMessageId,
               'bytes': e.sizeBytes,
             },
@@ -334,6 +346,7 @@ class EmojiFontCatalog {
     final label = (json['label'] as String?)?.trim() ?? '';
     final chatId = jsonInt(json['chat_id']);
     final messageId = jsonInt(json['message_id']);
+    final archiveMessageId = jsonInt(json['archive_message_id']);
     final previewMessageId = jsonInt(json['preview_message_id']);
     if (key.isEmpty || label.isEmpty || messageId == null || messageId <= 0) {
       return null;
@@ -344,6 +357,10 @@ class EmojiFontCatalog {
       license: (json['license'] as String?)?.trim() ?? '',
       chatId: chatId ?? 0,
       channelMessageId: messageId,
+      channelArchiveMessageId:
+          (archiveMessageId != null && archiveMessageId > 0)
+          ? archiveMessageId
+          : null,
       channelPreviewMessageId:
           (previewMessageId != null && previewMessageId > 0)
           ? previewMessageId
@@ -416,6 +433,37 @@ class EmojiFontCatalog {
       );
       throw const FileSystemException('channel emoji font unavailable');
     }
+    // An archived pack downloads its zip first, then the font comes out of
+    // the archive: the channel ships the Apple set as a 24 MB zip instead of
+    // a 45 MB font document.
+    final archiveMessageId = entry.channelArchiveMessageId;
+    if (archiveMessageId != null && archiveMessageId > 0) {
+      final archiveBytes = await (debugChannelSource ?? _channelSource)
+          .downloadArchive(
+            chatId: chatId,
+            messageId: archiveMessageId,
+            destPath: '${file.path}.zip',
+            // The download owns the first 90% of the progress line; the
+            // extract is instant next to it.
+            onProgress: onProgress == null
+                ? null
+                : (progress) => onProgress(progress * 0.9),
+          );
+      if (archiveBytes == null || archiveBytes <= 0) {
+        throw const FileSystemException('channel emoji font unavailable');
+      }
+      final font = await _extractFontFromArchive(File('${file.path}.zip'));
+      if (font == null) {
+        debugPrint('[emoji_font_catalog] archive has no font key=${entry.key}');
+        throw const FileSystemException('emoji archive has no font');
+      }
+      final tmp = File('${file.path}.tmp');
+      await tmp.writeAsBytes(font, flush: true);
+      if (await file.exists()) await file.delete();
+      await tmp.rename(file.path);
+      onProgress?.call(1);
+      return font.length;
+    }
     final bytes = await (debugChannelSource ?? _channelSource).downloadFont(
       chatId: chatId,
       messageId: entry.channelMessageId,
@@ -428,6 +476,45 @@ class EmojiFontCatalog {
     if (await file.exists()) await file.delete();
     await File('${file.path}.tmp').rename(file.path);
     return bytes;
+  }
+
+  /// Reads the pack's font out of a downloaded archive and deletes the zip.
+  ///
+  /// `font.ttf` wins when the archive names it (the reference channel's
+  /// layout); otherwise the first `.ttf`/`.otf` member is used. A zip of
+  /// preview images (the channel also carries image-only packs) yields null,
+  /// so the caller fails the pack instead of registering a broken family.
+  Future<Uint8List?> _extractFontFromArchive(File archive) async {
+    try {
+      final bytes = await archive.readAsBytes();
+      final decoded = ZipDecoder().decodeBytes(bytes);
+      ArchiveFile? chosen;
+      for (final file in decoded.files) {
+        if (!file.isFile) continue;
+        final name = file.name.toLowerCase();
+        if (!name.endsWith('.ttf') && !name.endsWith('.otf')) continue;
+        if (name.split('/').last == 'font.ttf') {
+          chosen = file;
+          break;
+        }
+        chosen ??= file;
+      }
+      if (chosen == null) return null;
+      final content = chosen.content;
+      return content.isEmpty ? null : content;
+    } catch (error) {
+      debugPrint(
+        '[emoji_font_catalog] archive extract failed '
+        'type=${error.runtimeType}',
+      );
+      return null;
+    } finally {
+      try {
+        await archive.delete();
+      } catch (_) {
+        // A leftover zip is retried by the next download; never fatal.
+      }
+    }
   }
 
   Future<File> _manifestCacheFile() async {

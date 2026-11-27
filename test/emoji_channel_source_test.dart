@@ -41,6 +41,23 @@ void main() {
       expect(apple.extension, 'ttf');
     });
 
+    test('a pack served as a zip remembers both addresses', () {
+      const body =
+          '#emojiv2 {"emojis": [{"name": "Apple", "id": "apple", '
+          '"preview": 22, "file": 23, "zip": 60, "size": 41943040}]}';
+      final apple = EmojiChannelSource.parseCatalog(body)!.single;
+      expect(apple.channelMessageId, 23);
+      expect(apple.channelArchiveMessageId, 60);
+      expect(apple.isArchive, isTrue);
+      expect(apple.sizeBytes, 41943040);
+
+      const plain =
+          '#emojiv2 {"emojis": [{"name": "X", "id": "x", "file": 7}]}';
+      final x = EmojiChannelSource.parseCatalog(plain)!.single;
+      expect(x.channelArchiveMessageId, isNull);
+      expect(x.isArchive, isFalse);
+    });
+
     test('entries without a preview id keep a null preview id', () {
       const body =
           '#emojiv2 {"emojis": [{'

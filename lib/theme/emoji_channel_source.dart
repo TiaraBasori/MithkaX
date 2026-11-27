@@ -99,6 +99,12 @@ class EmojiChannelSource {
   /// parses. Mapped onto [EmojiFontManifestEntry]s with the channel message
   /// id kept as the download address; chatId is left 0 for fetchCatalog to
   /// stamp once the channel is known.
+  ///
+  /// `zip` (optional) points at a `application/zip` message that carries the
+  /// pack's font inside: the reference channel serves heavy packs that way
+  /// (the Apple set is a 24 MB archive rather than a 45 MB font document), so
+  /// the entry remembers both addresses and the catalog downloads the archive
+  /// first.
   @visibleForTesting
   static List<EmojiFontManifestEntry>? parseCatalog(String body) {
     final jsonStart = body.indexOf('{');
@@ -113,6 +119,7 @@ class EmojiChannelSource {
       final key = (item['id'] as String?)?.trim() ?? '';
       final label = (item['name'] as String?)?.trim() ?? '';
       final file = (item['file'] as num?)?.toInt();
+      final zip = (item['zip'] as num?)?.toInt();
       final size = (item['size'] as num?)?.toInt();
       final preview = (item['preview'] as num?)?.toInt();
       if (key.isEmpty || label.isEmpty || file == null || file <= 0) continue;
@@ -123,6 +130,7 @@ class EmojiChannelSource {
           license: (item['license'] as String?)?.trim() ?? '',
           chatId: 0,
           channelMessageId: file,
+          channelArchiveMessageId: (zip != null && zip > 0) ? zip : null,
           channelPreviewMessageId: (preview != null && preview > 0)
               ? preview
               : null,
@@ -132,6 +140,22 @@ class EmojiChannelSource {
     }
     return entries.isEmpty ? null : entries;
   }
+
+  /// Downloads a pack's archive (an `application/zip` document holding the
+  /// font) to [destPath]. Same pipeline as [downloadFont], with the archive's
+  /// own content type accepted so a wrong-kind message is still rejected.
+  Future<int?> downloadArchive({
+    required int chatId,
+    required int messageId,
+    required String destPath,
+    void Function(double progress)? onProgress,
+  }) => _downloadChannelDocument(
+    chatId: chatId,
+    messageId: messageId,
+    destPath: destPath,
+    expectedMimeType: 'application/zip',
+    onProgress: onProgress,
+  );
 
   /// Downloads a pack's font file (a .ttf document in the channel) to
   /// [destPath]. Returns the byte length, or null on any failure.
