@@ -25,7 +25,7 @@ import '../../history/message_history_store.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_theme.dart';
-import '../downloads_storage/local_database_reset.dart';
+import '../downloads_storage/reset_database_settings_row.dart';
 import '../local_premium.dart';
 import '../profile_account/message_history_transfer_view.dart';
 import 'ghost_mode_settings_view.dart';
@@ -272,7 +272,9 @@ class _TransferSection extends StatelessWidget {
         ),
         _BadgeStyleRow(),
         const _ClearDatabaseRow(),
-        const _ResetDatabaseRow(),
+        const ResetDatabaseSettingsRow(
+          rowKey: ValueKey('kept-messages-reset-database'),
+        ),
       ],
     );
   }
@@ -348,67 +350,6 @@ class _ClearDatabaseRowState extends State<_ClearDatabaseRow> {
       leading: const SettingsLeadingIcon(icon: HeroAppIcons.database),
       enabled: !_clearing,
       onTap: _clear,
-    );
-  }
-}
-
-/// “重置数据库”: the wide local wipe. Unlike the mirror row above it also
-/// drops TDLib's cached media, downloaded emoji packs, the search history and
-/// the in-memory image cache — while the session, every preference, drafts and
-/// saved downloads survive. One destructive confirm, then a toast.
-class _ResetDatabaseRow extends StatefulWidget {
-  const _ResetDatabaseRow();
-
-  @override
-  State<_ResetDatabaseRow> createState() => _ResetDatabaseRowState();
-}
-
-class _ResetDatabaseRowState extends State<_ResetDatabaseRow> {
-  bool _working = false;
-
-  Future<void> _reset() async {
-    if (_working) return;
-    final confirmed = await showAppConfirmDialog(
-      context,
-      title: AppStringKeys.settingsResetDatabase.l10n(context),
-      message: AppStringKeys.settingsResetDatabaseMessage.l10n(context),
-      confirmText: AppStringKeys.historyClearAction.l10n(context),
-      destructive: true,
-    );
-    if (!confirmed || !mounted) return;
-    setState(() => _working = true);
-    try {
-      final result = await LocalDatabaseReset.run();
-      if (!mounted) return;
-      // A failed account keeps its old database (the client rolls back), so the
-      // toast must say so instead of claiming the whole reset succeeded.
-      showToast(
-        context,
-        (result.ok
-                ? AppStringKeys.settingsResetDatabaseDone
-                : AppStringKeys.settingsResetDatabaseFailed)
-            .l10n(context),
-      );
-    } catch (error) {
-      if (mounted) showToast(context, error.toString());
-    } finally {
-      if (mounted) setState(() => _working = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SettingsRow(
-      key: const ValueKey('settings-reset-database'),
-      title: AppStringKeys.settingsResetDatabase.l10n(context),
-      subtitle: AppStringKeys.settingsResetDatabaseMessage.l10n(context),
-      // The wipe walks every account's database; a spinner-less value keeps
-      // the row honest while that runs.
-      value: _working ? '…' : '',
-      leading: const SettingsLeadingIcon(icon: HeroAppIcons.database),
-      titleColor: AppTheme.tagRed,
-      enabled: !_working,
-      onTap: _reset,
     );
   }
 }

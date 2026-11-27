@@ -20,6 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> _pump(
   WidgetTester tester, {
   required String preview,
+  String body = 'ok',
   TdFileRef? replyImage,
 }) async {
   tester.view
@@ -33,7 +34,7 @@ Future<void> _pump(
       ChatMessage(
           id: 2,
           isOutgoing: false,
-          text: 'ok',
+          text: body,
           date: 1,
           contentType: 'messageText',
           replyToMessageId: 1,
@@ -123,5 +124,38 @@ void main() {
       find.byKey(const ValueKey('messageReplyMediaPreview')),
     );
     expect(thumb, const Size(34, 34));
+  });
+
+  testWidgets('the marker and the body share one width', (tester) async {
+    const body =
+        'This is a long message body that has to wrap over several lines so '
+        'the bubble reaches the lane width and the marker can follow it.';
+    await _pump(tester, preview: 'yes', body: body);
+    final panel = tester.getRect(
+      find.byKey(const ValueKey('messageReplyQuote')),
+    );
+    final bubble = tester.getRect(
+      find.byKey(const ValueKey('messageTextBubble-2')),
+    );
+    // The reference's reply line spans the bubble; the body sits in the same
+    // box. Both edges line up instead of the marker floating in its own box.
+    expect(panel.width, greaterThan(200));
+    expect(panel.left, closeTo(bubble.left + 10, 1.5));
+    expect(panel.right, closeTo(bubble.right - 10, 1.5));
+  });
+
+  testWidgets('a short marker never draws wider than its message', (
+    tester,
+  ) async {
+    await _pump(tester, preview: 'yes', body: 'k');
+    final panel = tester.getSize(
+      find.byKey(const ValueKey('messageReplyQuote')),
+    );
+    final bubble = tester.getSize(
+      find.byKey(const ValueKey('messageTextBubble-2')),
+    );
+    expect(panel.width, lessThan(bubble.width));
+    // And the pair still hugs: no full-lane bar for two short lines.
+    expect(bubble.width, lessThan(200));
   });
 }

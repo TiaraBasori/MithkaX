@@ -27,6 +27,7 @@ import '../theme/theme_controller.dart';
 import 'downloads_storage/auto_download_media_controller.dart';
 import 'downloads_storage/auto_download_settings_view.dart';
 import 'downloads_storage/downloads_view.dart';
+import 'downloads_storage/reset_database_settings_row.dart';
 import 'downloads_storage/storage_usage_view.dart';
 import 'network_proxy/network_usage_view.dart';
 import 'video_playback_settings_view.dart';
@@ -164,6 +165,9 @@ class _GeneralSettingsViewState extends State<GeneralSettingsView> {
             context,
           ).push(MaterialPageRoute(builder: (_) => const NetworkUsageView())),
         ),
+        // The destructive wipe belongs where a reader looks for storage, not
+        // only behind the kept-messages switches. Same confirm, same run.
+        const ResetDatabaseSettingsRow(),
       ],
     );
   }
