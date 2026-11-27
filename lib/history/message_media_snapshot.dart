@@ -26,8 +26,11 @@ class MessageMediaSnapshotter {
 
   static final MessageMediaSnapshotter shared = MessageMediaSnapshotter._();
 
+  /// A fresh instance for tests (and for a test subclass that records the
+  /// order [clearAllAndFlush] walks it in). Generative so `super.forTesting()`
+  /// is legal.
   @visibleForTesting
-  factory MessageMediaSnapshotter.forTesting() => MessageMediaSnapshotter._();
+  MessageMediaSnapshotter.forTesting();
 
   /// Directory holding the copies. Resolved lazily from app support behind
   /// the same compile-time gate; tests inject one.

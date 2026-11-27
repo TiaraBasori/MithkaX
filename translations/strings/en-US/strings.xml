@@ -4231,7 +4231,7 @@
     <string name="aboutUpdatePrereleases">Check pre-release builds</string>
     <string name="aboutUpdatePrereleasesDetail">Offer release candidates and beta builds as updates. Off means only official releases are offered.</string>
     <string name="settingsResetDatabase">Reset database</string>
-    <string name="settingsResetDatabaseMessage">Delete the locally cached messages, media, emoji packs, search history, drafts and saved downloads? Your settings and session stay.</string>
+    <string name="settingsResetDatabaseMessage">Delete the local message database and re-sync it from the server? Media caches, emoji packs, search history, drafts and saved downloads are cleared as well. Settings and the signed-in session stay.</string>
     <string name="autoDownloadChatTypesTitle">Auto-download in</string>
     <string name="autoDownloadChatTypesDetail">Only chats of the ticked kinds fetch media on their own.</string>
     <string name="autoDownloadChatContacts">Contacts</string>
@@ -4239,4 +4239,5 @@
     <string name="autoDownloadChatGroups">Groups</string>
     <string name="autoDownloadChatChannels">Channels</string>
     <string name="settingsResetDatabaseDone">Database reset</string>
+    <string name="settingsResetDatabaseFailed">Some accounts could not be reset; their databases were left untouched.</string>
 </resources>

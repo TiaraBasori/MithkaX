@@ -5581,6 +5581,7 @@ abstract final class AppStringKeys {
   static const settingsResetDatabase = 'settingsResetDatabase';
   static const settingsResetDatabaseMessage = 'settingsResetDatabaseMessage';
   static const settingsResetDatabaseDone = 'settingsResetDatabaseDone';
+  static const settingsResetDatabaseFailed = 'settingsResetDatabaseFailed';
   static const historyClearDatabase = 'historyClearDatabase';
   static const historyClearDatabaseMessage = 'historyClearDatabaseMessage';
   static const historyDatabaseClearedToast = 'historyDatabaseClearedToast';

@@ -378,9 +378,19 @@ class _ResetDatabaseRowState extends State<_ResetDatabaseRow> {
     if (!confirmed || !mounted) return;
     setState(() => _working = true);
     try {
-      await LocalDatabaseReset.run();
+      final result = await LocalDatabaseReset.run();
       if (!mounted) return;
-      showToast(context, AppStringKeys.settingsResetDatabaseDone.l10n(context));
+      // A failed account keeps its old database (the client rolls back), so the
+      // toast must say so instead of claiming the whole reset succeeded.
+      showToast(
+        context,
+        (result.ok
+                ? AppStringKeys.settingsResetDatabaseDone
+                : AppStringKeys.settingsResetDatabaseFailed)
+            .l10n(context),
+      );
+    } catch (error) {
+      if (mounted) showToast(context, error.toString());
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -392,6 +402,9 @@ class _ResetDatabaseRowState extends State<_ResetDatabaseRow> {
       key: const ValueKey('settings-reset-database'),
       title: AppStringKeys.settingsResetDatabase.l10n(context),
       subtitle: AppStringKeys.settingsResetDatabaseMessage.l10n(context),
+      // The wipe walks every account's database; a spinner-less value keeps
+      // the row honest while that runs.
+      value: _working ? '…' : '',
       leading: const SettingsLeadingIcon(icon: HeroAppIcons.database),
       titleColor: AppTheme.tagRed,
       enabled: !_working,

@@ -1776,6 +1776,33 @@ class MessageHistoryStore extends ChangeNotifier {
     return removed;
   }
 
+  /// [clearAll] plus the disk side, finished before it returns.
+  ///
+  /// The debounced persist is cancelled and the mirror file removed outright
+  /// (an empty mirror is no file), and the media snapshotter resolves its
+  /// directory first — a fresh process has no directory yet, and deleting
+  /// nothing would leave the old attachments behind. The reset row uses this:
+  /// killing the app right after the tap must not resurrect entries through a
+  /// persist that never ran.
+  Future<void> clearAllAndFlush() async {
+    if (!allowTelegramTosViolations) return;
+    clearAll();
+    _persistTimer?.cancel();
+    _persistTimer = null;
+    try {
+      final dir = fileDir ?? await getApplicationSupportDirectory();
+      for (final name in [_fileName, '$_fileName$_tmpSuffix']) {
+        final file = File('${dir.path}/$name');
+        if (await file.exists()) await file.delete();
+      }
+    } catch (_) {
+      // An unresolvable support directory means nothing was written there.
+    }
+    final snapshotter = _media();
+    await snapshotter.ensureDirResolved();
+    snapshotter.deleteAll();
+  }
+
   /// Bytes the kept-message database occupies on disk: the mirror file plus
   /// every media snapshot. Nothing recorded yet reads as 0 — the settings
   /// row shows the number before the first message is kept.

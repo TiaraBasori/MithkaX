@@ -69,7 +69,7 @@ class _FakeSearchHistory extends SearchHistoryStore {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('the reset evicts caches and never reaches the session', () async {
+  test('with no live account the reset falls back to cache eviction', () async {
     final storage = _FakeStorage();
     final emoji = _FakeEmoji();
     final search = _FakeSearchHistory();
@@ -83,7 +83,7 @@ void main() {
       emoji: emoji,
       searchHistory: search,
       history: history,
-      downloads: downloads,
+      downloads: [downloads],
     );
 
     expect(storage.calls, hasLength(1));
@@ -123,7 +123,7 @@ void main() {
       emoji: _FakeEmoji(),
       searchHistory: _FakeSearchHistory(),
       history: MessageHistoryStore.forTesting(),
-      downloads: store,
+      downloads: [store],
     );
 
     expect(await store.list(), isEmpty);

@@ -40,6 +40,7 @@ import 'forum_topic_index.dart';
 import 'gram_js_session.dart';
 import 'json_helpers.dart';
 import 'td_bindings.dart';
+import 'td_image_loader.dart';
 import 'td_session_string.dart';
 import 'td_user_index.dart';
 import 'web_proxy_carrier.dart';
@@ -1927,6 +1928,118 @@ class TdClient {
   }
 
   /// Deletes the local TDLib data for a forgotten slot without contacting
+  /// The TDLib files directory for [slot] — the media cache the parameters
+  /// hand to TDLib. Shared by [_sendParameters] and the database reset so the
+  /// two can never disagree about what has to be removed.
+  String _filesDirectory(int slot) {
+    final dbDir = _databaseDirectory(slot);
+    return Platform.isAndroid && DownloadStorage.currentRoot != null
+        ? DownloadStorage.filesDirectory(DownloadStorage.currentRoot!, slot)
+        : '$dbDir/files';
+  }
+
+  /// Deletes every live Telegram slot's local database and media cache and
+  /// immediately reopens each one on a fresh database carrying its own session
+  /// string.
+  ///
+  /// TDLib has no API that drops the local message database; deleting the
+  /// directory would also delete the authorization key and sign the account
+  /// out. The supported path is therefore the account-backup one: export the
+  /// slot's session string, write it into a fresh binlog, swap the directories
+  /// while the client is closed, and reopen. Every account stays signed in and
+  /// re-syncs chats, messages and media from the server.
+  ///
+  /// Returns how many slots were reset. Bot-API accounts are skipped on
+  /// purpose: their on-device history is the only copy of what the bot sent,
+  /// not a cache of a server database.
+  Future<int> resetLocalDatabases() async {
+    var reset = 0;
+    for (final slot in _clientForSlot.keys.toList(growable: false)) {
+      final clientId = _clientForSlot[slot];
+      if (clientId == null) continue;
+      if (_botApiBackendForClient.containsKey(clientId)) continue;
+      await resetSlotDatabase(slot);
+      reset += 1;
+    }
+    return reset;
+  }
+
+  /// One slot's database reset. See [resetLocalDatabases].
+  ///
+  /// The session string is exported and materialized into a staging binlog
+  /// BEFORE the live database is touched, and the swap is a pair of renames;
+  /// if the reopened client cannot reach the account, the old database is put
+  /// back and reopened, so a failed reset never costs the login.
+  Future<void> resetSlotDatabase(int slot) async {
+    _ensureAcceptingNewClients();
+    final clientId = _clientForSlot[slot];
+    if (clientId == null) {
+      throw StateError('Account slot $slot has no live TDLib client');
+    }
+    final me = await queryTo({
+      '@type': 'getMe',
+    }, clientId).timeout(const Duration(seconds: 8));
+    final userId = me.int64('id');
+    if (userId == null) {
+      throw StateError('TDLib did not report the account of slot $slot');
+    }
+    final session = await exportSessionStringForSlot(slot, userId: userId);
+    validateSessionString(session, expectedUserId: userId);
+
+    final dbDir = Directory(_databaseDirectory(slot));
+    final staging = Directory('${dbDir.path}.reset');
+    await _deleteDirectoryIfPresent(staging);
+    await staging.create(recursive: true);
+    _bindings.importSessionString(session, '${staging.path}/td.binlog');
+
+    if (!await _closeClientForSlot(slot)) {
+      await _deleteDirectoryIfPresent(staging);
+      throw TimeoutException('Timed out closing slot $slot');
+    }
+    // The old media cache belongs to the database that is going away.
+    await _deleteDirectoryIfPresent(Directory(_filesDirectory(slot)));
+
+    final previous = Directory('${dbDir.path}.old');
+    await _deleteDirectoryIfPresent(previous);
+    var swapped = false;
+    try {
+      if (await dbDir.exists()) await dbDir.rename(previous.path);
+      await staging.rename(dbDir.path);
+      swapped = true;
+      await _reopenSlotAfterReset(slot, userId);
+    } catch (_) {
+      await _closeClientForSlot(slot);
+      if (swapped) {
+        await _deleteDirectoryIfPresent(dbDir);
+        if (await previous.exists()) await previous.rename(dbDir.path);
+      }
+      try {
+        await _reopenSlotAfterReset(slot, userId);
+      } catch (_) {
+        // The old binlog is back on disk; the next launch reopens it.
+      }
+      await _deleteDirectoryIfPresent(staging);
+      rethrow;
+    }
+    await _deleteDirectoryIfPresent(previous);
+    // Lookup caches are keyed by slot and outlive a client; the fresh database
+    // no longer holds the chats/users they describe.
+    TdUserIndex.shared.clearSlot(slot);
+    ForumTopicIndex.shared.clearSlot(slot);
+    TdFileCenter.shared.clearSlot(slot);
+    unawaited(_persistLiveClientIds());
+  }
+
+  Future<void> _reopenSlotAfterReset(int slot, int userId) async {
+    _ensureAcceptingNewClients();
+    final clientId = _bindings.createClientId();
+    _clientForSlot[slot] = clientId;
+    _slotForClient[clientId] = slot;
+    unawaited(_persistLiveClientIds());
+    _bindings.send(clientId, _tdActivateRequest);
+    await _waitForRestoredSessionReady(slot, clientId, userId);
+  }
+
   /// Telegram. Slot 0 is the legacy base directory, so keep account-* child
   /// directories for other slots while removing slot-0 files.
   Future<void> deleteSlotData(int slot) async {
@@ -2344,9 +2457,7 @@ class TdClient {
     if (!_parametersSent.add(clientId)) return;
 
     final dbDir = _databaseDirectory(slot);
-    final filesDir = Platform.isAndroid && DownloadStorage.currentRoot != null
-        ? DownloadStorage.filesDirectory(DownloadStorage.currentRoot!, slot)
-        : '$dbDir/files';
+    final filesDir = _filesDirectory(slot);
     final api = ApiCredentialsConfig.fromPrefs(_prefs);
     final useCustomApi = api.isUsable;
 

@@ -4213,7 +4213,7 @@
     <string name="aboutUpdatePrereleases">プレリリース版を確認</string>
     <string name="aboutUpdatePrereleasesDetail">リリース候補やベータ版も更新として提示します。オフの場合は正式版のみを確認します。</string>
     <string name="settingsResetDatabase">データベースをリセット</string>
-    <string name="settingsResetDatabaseMessage">ローカルにキャッシュされたメッセージ、メディア、絵文字パック、検索履歴、下書き、保存済みのダウンロードを削除しますか？設定とセッションは保持されます。</string>
+    <string name="settingsResetDatabaseMessage">ローカルのメッセージデータベースを削除し、サーバーから再同期しますか？メディアキャッシュ、絵文字パック、検索履歴、下書き、保存済みのダウンロードも削除されます。設定とログイン状態は保持されます。</string>
     <string name="autoDownloadChatTypesTitle">自動ダウンロードする場所</string>
     <string name="autoDownloadChatTypesDetail">チェックした種類のチャットだけがメディアを自動で取得します。</string>
     <string name="autoDownloadChatContacts">連絡先</string>
@@ -4221,4 +4221,5 @@
     <string name="autoDownloadChatGroups">グループ</string>
     <string name="autoDownloadChatChannels">チャンネル</string>
     <string name="settingsResetDatabaseDone">データベースをリセットしました</string>
+    <string name="settingsResetDatabaseFailed">一部のアカウントをリセットできませんでした。そのデータベースは変更されていません。</string>
 </resources>

@@ -4231,7 +4231,7 @@
     <string name="aboutUpdatePrereleases">Vorabversionen suchen</string>
     <string name="aboutUpdatePrereleasesDetail">Auch Release-Kandidaten und Beta-Builds als Update anbieten. Aus: nur offizielle Releases.</string>
     <string name="settingsResetDatabase">Datenbank zurücksetzen</string>
-    <string name="settingsResetDatabaseMessage">Zwischengespeicherte Nachrichten, Medien, Emoji-Pakete, Suchverlauf, Entwürfe und gespeicherte Downloads löschen? Einstellungen und Sitzung bleiben erhalten.</string>
+    <string name="settingsResetDatabaseMessage">Die lokale Nachrichtendatenbank löschen und vom Server neu synchronisieren? Medien-Caches, Emoji-Pakete, Suchverlauf, Entwürfe und gespeicherte Downloads werden ebenfalls gelöscht. Einstellungen und die Anmeldung bleiben erhalten.</string>
     <string name="autoDownloadChatTypesTitle">Automatisch herunterladen in</string>
     <string name="autoDownloadChatTypesDetail">Nur Chats der markierten Arten laden Medien automatisch.</string>
     <string name="autoDownloadChatContacts">Kontakte</string>
@@ -4239,4 +4239,5 @@
     <string name="autoDownloadChatGroups">Gruppen</string>
     <string name="autoDownloadChatChannels">Kanäle</string>
     <string name="settingsResetDatabaseDone">Datenbank zurückgesetzt</string>
+    <string name="settingsResetDatabaseFailed">Einige Konten konnten nicht zurückgesetzt werden; ihre Datenbanken blieben unverändert.</string>
 </resources>
