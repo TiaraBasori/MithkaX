@@ -3,11 +3,10 @@
 
 In the app the mark is painted (`lib/components/brand_mark.dart`), so it can
 follow the theme's brand colour and the light/dark appearance. Android's
-starting window is a native drawable and cannot: it gets baked copies instead,
-AZURE on the white launch colour and a lifted AZURE under
-`drawable-night-*`, one per density bucket. Both appearances are blue: the
-frost (near-white) night fill is gone, so no baked Mithka X mark reads as a
-white glyph.
+starting window is a native drawable and cannot: it gets baked copies instead.
+Both appearances bake the SAME ink — the dark launcher icon's azure body — so
+the cold-start mark is the logo the reader knows, never a paler variant and
+never a white glyph.
 
 `tool/app_icons/mithkax_mark.svg` is the canonical geometry; every raster here
 is generated from it.
@@ -31,11 +30,6 @@ SPLASH_INK_HEIGHT = 0.62
 # Stops sampled from the launcher icon's mark (assets/app_icons/
 # mithkax_default{,_night}.png), top-left to bottom-right.
 AZURE = ((0x2B, 0xA7, 0xF9), (0x0A, 0x8B, 0xF9), (0x01, 0x68, 0xF1))
-
-# The night fill is the same brand hue, lifted so it carries on the near-black
-# starting window. It stays saturated blue on purpose: FROST (a near-white
-# ladder) made the cold-start mark look like a white glyph.
-NIGHT_AZURE = ((0x7C, 0xC7, 0xFB), (0x47, 0xAC, 0xF7), (0x24, 0x8F, 0xEE))
 
 DENSITIES = {
     "mdpi": 192,
@@ -190,14 +184,14 @@ def main():
     master = render_master(4096)
     ink = master.crop(master.getbbox())
 
-    # Android cold-start art: AZURE on the light launch colour, the lifted
-    # blue on the night one, sized per density so no bucket upscales.
+    # Android cold-start art: the icon's own azure body in BOTH appearances,
+    # sized per density so no bucket upscales.
     for qualifier, size in DENSITIES.items():
         target = round(size * SPLASH_INK_HEIGHT)
         for name in ("penguin_launch", "penguin_splash"):
             for bucket, stops in (
                 (f"drawable-{qualifier}", AZURE),
-                (f"drawable-night-{qualifier}", NIGHT_AZURE),
+                (f"drawable-night-{qualifier}", AZURE),
             ):
                 (ANDROID_RES / bucket).mkdir(exist_ok=True)
                 compose(fit(ink, target), size, stops).save(
@@ -205,7 +199,7 @@ def main():
                 )
     for bucket, stops in (
         ("drawable", AZURE),
-        ("drawable-night", NIGHT_AZURE),
+        ("drawable-night", AZURE),
     ):
         (ANDROID_RES / bucket).mkdir(exist_ok=True)
         compose(

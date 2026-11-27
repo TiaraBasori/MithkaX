@@ -89,11 +89,6 @@ void main() {
     expect(brandMarkColors(), before);
   });
 
-  test('the frost ramp is the day icon and stays pale', () {
-    expect(markFrostColors.first.computeLuminance(), greaterThan(0.9));
-    expect(markFrostColors.last.computeLuminance(), greaterThan(0.5));
-  });
-
   testWidgets('a red theme still paints the azure mark', (tester) async {
     AppTheme.applyBrand(const Color(0xFFE0443E));
 

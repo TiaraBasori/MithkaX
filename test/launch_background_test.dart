@@ -357,14 +357,20 @@ void main() {
             inInclusiveRange(90, 200),
             reason: '$bucket/$name day ink luminance',
           );
-          // Both appearances are the brand's blue. The night fill used to
-          // be a near-white frost, which read as a white glyph on the
-          // starting window; it is now the same hue, lifted for legibility.
+          // Both appearances bake the SAME ink: the dark launcher icon's
+          // azure body. A paler night variant read as a second, light-blue
+          // logo at cold start.
           expect(
             night.luminance,
             inInclusiveRange(90, 200),
             reason: '$bucket/$name night ink must stay blue, never white',
           );
+          expect(
+            night.luminance,
+            closeTo(day.luminance, 3),
+            reason: '$bucket/$name must not ship a paler night mark',
+          );
+          expect(night.meanBlue, closeTo(day.meanBlue, 3));
           expect(
             night.meanBlue,
             greaterThan(night.meanRed + 100),

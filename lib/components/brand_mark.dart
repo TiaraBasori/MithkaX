@@ -17,17 +17,6 @@ const List<Color> _markBody = [
   Color(0xFF0267EE),
 ];
 
-/// The day icon's frost ramp (near-white to pale blue). Only for the mark
-/// painted ON the brand gradient (the cold-start splash), where the azure body
-/// would disappear into the page.
-const List<Color> markFrostColors = [
-  Color(0xFFF3F9FF),
-  Color(0xFFEBF5FE),
-  Color(0xFFD1E9FD),
-  Color(0xFFAFD7FC),
-  Color(0xFF8DC6FB),
-];
-
 /// The gradient every in-app [BrandMark] paints, in both appearances.
 List<Color> brandMarkColors() => _markBody;
 
