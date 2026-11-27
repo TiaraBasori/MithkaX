@@ -116,7 +116,9 @@ void main() {
       tester,
       _message(
         chatId: -1001234567890,
-        reactions: const [MessageReaction(emoji: '👍', count: 4, chosen: false)],
+        reactions: const [
+          MessageReaction(emoji: '👍', count: 4, chosen: false),
+        ],
       ),
     );
     final chip = find.byKey(const ValueKey('reactionChip-5-emoji:👍'));

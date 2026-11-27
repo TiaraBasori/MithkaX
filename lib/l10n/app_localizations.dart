@@ -1566,6 +1566,9 @@ abstract final class AppStringKeys {
   static const composerLinkPreviewOff = 'composerLinkPreviewOff';
   static const composerLinkPreviewEnable = 'composerLinkPreviewEnable';
   static const composerLinkPreviewDisable = 'composerLinkPreviewDisable';
+  static const composerLinkPreviewOptionsSubtitle =
+      'composerLinkPreviewOptionsSubtitle';
+  static const composerLinkPreviewOptionDone = 'composerLinkPreviewOptionDone';
   static const composerReplyToName = 'composerReplyToName';
   static const composerReplyToQuoteName = 'composerReplyToQuoteName';
   static const composerReplyToExternalName = 'composerReplyToExternalName';

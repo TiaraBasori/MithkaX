@@ -4208,6 +4208,8 @@
     <string name="composerLinkPreviewOff">連結預覽已關閉</string>
     <string name="composerLinkPreviewEnable">顯示連結預覽</string>
     <string name="composerLinkPreviewDisable">不顯示連結預覽</string>
+    <string name="composerLinkPreviewOptionsSubtitle">選擇這則訊息是否顯示連結卡片，以及卡片的位置。</string>
+    <string name="composerLinkPreviewOptionDone">完成</string>
     <string name="aboutUpdatePrereleases">檢查預發佈版本</string>
     <string name="aboutUpdatePrereleasesDetail">把預發佈與測試版本也作為更新提供。關閉時只檢查正式版本。</string>
     <string name="settingsResetDatabase">重設資料庫</string>

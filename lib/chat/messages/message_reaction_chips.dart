@@ -227,11 +227,7 @@ class _AvatarPerson {
 /// The reference client's overlap: 20dp faces, every further face inset by
 /// 16dp, each ringed in the chip's own fill so the stack reads as one pill.
 class _AvatarsRow extends StatelessWidget {
-  const _AvatarsRow({
-    super.key,
-    required this.people,
-    required this.ringColor,
-  });
+  const _AvatarsRow({super.key, required this.people, required this.ringColor});
 
   final List<_AvatarPerson> people;
 
@@ -241,7 +237,6 @@ class _AvatarsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     final size = people.length == 1 ? 20.0 : 20 + (people.length - 1) * 16.0;
     return SizedBox(
       height: 20,

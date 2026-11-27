@@ -973,10 +973,7 @@ class SplashView extends StatelessWidget {
           children: [
             // The mark sits on the brand gradient, so it takes the launcher
             // icon's FROST body — the azure one would vanish into the page.
-            BrandMark(
-              size: AppMetric.splashMarkSize,
-              colors: markFrostColors,
-            ),
+            BrandMark(size: AppMetric.splashMarkSize, colors: markFrostColors),
             const SizedBox(height: AppSpacing.lg + AppSpacing.sm),
             const SizedBox(
               width: AppMetric.splashSpinnerSize,

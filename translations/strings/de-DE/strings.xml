@@ -4226,6 +4226,8 @@
     <string name="composerLinkPreviewOff">Linkvorschau aus</string>
     <string name="composerLinkPreviewEnable">Linkvorschau anzeigen</string>
     <string name="composerLinkPreviewDisable">Linkvorschau ausblenden</string>
+    <string name="composerLinkPreviewOptionsSubtitle">Lege fest, ob diese Nachricht eine Linkvorschau zeigt und wo sie steht.</string>
+    <string name="composerLinkPreviewOptionDone">Fertig</string>
     <string name="aboutUpdatePrereleases">Vorabversionen suchen</string>
     <string name="aboutUpdatePrereleasesDetail">Auch Release-Kandidaten und Beta-Builds als Update anbieten. Aus: nur offizielle Releases.</string>
     <string name="settingsResetDatabase">Datenbank zurücksetzen</string>

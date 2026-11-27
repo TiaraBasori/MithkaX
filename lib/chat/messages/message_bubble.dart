@@ -5129,7 +5129,8 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(fontSize: 14, color: line),
                               ),
-                            if ((message.replyPreviewText ?? '').isNotEmpty) ...[
+                            if ((message.replyPreviewText ?? '')
+                                .isNotEmpty) ...[
                               const SizedBox(height: 1),
                               _replyPreviewText(
                                 faded,

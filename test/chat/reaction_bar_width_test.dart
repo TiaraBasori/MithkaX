@@ -48,7 +48,10 @@ void main() {
       find.byKey(const ValueKey('quick-reaction-bar')),
     );
     // Two emoji plus the expand slot, the 8pt padding on both sides.
-    expect(bar.width, 2 * QuickReactionBar.slotWidth + QuickReactionBar.slotWidth + 16);
+    expect(
+      bar.width,
+      2 * QuickReactionBar.slotWidth + QuickReactionBar.slotWidth + 16,
+    );
     expect(bar.width, lessThan(360 - 24));
   });
 

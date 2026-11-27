@@ -4208,6 +4208,8 @@
     <string name="composerLinkPreviewOff">링크 미리보기 꺼짐</string>
     <string name="composerLinkPreviewEnable">링크 미리보기 표시</string>
     <string name="composerLinkPreviewDisable">링크 미리보기 숨기기</string>
+    <string name="composerLinkPreviewOptionsSubtitle">이 메시지에 링크 카드를 표시할지, 표시 위치를 선택하세요.</string>
+    <string name="composerLinkPreviewOptionDone">완료</string>
     <string name="aboutUpdatePrereleases">사전 출시 버전 확인</string>
     <string name="aboutUpdatePrereleasesDetail">출시 후보와 베타 빌드도 업데이트로 제공합니다. 끄면 정식 릴리스만 확인합니다.</string>
     <string name="settingsResetDatabase">데이터베이스 초기화</string>

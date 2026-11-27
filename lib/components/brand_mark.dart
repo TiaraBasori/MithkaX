@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
-
 /// The app mark: one flat glyph, filled at paint time with the launcher
 /// icon's own body colours.
 ///

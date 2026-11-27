@@ -215,8 +215,8 @@ class QuickReactionBar extends StatelessWidget {
   /// every available reaction and drops the expand button while the whole set
   /// fits; only a larger set needs the full picker.
   static int fittedCapacity(double availableWidth) {
-    final slots =
-        ((availableWidth - _horizontalPadding * 2) / slotWidth).floor();
+    final slots = ((availableWidth - _horizontalPadding * 2) / slotWidth)
+        .floor();
     return slots.clamp(1, maxFittedButtonCount);
   }
 

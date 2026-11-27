@@ -33,7 +33,6 @@ import 'package:record/record.dart' as desktop_record;
 import '../../app/desktop/desktop_utility_window.dart';
 import '../../app/diagnostic_breadcrumbs.dart';
 import '../../app/split_bottom_edge.dart';
-import '../../components/app_anchored_menu.dart';
 import '../../components/app_dialog.dart';
 import '../../components/app_icons.dart';
 import '../../components/app_interactive_surface.dart';
@@ -73,6 +72,7 @@ import '../ai_translation/ai_reply_service.dart';
 import '../ai_translation/telegram_ai_editor_view.dart';
 import '../ai_translation/telegram_ai_service.dart';
 import '../chat_view_model.dart';
+import '../composer_link_preview_options_sheet.dart';
 import '../composer_reply_options_sheet.dart';
 import '../favorite_sticker_store.dart';
 import '../forward_handoff.dart';
@@ -2523,40 +2523,25 @@ class _ChatInputBarState extends State<ChatInputBar>
     return host.isEmpty ? url : host;
   }
 
+  /// Opens the link-preview panel — the reply-options sheet's shape, with the
+  /// link itself in the preview slot. Toggles apply the moment they are
+  /// tapped, so the banner behind the sheet already reads the new state.
   Future<void> _openLinkPreviewMenu() async {
-    final box = _linkPreviewAnchorKey.currentContext?.findRenderObject();
-    final rect = box is RenderBox && box.hasSize
-        ? box.localToGlobal(Offset.zero) & box.size
-        : null;
-    if (rect == null) return;
-    await showAppAnchoredMenu(
+    final url = _linkPreviewUrl;
+    if (url == null) return;
+    await showAppModalSheet<void>(
       context: context,
-      anchor: rect,
-      header: AppStrings.t(AppStringKeys.composerLinkPreviewTitle),
-      actions: [
-        AppMenuAction(
-          key: 'link-preview-toggle',
-          icon: _linkPreviewEnabled ? HeroAppIcons.eyeSlash : HeroAppIcons.eye,
-          label: AppStrings.t(
-            _linkPreviewEnabled
-                ? AppStringKeys.composerLinkPreviewDisable
-                : AppStringKeys.composerLinkPreviewEnable,
-          ),
-          onSelected: () => _setLinkPreviewEnabled(!_linkPreviewEnabled),
-        ),
-        AppMenuAction(
-          key: 'link-preview-position',
-          icon: _linkPreviewAbove
-              ? HeroAppIcons.arrowDown
-              : HeroAppIcons.arrowUp,
-          label: AppStrings.t(
-            _linkPreviewAbove
-                ? AppStringKeys.composerLinkPreviewBelow
-                : AppStringKeys.composerLinkPreviewAbove,
-          ),
-          onSelected: _toggleLinkPreviewPosition,
-        ),
-      ],
+      backgroundColor: Colors.transparent,
+      builder: (_) => ComposerLinkPreviewOptionsSheet(
+        url: url,
+        enabled: _linkPreviewEnabled,
+        showAboveText: _linkPreviewAbove,
+        onEnabledChanged: _setLinkPreviewEnabled,
+        onPositionChanged: (above) {
+          if (_linkPreviewAbove == above) return;
+          _toggleLinkPreviewPosition();
+        },
+      ),
     );
   }
 

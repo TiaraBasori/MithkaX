@@ -4226,6 +4226,8 @@
     <string name="composerLinkPreviewOff">Aperçu désactivé</string>
     <string name="composerLinkPreviewEnable">Afficher l’aperçu</string>
     <string name="composerLinkPreviewDisable">Masquer l’aperçu</string>
+    <string name="composerLinkPreviewOptionsSubtitle">Choisissez si ce message affiche un aperçu du lien et où il se place.</string>
+    <string name="composerLinkPreviewOptionDone">Terminé</string>
     <string name="aboutUpdatePrereleases">Rechercher les préversions</string>
     <string name="aboutUpdatePrereleasesDetail">Proposer aussi les versions candidates et bêta comme mises à jour. Désactivé : seules les versions officielles.</string>
     <string name="settingsResetDatabase">Réinitialiser la base de données</string>
