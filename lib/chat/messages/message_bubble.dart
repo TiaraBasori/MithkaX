@@ -1049,9 +1049,15 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   /// The reply line/name colour: the quoted author's accent colour when the
   /// setting is on and the quote resolved one, else the theme's reply line.
+  ///
+  /// Our OWN bubble never takes the quoted author's colour: the reference
+  /// client overrides every reply colour with the outgoing reply line (our
+  /// text colour) once the message is ours, because a peer accent at 10% is
+  /// invisible on the brand fill and its name can clash with the bubble ink.
+  /// Incoming replies keep the accent.
   Color _replyAccentColor(bool outgoing) {
     final fallback = _messageReplyLineColor(outgoing);
-    if (!_theme.replyQuoteSenderStyle) return fallback;
+    if (outgoing || !_theme.replyQuoteSenderStyle) return fallback;
     final accentColorId = message.replyToSenderAccentColorId;
     if (accentColorId < 0) return fallback;
     final cloudTheme = _theme.cloudThemeFor(_brightness);

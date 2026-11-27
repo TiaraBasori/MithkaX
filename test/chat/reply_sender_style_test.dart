@@ -137,6 +137,45 @@ void main() {
     );
   });
 
+  testWidgets('our own bubble keeps the marker in the bubble ink', (
+    tester,
+  ) async {
+    // The quoted author has a peer colour; on OUR bubble it must not be used —
+    // the reference client replaces every reply colour with the outgoing reply
+    // line once the message is ours, or the marker disappears into the brand
+    // fill.
+    final message =
+        ChatMessage(
+            id: 6,
+            isOutgoing: true,
+            text: 'thanks',
+            date: 10,
+            contentType: 'messageText',
+            replyToMessageId: 1,
+            replyToDate: 8,
+            replyToSenderAccentColorId: 2,
+            replyToSenderIsPremium: true,
+          )
+          ..replyToSender = 'Ada'
+          ..replyToPreview = 'the quoted line';
+    final theme = await pumpReply(tester, message: message);
+    final ink = theme.themingEnabled
+        ? const Color(0xFFFFFFFF)
+        : AppTheme.bubbleOutgoingText;
+    expect(quoteDecoration(tester).color, ink.withValues(alpha: 0.10));
+    // The author's ink is the paragraph style (the span only carries the
+    // weight), so read the RichText that renders her name.
+    final sender = tester
+        .widgetList<RichText>(
+          find.descendant(
+            of: find.byKey(const ValueKey('messageReplyQuote')),
+            matching: find.byType(RichText),
+          ),
+        )
+        .firstWhere((text) => text.text.toPlainText().contains('Ada'));
+    expect(sender.text.style?.color, ink);
+  });
+
   testWidgets('turning the switch off leaves a plain theme colour', (
     tester,
   ) async {
