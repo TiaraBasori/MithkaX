@@ -1200,8 +1200,13 @@ class ChatViewModel extends ChangeNotifier {
   /// Points TDLib at a preview mirror for the message's first link when the user
   /// opted in to fixing link previews. Requests that already carry
   /// `link_preview_options` keep them: an explicit choice beats a preference.
+  /// The composer's link preview panel answer for the message being typed
+  /// (on/off and above/below the text). Null means no explicit choice, so the
+  /// fixer's own rules apply. Cleared when the draft's link goes away.
+  ComposerLinkPreviewChoice? composerLinkPreview;
+
   Map<String, dynamic> _withFixedLinkPreview(Map<String, dynamic> request) =>
-      LinkPreviewFixer.shared.applyTo(request);
+      LinkPreviewFixer.shared.applyTo(request, choice: composerLinkPreview);
 
   Future<bool> _submitMessageRequest(Map<String, dynamic> request) async {
     final startedBotTopicId = await _scopeSendToNewBotTopic(request);

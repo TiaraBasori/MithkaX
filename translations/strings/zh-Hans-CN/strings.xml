@@ -4200,4 +4200,10 @@
     <string name="mithkaxStickerSizeSmall">小</string>
     <string name="mithkaxStickerSizeLarge">大</string>
     <string name="mithkaxStickerSizeReset">重置</string>
+    <string name="composerLinkPreviewTitle">链接预览</string>
+    <string name="composerLinkPreviewAbove">预览显示在文字上方</string>
+    <string name="composerLinkPreviewBelow">预览显示在文字下方</string>
+    <string name="composerLinkPreviewOff">链接预览已关闭</string>
+    <string name="composerLinkPreviewEnable">显示链接预览</string>
+    <string name="composerLinkPreviewDisable">不显示链接预览</string>
 </resources>

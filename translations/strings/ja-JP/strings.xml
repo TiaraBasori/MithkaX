@@ -4200,4 +4200,10 @@
     <string name="mithkaxStickerSizeSmall">小</string>
     <string name="mithkaxStickerSizeLarge">大</string>
     <string name="mithkaxStickerSizeReset">リセット</string>
+    <string name="composerLinkPreviewTitle">リンクプレビュー</string>
+    <string name="composerLinkPreviewAbove">テキストの上にプレビュー</string>
+    <string name="composerLinkPreviewBelow">テキストの下にプレビュー</string>
+    <string name="composerLinkPreviewOff">リンクプレビューはオフ</string>
+    <string name="composerLinkPreviewEnable">リンクプレビューを表示</string>
+    <string name="composerLinkPreviewDisable">リンクプレビューを非表示</string>
 </resources>

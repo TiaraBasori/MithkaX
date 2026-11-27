@@ -4200,4 +4200,10 @@
     <string name="mithkaxStickerSizeSmall">작게</string>
     <string name="mithkaxStickerSizeLarge">크게</string>
     <string name="mithkaxStickerSizeReset">초기화</string>
+    <string name="composerLinkPreviewTitle">링크 미리보기</string>
+    <string name="composerLinkPreviewAbove">텍스트 위에 미리보기</string>
+    <string name="composerLinkPreviewBelow">텍스트 아래에 미리보기</string>
+    <string name="composerLinkPreviewOff">링크 미리보기 꺼짐</string>
+    <string name="composerLinkPreviewEnable">링크 미리보기 표시</string>
+    <string name="composerLinkPreviewDisable">링크 미리보기 숨기기</string>
 </resources>

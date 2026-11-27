@@ -1551,6 +1551,12 @@ abstract final class AppStringKeys {
       'composerLongMessageRichTextPrompt';
   static const composerLongMessageTitle = 'composerLongMessageTitle';
   static const composerMarkdownSupportHint = 'composerMarkdownSupportHint';
+  static const composerLinkPreviewTitle = 'composerLinkPreviewTitle';
+  static const composerLinkPreviewAbove = 'composerLinkPreviewAbove';
+  static const composerLinkPreviewBelow = 'composerLinkPreviewBelow';
+  static const composerLinkPreviewOff = 'composerLinkPreviewOff';
+  static const composerLinkPreviewEnable = 'composerLinkPreviewEnable';
+  static const composerLinkPreviewDisable = 'composerLinkPreviewDisable';
   static const composerReplyToName = 'composerReplyToName';
   static const composerReplyToQuoteName = 'composerReplyToQuoteName';
   static const composerReplyToExternalName = 'composerReplyToExternalName';

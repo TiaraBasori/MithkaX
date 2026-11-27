@@ -33,6 +33,7 @@ import 'package:record/record.dart' as desktop_record;
 import '../../app/desktop/desktop_utility_window.dart';
 import '../../app/diagnostic_breadcrumbs.dart';
 import '../../app/split_bottom_edge.dart';
+import '../../components/app_anchored_menu.dart';
 import '../../components/app_dialog.dart';
 import '../../components/app_icons.dart';
 import '../../components/app_interactive_surface.dart';
@@ -76,6 +77,7 @@ import '../composer_reply_options_sheet.dart';
 import '../favorite_sticker_store.dart';
 import '../forward_handoff.dart';
 import '../links_search/link_handler.dart';
+import '../links_search/link_preview_fixer.dart';
 import '../media/audio_search_view.dart';
 import '../media/image_edit_view.dart';
 import '../media/media_download_service.dart';
@@ -947,6 +949,15 @@ class _ChatInputBarState extends State<ChatInputBar>
 
   late bool _hasText = vm.draft.trim().isNotEmpty;
 
+  /// The link-preview panel above the input (the reference client's link
+  /// preview row): the first previewable URL in the draft, whether this
+  /// message carries a preview at all, and which side of the text its card
+  /// sits on. All three feed `vm.composerLinkPreview`, which the send path
+  /// applies as `linkPreviewOptions`.
+  String? _linkPreviewUrl;
+  bool _linkPreviewEnabled = true;
+  bool _linkPreviewAbove = false;
+
   /// Assigned in [initState], never lazily: a `late` initializer would first
 
   /// run inside the very [_syncFromVm] call it exists to compare against, and
@@ -1266,6 +1277,7 @@ class _ChatInputBarState extends State<ChatInputBar>
       }
       if (mounted) setState(() {});
     }
+    _refreshLinkPreview(_controller.text, entities);
     if (applyingAiReplyDraft) return;
     if (vm.editingMessage != null) {
       _mentionSearchTimer?.cancel();
@@ -1719,6 +1731,12 @@ class _ChatInputBarState extends State<ChatInputBar>
                       _forwardBanner(vm.pendingForward!)
                     else if (vm.replyTo != null)
                       _replyBanner(vm.replyTo!),
+                    // The link preview row sits exactly where the reply row
+                    // does — above the field, one strip, no overlay.
+                    if (editingMessage == null &&
+                        vm.pendingForward == null &&
+                        _linkPreviewUrl != null)
+                      _linkPreviewBanner(_linkPreviewUrl!),
                     if (editingMessage == null)
                       if (_inlineBotResults != null)
                         _inlineBotResultMenu()
@@ -2453,6 +2471,177 @@ class _ChatInputBarState extends State<ChatInputBar>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Re-reads the draft's first previewable link. The panel only exists while
+  /// the text carries a link Telegram can preview; hiding it the moment the
+  /// link is edited away keeps a stale "off" from silencing the next link.
+  void _refreshLinkPreview(String text, List<Map<String, dynamic>> entities) {
+    final url = LinkPreviewFixer.shared.previewableUrlForFormatted({
+      '@type': 'formattedText',
+      'text': text,
+      'entities': entities,
+    });
+    final urlChanged = url != _linkPreviewUrl;
+    if (urlChanged) {
+      _linkPreviewUrl = url;
+      // A new link starts from the same defaults the reference client picks:
+      // preview on, card under the text. The chosen side is a reading
+      // preference and survives; the on/off switch is per link.
+      _linkPreviewEnabled = true;
+    }
+    _syncLinkPreviewChoice();
+    if (urlChanged && mounted) setState(() {});
+  }
+
+  void _syncLinkPreviewChoice() {
+    final url = _linkPreviewUrl;
+    vm.composerLinkPreview = url == null
+        ? null
+        : ComposerLinkPreviewChoice(
+            enabled: _linkPreviewEnabled,
+            showAboveText: _linkPreviewAbove,
+          );
+  }
+
+  void _setLinkPreviewEnabled(bool enabled) {
+    if (_linkPreviewEnabled == enabled) return;
+    setState(() => _linkPreviewEnabled = enabled);
+    _syncLinkPreviewChoice();
+  }
+
+  void _toggleLinkPreviewPosition() {
+    setState(() => _linkPreviewAbove = !_linkPreviewAbove);
+    _syncLinkPreviewChoice();
+  }
+
+  String _linkPreviewHost(String url) {
+    final uri = Uri.tryParse(url);
+    final host = uri?.host ?? '';
+    return host.isEmpty ? url : host;
+  }
+
+  Future<void> _openLinkPreviewMenu() async {
+    final box = _linkPreviewAnchorKey.currentContext?.findRenderObject();
+    final rect = box is RenderBox && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    if (rect == null) return;
+    await showAppAnchoredMenu(
+      context: context,
+      anchor: rect,
+      header: AppStrings.t(AppStringKeys.composerLinkPreviewTitle),
+      actions: [
+        AppMenuAction(
+          key: 'link-preview-toggle',
+          icon: _linkPreviewEnabled ? HeroAppIcons.eyeSlash : HeroAppIcons.eye,
+          label: AppStrings.t(
+            _linkPreviewEnabled
+                ? AppStringKeys.composerLinkPreviewDisable
+                : AppStringKeys.composerLinkPreviewEnable,
+          ),
+          onSelected: () => _setLinkPreviewEnabled(!_linkPreviewEnabled),
+        ),
+        AppMenuAction(
+          key: 'link-preview-position',
+          icon: _linkPreviewAbove
+              ? HeroAppIcons.arrowDown
+              : HeroAppIcons.arrowUp,
+          label: AppStrings.t(
+            _linkPreviewAbove
+                ? AppStringKeys.composerLinkPreviewBelow
+                : AppStringKeys.composerLinkPreviewAbove,
+          ),
+          onSelected: _toggleLinkPreviewPosition,
+        ),
+      ],
+    );
+  }
+
+  final GlobalKey _linkPreviewAnchorKey = GlobalKey();
+
+  /// The link preview row: the same 46dp strip as the reply banner, with the
+  /// link's glyph in the reference client's icon slot, the host as its title
+  /// and the URL as its subtitle. Tapping it opens the preview options; the
+  /// trailing X turns the preview off for this message.
+  Widget _linkPreviewBanner(String url) {
+    final c = context.colors;
+    final enabled = _linkPreviewEnabled;
+    final title = enabled
+        ? AppStrings.t(AppStringKeys.composerLinkPreviewTitle)
+        : AppStrings.t(AppStringKeys.composerLinkPreviewOff);
+    return SizedBox(
+      key: const ValueKey('composerLinkPreviewBanner'),
+      height: 46,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            height: 46,
+            child: Center(
+              child: AppIcon(
+                HeroAppIcons.link,
+                size: 19,
+                color: enabled ? c.linkBlue : c.textTertiary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              key: _linkPreviewAnchorKey,
+              behavior: HitTestBehavior.opaque,
+              onTap: () => unawaited(_openLinkPreviewMenu()),
+              child: SizedBox(
+                height: 46,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.body(
+                          enabled ? c.linkBlue : c.textTertiary,
+                          weight: AppTextWeight.semibold,
+                        ),
+                      ),
+                      Text(
+                        _linkPreviewHost(url),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.body(c.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 52,
+            height: 46,
+            child: AppInteractiveSurface(
+              key: const ValueKey('composerLinkPreviewClose'),
+              semanticLabel: AppStringKeys.composerLinkPreviewDisable.l10n(
+                context,
+              ),
+              onTap: () => _setLinkPreviewEnabled(false),
+              borderRadius: BorderRadius.circular(19),
+              child: Center(
+                child: AppIcon(
+                  HeroAppIcons.xmark,
+                  size: 17,
+                  color: c.textTertiary,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

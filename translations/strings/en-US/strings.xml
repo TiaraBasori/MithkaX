@@ -4218,4 +4218,10 @@
     <string name="mithkaxStickerSizeSmall">Small</string>
     <string name="mithkaxStickerSizeLarge">Large</string>
     <string name="mithkaxStickerSizeReset">Reset</string>
+    <string name="composerLinkPreviewTitle">Link preview</string>
+    <string name="composerLinkPreviewAbove">Preview above the text</string>
+    <string name="composerLinkPreviewBelow">Preview below the text</string>
+    <string name="composerLinkPreviewOff">Link preview off</string>
+    <string name="composerLinkPreviewEnable">Show link preview</string>
+    <string name="composerLinkPreviewDisable">Hide link preview</string>
 </resources>
