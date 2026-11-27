@@ -139,12 +139,15 @@ void main() {
         reactions: const [MessageReaction(emoji: '❤️', count: 2, chosen: true)],
       ),
     );
-    expect(find.byKey(const ValueKey('reactionAvatars-5')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('reactionAvatars-5-emoji:❤️')),
+      findsOneWidget,
+    );
     expect(find.text('2', findRichText: true), findsNothing);
     // Both faces are drawn: one per participant.
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('reactionAvatars-5')),
+        of: find.byKey(const ValueKey('reactionAvatars-5-emoji:❤️')),
         matching: find.byType(PhotoAvatar),
       ),
       findsNWidgets(2),
@@ -158,11 +161,14 @@ void main() {
         reactions: const [MessageReaction(emoji: '👍', count: 1, chosen: true)],
       ),
     );
-    expect(find.byKey(const ValueKey('reactionAvatars-5')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('reactionAvatars-5-emoji:👍')),
+      findsOneWidget,
+    );
     expect(find.text('1', findRichText: true), findsNothing);
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('reactionAvatars-5')),
+        of: find.byKey(const ValueKey('reactionAvatars-5-emoji:👍')),
         matching: find.byType(PhotoAvatar),
       ),
       findsOneWidget,
@@ -181,7 +187,10 @@ void main() {
         ],
       ),
     );
-    expect(find.byKey(const ValueKey('reactionAvatars-5')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('reactionAvatars-5-emoji:🔥')),
+      findsNothing,
+    );
     expect(find.text('9', findRichText: true), findsOneWidget);
   });
 
@@ -228,5 +237,87 @@ void main() {
         (element.widget.key! as ValueKey<String>).value,
     ];
     expect(keys, ['reactionChip-5-emoji:❤️', 'reactionChip-5-emoji:👍']);
+  });
+
+  testWidgets('a group reactor without a profile keeps the count', (
+    tester,
+  ) async {
+    // TDLib cannot answer in a widget test, exactly like a first frame in the
+    // app: the chip must keep its number instead of painting an empty face.
+    await _pump(
+      tester,
+      _message(
+        chatId: -1001234567890,
+        reactions: const [
+          MessageReaction(
+            emoji: '👍',
+            count: 2,
+            chosen: false,
+            reactors: [MessageReactor(senderId: 4242)],
+          ),
+        ],
+      ),
+    );
+    expect(
+      find.byKey(const ValueKey('reactionAvatars-5-emoji:👍')),
+      findsNothing,
+    );
+    expect(find.text('2', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('a private chat without a reader id keeps the count', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final theme = ThemeController(await SharedPreferences.getInstance());
+    addTearDown(theme.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ThemeController>.value(
+        value: theme,
+        child: MaterialApp(
+          theme: ThemeData(extensions: [AppColors.light]),
+          home: Scaffold(
+            body: MessageReactionChips(
+              message: _message(
+                reactions: const [
+                  MessageReaction(emoji: '❤️', count: 2, chosen: true),
+                ],
+              ),
+              outgoing: false,
+              peerTitle: 'Alice',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      find.byKey(const ValueKey('reactionAvatars-5-emoji:❤️')),
+      findsNothing,
+    );
+    expect(find.text('2', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('two private buckets draw two stacks under distinct keys', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _message(
+        reactions: const [
+          MessageReaction(emoji: '❤️', count: 2, chosen: true),
+          MessageReaction(emoji: '👍', count: 2, chosen: false),
+        ],
+      ),
+    );
+    // Duplicate sibling keys would trip the element-reuse assertion in debug.
+    expect(
+      find.byKey(const ValueKey('reactionAvatars-5-emoji:❤️')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('reactionAvatars-5-emoji:👍')),
+      findsOneWidget,
+    );
   });
 }

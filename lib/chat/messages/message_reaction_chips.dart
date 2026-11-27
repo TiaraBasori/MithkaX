@@ -19,6 +19,11 @@ import 'reaction_reactor_avatars.dart';
 /// reference client does; in a private chat the two participants stand in for
 /// the count.
 ///
+/// A face only appears once its name or photo is known. The reference resolves
+/// reactors from its cache synchronously and omits whoever is missing; drawing
+/// an empty circle would read as a broken avatar, so an unresolved (or deleted)
+/// reactor keeps the count until a real identity arrives.
+///
 /// Sorting follows the reference too: a private chat leads with the bucket the
 /// reader chose, a group/channel with the biggest bucket.
 class MessageReactionChips extends StatefulWidget {
@@ -54,6 +59,46 @@ class MessageReactionChips extends StatefulWidget {
 }
 
 class _MessageReactionChipsState extends State<MessageReactionChips> {
+  /// Resolved reactors by sender id. A null value means "asked, no answer
+  /// yet"; a failed or deleted sender stays null and never paints a face.
+  final Map<int, ReactionReactorAvatar?> _reactors = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveReactors();
+  }
+
+  @override
+  void didUpdateWidget(covariant MessageReactionChips oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.message.reactions, widget.message.reactions)) {
+      _resolveReactors();
+    }
+  }
+
+  /// One lookup per distinct reactor, bounded by the three faces a chip can
+  /// draw. The cache answers synchronously once warm; a first view fills in as
+  /// the profiles arrive.
+  void _resolveReactors() {
+    for (final reaction in widget.message.reactions) {
+      for (final reactor in reaction.reactors.take(3)) {
+        final id = reactor.senderId;
+        if (id == 0 || _reactors.containsKey(id)) continue;
+        final known = ReactionReactorAvatars.shared.peek(id);
+        _reactors[id] = known;
+        if (known != null) continue;
+        ReactionReactorAvatars.shared
+            .resolve(id)
+            .then((person) {
+              if (!mounted) return;
+              setState(() => _reactors[id] = person);
+            })
+            .catchError((_) => null);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -101,7 +146,7 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
         ? AppTheme.brand
         : AppTheme.brand.withValues(alpha: 0.156);
     final foreground = r.chosen ? Colors.white : AppTheme.brand;
-    final avatars = _avatarSlot(r, total, fill);
+    final avatars = _avatarSlot(r, total);
     return GestureDetector(
       key: ValueKey('reactionChip-${widget.message.id}-${_reactionKey(r)}'),
       behavior: HitTestBehavior.opaque,
@@ -112,8 +157,9 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
         padding: EdgeInsets.only(
           left: 8,
           // 8 + emoji 20 + 4 + count + 8 is the reference chip's box; a lone
-          // emoji closes at 31pt (8 + 20 + 3).
-          right: avatars == null && r.count <= 1 ? 3 : 8,
+          // emoji closes at 31pt (8 + 20 + 3), and an avatar stack keeps the
+          // reference's short 4pt tail.
+          right: avatars == null ? (r.count <= 1 ? 3 : 8) : 4,
         ),
         decoration: BoxDecoration(
           color: fill,
@@ -124,7 +170,7 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
           children: [
             _glyph(r, foreground),
             if (avatars != null) ...[
-              const SizedBox(width: 2),
+              const SizedBox(width: 4),
               avatars,
             ] else if (r.count > 1)
               _countTarget(r, foreground),
@@ -148,33 +194,44 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
   /// and the peer when not); a group/channel only does so while the message has
   /// at most three reactors in total, because beyond that the avatars no longer
   /// name who reacted.
-  Widget? _avatarSlot(MessageReaction r, int total, Color fill) {
-    if (_isPrivateChat) {
-      final me = _meAvatar();
-      final peer = _peerAvatar();
-      final people = r.count == 2 ? [me, peer] : [if (r.chosen) me else peer];
-      if (people.isEmpty) return null;
-      return _avatarStack(people, fill);
-    }
-    if (r.count > 3 || total > 3 || r.reactors.isEmpty) return null;
-    return _ReactorAvatarStack(
+  Widget? _avatarSlot(MessageReaction r, int total) {
+    final people = _isPrivateChat
+        ? _privateParticipants(r)
+        : _resolvedReactors(r, total);
+    if (people.isEmpty) return null;
+    return _AvatarsRow(
+      // The reaction is part of the key: two buckets in one private chat both
+      // draw a stack, and duplicate sibling keys break element reuse.
       key: ValueKey('reactionAvatars-${widget.message.id}-${_reactionKey(r)}'),
-      senders: r.reactors.take(3).map((reactor) => reactor.senderId).toList(),
-      ringColor: fill,
+      people: people,
     );
   }
 
-  Widget _avatarStack(List<_AvatarPerson> people, Color fill) => _AvatarsRow(
-    people: people,
-    key: ValueKey('reactionAvatars-${widget.message.id}'),
-    ringColor: fill,
-  );
+  List<_AvatarPerson> _privateParticipants(MessageReaction r) {
+    // No reader id means this surface never told us who is who; the count is
+    // the honest thing to show.
+    if (widget.meId == null) return const [];
+    final me = _AvatarPerson(title: widget.meName ?? '', photo: widget.mePhoto);
+    final peer = _AvatarPerson(
+      title: widget.peerTitle ?? '',
+      photo: widget.peerPhoto,
+    );
+    final people = r.count == 2 ? [me, peer] : [if (r.chosen) me else peer];
+    return [
+      for (final person in people)
+        if (person.isKnown) person,
+    ];
+  }
 
-  _AvatarPerson _meAvatar() =>
-      _AvatarPerson(title: widget.meName ?? '', photo: widget.mePhoto);
-
-  _AvatarPerson _peerAvatar() =>
-      _AvatarPerson(title: widget.peerTitle ?? '', photo: widget.peerPhoto);
+  List<_AvatarPerson> _resolvedReactors(MessageReaction r, int total) {
+    if (r.count > 3 || total > 3 || r.reactors.isEmpty) return const [];
+    return [
+      for (final reactor in r.reactors.take(3))
+        if (_reactors[reactor.senderId] case final person?
+            when !person.isDeleted && person.title.isNotEmpty)
+          _AvatarPerson(title: person.title, photo: person.photo),
+    ];
+  }
 
   Widget _countTarget(MessageReaction r, Color color) {
     final count = Padding(
@@ -222,18 +279,19 @@ class _AvatarPerson {
 
   final String title;
   final TdFileRef? photo;
+
+  /// A face we can actually show: a name, a photo, or both.
+  bool get isKnown => title.isNotEmpty || photo != null;
 }
 
-/// The reference client's overlap: 20dp faces, every further face inset by
-/// 16dp, each ringed in the chip's own fill so the stack reads as one pill.
+/// The reference client's stack: 20dp faces, every further face inset by 16dp,
+/// no separator — the earlier face shows through as a crescent, exactly like
+/// `AvatarsDrawable` and its 0.8 step. A translucent ring in the chip's fill
+/// could not mask the face underneath, so there is none.
 class _AvatarsRow extends StatelessWidget {
-  const _AvatarsRow({super.key, required this.people, required this.ringColor});
+  const _AvatarsRow({super.key, required this.people});
 
   final List<_AvatarPerson> people;
-
-  /// The chip fill behind the stack: the 1.5pt ring uses it so overlapping
-  /// faces read as one pill on the chosen solid chip and the tinted one alike.
-  final Color ringColor;
 
   @override
   Widget build(BuildContext context) {
@@ -248,104 +306,18 @@ class _AvatarsRow extends StatelessWidget {
             Positioned(
               left: i * 16.0,
               top: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: ringColor, width: 1.5),
-                ),
+              child: SizedBox(
+                width: 20,
+                height: 20,
                 child: PhotoAvatar(
                   title: people[i].title,
                   photo: people[i].photo,
-                  size: 18,
+                  size: 20,
                 ),
               ),
             ),
         ],
       ),
     );
-  }
-}
-
-/// The group/channel variant: resolves each reactor's name and photo through
-/// the process-wide cache and paints the same overlapping stack.
-class _ReactorAvatarStack extends StatefulWidget {
-  const _ReactorAvatarStack({
-    super.key,
-    required this.senders,
-    required this.ringColor,
-  });
-
-  final List<int> senders;
-  final Color ringColor;
-
-  @override
-  State<_ReactorAvatarStack> createState() => _ReactorAvatarStackState();
-}
-
-class _ReactorAvatarStackState extends State<_ReactorAvatarStack> {
-  final List<ReactionReactorAvatar?> _people = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ReactorAvatarStack oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_sameSenders(oldWidget.senders, widget.senders)) {
-      _people.clear();
-      _resolve();
-    }
-  }
-
-  bool _sameSenders(List<int> a, List<int> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
-
-  void _resolve() {
-    final cached = [
-      for (final id in widget.senders) ReactionReactorAvatars.shared.peek(id),
-    ];
-    if (cached.every((person) => person != null)) {
-      _people
-        ..clear()
-        ..addAll(cached);
-      return;
-    }
-    for (var i = 0; i < widget.senders.length; i++) {
-      final index = i;
-      ReactionReactorAvatars.shared
-          .resolve(widget.senders[index])
-          .then((person) {
-            if (!mounted || index >= _people.length) return;
-            if (_people[index] == person) return;
-            setState(() => _people[index] = person);
-          })
-          .catchError((_) => null);
-    }
-    // Keep the row's geometry stable while the lookups are in flight.
-    while (_people.length < widget.senders.length) {
-      _people.add(null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final people = [
-      for (var i = 0; i < widget.senders.length; i++)
-        _people.length > i
-            ? _AvatarPerson(
-                title: _people[i]?.title ?? '',
-                photo: _people[i]?.photo,
-              )
-            : const _AvatarPerson(title: ''),
-    ];
-    return _AvatarsRow(people: people, ringColor: widget.ringColor);
   }
 }
