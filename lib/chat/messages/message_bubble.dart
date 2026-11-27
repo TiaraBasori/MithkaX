@@ -281,8 +281,9 @@ class MessageBubble extends StatelessWidget {
   final ValueChanged<ChatMessage>? onApplyMessageBubble;
   final ValueChanged<ChatMessage>? onOpenSticker;
 
-  /// Opens a GIF/motion message in the image viewer, which loops it over its
-  /// still without video chrome. Falls back to [onPlayVideo] when unset.
+  /// Opens a GIF/motion message. A motion MP4 opens in the player, because a
+  /// looping picture page has no transport to pause, scrub or mute it with.
+  /// Falls back to [onPlayVideo] when unset.
   final ValueChanged<ChatMessage>? onOpenAnimation;
   final ValueChanged<ChatMessage>? onPlayVideo;
   final ValueChanged<ChatMessage>? onPlayMusic;
