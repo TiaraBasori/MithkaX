@@ -605,12 +605,11 @@ void main() {
       );
     });
 
-    testWidgets('the read tick stays on the bubble corner, not the band', (
+    testWidgets('the read tick rides the band next to the time', (
       tester,
     ) async {
-      // A plain read outgoing message carries no band mark: the read
-      // circle is ink on the bubble's inside corner, and the band never
-      // reserves a strip for it.
+      // Every send time reads outside now: the band carries `12:34` and the
+      // read tick after it, right-aligned to the bubble's own edge.
       final message = bandMessage(outgoing: true);
       await pumpBand(tester, message, isRead: true);
 
@@ -621,16 +620,25 @@ void main() {
       expect(tick, findsOneWidget);
       final tickRect = tester.getRect(tick);
       expect(
-        tickRect.bottom,
-        lessThan(surface.bottom + 1),
-        reason: 'the read tick rides inside the bubble',
+        tickRect.top,
+        greaterThanOrEqualTo(surface.bottom - 1),
+        reason: 'the read tick hangs under the bubble, on the band',
       );
       expect(
         tickRect.right,
         lessThanOrEqualTo(surface.right + 1),
-        reason: 'the read tick never passes the bubble border',
+        reason: 'the band never passes the bubble border',
       );
-      // Nothing renders below the bubble: no band, no reserved strip.
+      final time = find.byKey(const ValueKey('messageBandTime-1'));
+      expect(time, findsOneWidget);
+      final label = tester.getRect(
+        find.descendant(of: time, matching: find.byType(Text)).first,
+      );
+      expect(
+        label.right,
+        lessThanOrEqualTo(tickRect.left),
+        reason: 'the time leads the tick on the same line',
+      );
       expect(
         find.byKey(const ValueKey('messageCompactReplies-1')),
         findsNothing,

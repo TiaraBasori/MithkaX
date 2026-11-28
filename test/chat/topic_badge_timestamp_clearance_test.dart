@@ -114,8 +114,11 @@ void main() {
             'forum-topic-section-',
           ),
     );
-    final timestampFinder = find.byKey(
-      const ValueKey('messageTappedTimestamp'),
+    // Every send time now rides the band under its bubble.
+    final timestampFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key as ValueKey<String>).value.startsWith('messageBandTime-'),
       skipOffstage: false,
     );
     final pills = <Rect>[];
@@ -158,10 +161,10 @@ void main() {
       }
     }
 
-    // Every stamp is inside a message bubble now, so the clearance above is
-    // structural rather than a padding coincidence. Pin that too: a stamp
-    // that drifted outside its bubble would make the no-overlap check pass
-    // for the wrong reason on this fixture.
+    // Every stamp hangs under a message bubble now, so the clearance above is
+    // structural rather than a padding coincidence. Pin that too: a stamp that
+    // drifted back over its bubble would make the no-overlap check pass for the
+    // wrong reason on this fixture.
     final bubbles = <Rect>[
       for (final element
           in find
@@ -178,13 +181,9 @@ void main() {
     expect(bubbles, isNotEmpty);
     for (final stamp in stamps) {
       expect(
-        bubbles.any(
-          (bubble) =>
-              bubble.contains(stamp.topLeft) &&
-              bubble.contains(stamp.bottomRight),
-        ),
+        bubbles.any((bubble) => stamp.top >= bubble.bottom - 1),
         isTrue,
-        reason: 'stamp $stamp must live inside one of $bubbles',
+        reason: 'stamp $stamp must hang under one of $bubbles',
       );
     }
 
