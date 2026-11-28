@@ -157,9 +157,24 @@ extension _ChatViewScrollSession on _ChatViewState {
 
   /// Resolves the date of the topmost message in the viewport and paints the
   /// plate, unless that row's own date separator is already on screen.
+  ///
+  /// A scroll notification can be dispatched from inside `performLayout`
+  /// (a scroll position applying new content dimensions starts its ballistic
+  /// activity, which emits `ScrollStartNotification`). Reading another
+  /// render object's geometry there trips Flutter's `sizeAccessAllowed`
+  /// assertion, so the measurement is always deferred to the frame's end.
   void _updateFloatingDate() {
     if (!_initialTranscriptReady || !mounted) return;
-    if (!_floatingDateScrolling) return;
+    if (!_floatingDateScrolling || _floatingDateUpdateScheduled) return;
+    _floatingDateUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _floatingDateUpdateScheduled = false;
+      if (!mounted || !_floatingDateScrolling) return;
+      _resolveFloatingDate();
+    });
+  }
+
+  void _resolveFloatingDate() {
     final viewport = _transcriptViewportKey.currentContext?.findRenderObject();
     if (viewport is! RenderBox || !viewport.attached) return;
     final viewportHeight = viewport.size.height;

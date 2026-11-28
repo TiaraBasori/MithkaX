@@ -832,6 +832,7 @@ class _ChatViewState extends State<ChatView> {
   int? _floatingDateUnix;
   bool _floatingDateVisible = false;
   bool _floatingDateScrolling = false;
+  bool _floatingDateUpdateScheduled = false;
   Timer? _floatingDateHideTimer;
 
   /// Whether the row's own date separator sits directly above its message, so
