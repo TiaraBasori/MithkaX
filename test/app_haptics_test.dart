@@ -176,9 +176,8 @@ void main() {
     ).readAsStringSync();
     // The reference client fires exactly two constants for its interface, and
     // its intensity is whatever the platform assigns those constants. A raw
-    // waveform at DEFAULT_AMPLITUDE is louder than any platform tick, so no
-    // path may use one; a refused tick answers false and Dart falls back to
-    // Flutter's channel instead.
+    // waveform at DEFAULT_AMPLITUDE is louder than any platform tick, so it is
+    // a FALLBACK only, used when the window refuses the platform haptic.
     expect(source, contains('performHapticFeedback(constant, FLAGS)'));
     expect(
       source,
@@ -199,8 +198,13 @@ void main() {
     expect(source, contains('else -> HapticFeedbackConstants.KEYBOARD_TAP'));
     expect(source, isNot(contains('HapticFeedbackConstants.CONFIRM')));
     expect(source, isNot(contains('HapticFeedbackConstants.REJECT')));
-    expect(source, isNot(contains('VibrationEffect')));
+    expect(source, contains('if (!tick(constant)) return oneShot(kind)'));
+    expect(source, contains('VibrationEffect.createOneShot'));
     expect(source, contains('const val CHANNEL = "mithka/haptics"'));
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    expect(manifest, contains('android.permission.VIBRATE'));
     final activity = File(
       'android/app/src/main/kotlin/x/empty/mithka/MainActivity.kt',
     ).readAsStringSync();

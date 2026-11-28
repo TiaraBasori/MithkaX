@@ -1,8 +1,13 @@
 package x.empty.mithka
 
 import android.app.Activity
+import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -27,8 +32,10 @@ import io.flutter.plugin.common.MethodChannel
  * in-app vibration switch is what the user controls here.
  *
  * A refused request answers false and Dart falls back to Flutter's own channel
- * (the same constants, no flags) — a tick can never disappear silently, and no
- * path ever fires a raw full-amplitude waveform.
+ * (the same constants, no flags), and a request the window cannot take at all
+ * is covered by a short one-shot vibration — a tick can never disappear
+ * silently. The one-shot is a FALLBACK only: the platform constant is always
+ * preferred, so the intensity stays the device's.
  */
 class HapticsPlugin(
     private val activity: Activity,
@@ -37,6 +44,22 @@ class HapticsPlugin(
     MethodChannel.MethodCallHandler {
     private val channel = MethodChannel(messenger, CHANNEL)
     private val handler = Handler(Looper.getMainLooper())
+    private val appContext = activity.applicationContext
+
+    /** Manager first, legacy service after it: some ROMs ship no manager. */
+    @Suppress("DEPRECATION")
+    private val vibrator: Vibrator? = try {
+        val manager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            appContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+        } else {
+            null
+        }
+        val resolved = manager?.defaultVibrator
+            ?: appContext.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        if (resolved?.hasVibrator() == true) resolved else null
+    } catch (_: Exception) {
+        null
+    }
 
     init {
         channel.setMethodCallHandler(this)
@@ -55,7 +78,7 @@ class HapticsPlugin(
             "longPress", "error" -> HapticFeedbackConstants.LONG_PRESS
             else -> HapticFeedbackConstants.KEYBOARD_TAP
         }
-        if (!tick(constant)) return false
+        if (!tick(constant)) return oneShot(kind)
         if (kind == "error") {
             // APP_ERROR is a double buzz: the second pulse lands 150 ms later.
             handler.postDelayed(
@@ -70,6 +93,34 @@ class HapticsPlugin(
     private fun tick(constant: Int): Boolean {
         val view = activity.window?.decorView ?: return false
         return view.performHapticFeedback(constant, FLAGS)
+    }
+
+    /**
+     * Only used when the platform haptic was refused (an unattached window, a
+     * ROM that drops the constant): a short one-shot so the tick is still felt.
+     * Never the primary path — DEFAULT_AMPLITUDE is louder than any platform
+     * tick, which is why the reference client has no such call for its UI.
+     */
+    @Suppress("DEPRECATION")
+    private fun oneShot(kind: String?): Boolean {
+        val target = vibrator ?: return false
+        val durationMs = when (kind) {
+            "longPress" -> 40L
+            "error" -> 200L
+            else -> 20L
+        }
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                target.vibrate(
+                    VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE),
+                )
+            } else {
+                target.vibrate(durationMs)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun dispose() {
