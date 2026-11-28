@@ -344,6 +344,20 @@ class TdClient {
   /// waitTdlibParameters push reach here.
   final Set<int> _parametersSent = {};
 
+  /// Clients retired by an internal database reset (see [resetSlotDatabase]).
+  /// Their `authorizationStateClosed` is bookkeeping for the swap, not a
+  /// logout: the slot is reopened from its exported session a moment later,
+  /// so publishing that state to the active account would drop every UI on
+  /// the login surface for an account that never signed out. Everything the
+  /// retired client still says describes the database that is being deleted.
+  final Set<int> _retiredForReset = {};
+
+  /// Reopened clients whose authorization state is held back until the reset
+  /// verifies they are the same account. The signed-in surface never left
+  /// AuthReady, so a reopened session that turns out to belong to another
+  /// account must not paint the login form on its way to the rollback either.
+  final Set<int> _verifyingResetClients = {};
+
   // Request/response correlation, keyed by the "@extra" we attach.
   final Map<String, _PendingRequest> _pending = {};
   final Map<int, Completer<void>> _clientClosedWaiters = {};
@@ -2006,6 +2020,12 @@ class TdClient {
     await staging.create(recursive: true);
     _bindings.importSessionString(session, '${staging.path}/td.binlog');
 
+    // The close below is this reset's own bookkeeping. Keep its update stream
+    // — chiefly authorizationStateClosed — off the active account's
+    // subscribers (AuthManager would read it as a logout) until the slot is
+    // reopened and the new client re-announces Ready.
+    final retired = slot == _activeSlot ? clientId : null;
+    if (retired != null) _retiredForReset.add(retired);
     if (!await _closeClientForSlot(slot)) {
       await _deleteDirectoryIfPresent(staging);
       throw TimeoutException('Timed out closing slot $slot');
@@ -2049,9 +2069,22 @@ class TdClient {
     final clientId = _bindings.createClientId();
     _clientForSlot[slot] = clientId;
     _slotForClient[clientId] = slot;
+    // The account never signed out, so the reopened client IS the active
+    // one: without this the old id stays in [_activeClientId], every update
+    // of the new client is filtered out as another account's, and the UI
+    // stays on the login surface until the next launch.
+    final wasActive = slot == _activeSlot;
+    if (wasActive) {
+      _activeClientId = clientId;
+      _verifyingResetClients.add(clientId);
+    }
     unawaited(_persistLiveClientIds());
     _bindings.send(clientId, _tdActivateRequest);
-    await _waitForRestoredSessionReady(slot, clientId, userId);
+    try {
+      await _waitForRestoredSessionReady(slot, clientId, userId);
+    } finally {
+      _verifyingResetClients.remove(clientId);
+    }
   }
 
   /// Telegram. Slot 0 is the legacy base directory, so keep account-* child
@@ -2370,8 +2403,28 @@ class TdClient {
     }
 
     _dispatchToAllSubscribers(object);
+    // A client retired by an internal database reset is bookkeeping for that
+    // swap, not a logout: the slot is reopened from its own session a moment
+    // later, so its states must not reach the active account's subscribers
+    // (AuthManager would leave every UI on the login surface).
+    final retiredForReset = _retiredForReset.contains(clientId);
+    // A reset in progress leaves the account signed in: its auth states are
+    // bookkeeping, not a new login step.
+    final heldResetAuthState =
+        _verifyingResetClients.contains(clientId) &&
+        object.type == 'updateAuthorizationState';
     // Most UI consumers only need the active account's updates.
-    if (clientId == _activeClientId) _dispatchToActiveSubscribers(object);
+    if (clientId == _activeClientId &&
+        !retiredForReset &&
+        !heldResetAuthState) {
+      _dispatchToActiveSubscribers(object);
+    }
+    if (retiredForReset &&
+        object.type == 'updateAuthorizationState' &&
+        object.obj('authorization_state')?.type == 'authorizationStateClosed') {
+      // The close is acknowledged; the id can never produce another update.
+      _retiredForReset.remove(clientId);
+    }
 
     // Internal: receive isolate reported a fatal error (e.g. td_receive threw
     // after Android background→foreground). Mark it dead so a later resume

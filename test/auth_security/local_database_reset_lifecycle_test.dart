@@ -72,7 +72,24 @@ class _FakeBindings implements TdBindings {
     final decoded = jsonDecode(request) as Map<String, dynamic>;
     sent.add((clientId, decoded));
     if (decoded['@type'] == 'close') {
+      // TDLib acknowledges a close with authorizationStateClosed before the
+      // closed waiter fires; the reset must keep that off AuthManager.
+      _client.routeUpdateForTesting({
+        '@type': 'updateAuthorizationState',
+        'authorization_state': {'@type': 'authorizationStateClosed'},
+        '@client_id': clientId,
+      });
       _client.debugCompleteClientClosed(clientId);
+    }
+    if (decoded['@type'] == 'setTdlibParameters') {
+      // A client that accepted its parameters announces Ready on its own.
+      scheduleMicrotask(() {
+        _client.routeUpdateForTesting({
+          '@type': 'updateAuthorizationState',
+          'authorization_state': {'@type': 'authorizationStateReady'},
+          '@client_id': clientId,
+        });
+      });
     }
   }
 
@@ -200,6 +217,31 @@ void main() {
     );
     expect(File('${harness.slotDir(1).path}/td.binlog').existsSync(), isTrue);
     expect(harness.client.activeSlot, 1);
+    // The reopened client carries the account now: leaving the old id active
+    // filtered the new client's Ready out as another account's update.
+    expect(harness.client.activeClientId, harness.client.clientId(1));
+  });
+
+  test('a reset never publishes a logout for the account it keeps', () async {
+    final harness = await _prepare(respond: _steadyResponder(777));
+    await harness.client.restoreSessionSlot(_syntheticSession());
+    final authStates = <String>[];
+    final subscription = harness.client.subscribe().listen((update) {
+      if (update['@type'] != 'updateAuthorizationState') return;
+      final state = update['authorization_state'];
+      final type = state is Map ? state['@type'] as String? : null;
+      if (type != null) authStates.add(type);
+    });
+    addTearDown(subscription.cancel);
+
+    await harness.client.resetSlotDatabase(1);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    // The account was signed in before the reset and stays signed in: the
+    // close, the reopen's parameters and its Ready are all the swap's own
+    // bookkeeping, and AuthManager must not be walked through them.
+    expect(authStates, isEmpty);
+    expect(harness.client.activeClientId, harness.client.clientId(1));
   });
 
   test('a reset that cannot reopen restores the previous database', () async {
