@@ -7,6 +7,7 @@ import 'unread_chat_summary_service.dart';
 class ApplePccUnreadSummaryProvider implements UnreadChatSummaryProvider {
   const ApplePccUnreadSummaryProvider({
     required this.api,
+    this.isAvailable,
     this.model = AppleAiModel.privateCloudCompute,
     this.reasoningLevel = ApplePccReasoningLevel.moderate,
     this.maximumResponseTokens,
@@ -23,6 +24,7 @@ class ApplePccUnreadSummaryProvider implements UnreadChatSummaryProvider {
        assert(invalidResponseRetryCount >= 0);
 
   final ApplePccApi api;
+  final bool Function()? isAvailable;
   final AppleAiModel model;
   final ApplePccReasoningLevel reasoningLevel;
 
@@ -40,6 +42,9 @@ class ApplePccUnreadSummaryProvider implements UnreadChatSummaryProvider {
     var transientAttempt = 0;
     var invalidResponseAttempt = 0;
     while (true) {
+      if (isAvailable?.call() == false) {
+        throw const UnreadChatSummaryUnavailable();
+      }
       try {
         final result = await api.summarize(
           prompt:
@@ -53,6 +58,9 @@ class ApplePccUnreadSummaryProvider implements UnreadChatSummaryProvider {
                   ? chunkMaximumResponseTokens
                   : mergeMaximumResponseTokens),
         );
+        if (isAvailable?.call() == false) {
+          throw const UnreadChatSummaryUnavailable();
+        }
         return decodeUnreadChatSummaryJson(result.text);
       } on PlatformException catch (error) {
         if (!_isTransient(error) ||

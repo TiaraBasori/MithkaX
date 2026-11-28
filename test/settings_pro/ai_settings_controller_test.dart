@@ -63,6 +63,29 @@ void main() {
       expect(controller.isConfiguredForFeature(AiFeature.reply), isTrue);
     });
 
+    for (final storedChoice in [false, true]) {
+      test('preserves explicit unread summary choice: $storedChoice', () async {
+        SharedPreferences.setMockInitialValues({
+          AiSettingsController.enabledPreferenceKey: storedChoice,
+        });
+        final preferences = await SharedPreferences.getInstance();
+        final controller = AiSettingsController(
+          preferences,
+          pccApi: _pccApi(available: true),
+          secureRead: (_) async => null,
+          secureWrite: (_, _) async {},
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+
+        expect(controller.enabled, storedChoice);
+        expect(
+          preferences.getBool(AiSettingsController.enabledPreferenceKey),
+          storedChoice,
+        );
+      });
+    }
+
     test(
       'keeps the composer AI Reply button off until it is switched on',
       () async {
