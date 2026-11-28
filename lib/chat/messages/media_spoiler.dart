@@ -6,7 +6,6 @@ import 'package:flutter/widgets.dart';
 import '../../components/app_interactive_surface.dart';
 import '../../l10n/app_localizations.dart';
 import '../../tdlib/td_client.dart';
-import '../../tdlib/td_image_loader.dart';
 import '../../tdlib/td_models.dart';
 
 /// Opening one item must not reveal other spoilers by gallery swipe or autoplay.
@@ -185,21 +184,26 @@ class MessageMediaSpoiler extends StatelessWidget {
           child: child,
         );
 
-  /// Starts the file download while the spoiler still hides the media.
+  /// Asks TDLib for the hidden file while the cover is on screen.
   ///
-  /// `pathFor` drives TDLib's `downloadFile`, so a revealed preview paints
-  /// from disk instead of starting a download at the moment of the tap.
+  /// A plain `downloadFile` with `synchronous: false` only queues the transfer:
+  /// it owns no timer and no local state, and whatever mounts the media after
+  /// the reveal joins the same download instead of starting one. Priority 6
+  /// keeps it behind the media the reader can actually see.
   void _preloadHiddenMedia(int? slot) {
     final ref = message.video ?? message.image;
-    if (ref == null) return;
+    if (ref == null || !TdClient.shared.hasTransport) return;
     unawaited(
-      TdFileCenter.shared
-          .pathFor(
-            ref,
-            accountSlot: slot ?? TdClient.shared.activeSlot,
-            priority: 6,
-          )
-          .catchError((Object _) => null),
+      TdClient.shared
+          .queryForSlot({
+            '@type': 'downloadFile',
+            'file_id': ref.id,
+            'priority': 6,
+            'offset': 0,
+            'limit': 0,
+            'synchronous': false,
+          }, slot ?? TdClient.shared.activeSlot)
+          .catchError((Object _) => <String, dynamic>{}),
     );
   }
 }

@@ -407,6 +407,13 @@ class TdClient {
   static const _liveClientIdsKey = 'drachma.debugLiveClientIds';
 
   int get activeSlot => _activeSlot;
+
+  /// Whether a transport is attached, so a query can actually be issued.
+  ///
+  /// Widgets that want to warm a file up in the background ask this first: in
+  /// a widget test (or before startup finishes) there is nobody to answer, and
+  /// a request would only leave a timer pending.
+  bool get hasTransport => _proxyTransport != null || _isRunning;
   int get activeClientId => _activeClientId;
   bool get hasActiveClient => _activeClientId != 0;
 
