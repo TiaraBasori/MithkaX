@@ -4240,6 +4240,7 @@
     <string name="aboutUpdatePrereleasesDetail">Offer release candidates and beta builds as updates. Off means only official releases are offered.</string>
     <string name="settingsResetDatabase">Reset database</string>
     <string name="settingsResetDatabaseMessage">Delete the local message database and re-sync it from the server? Media caches, emoji packs, search history, drafts and saved downloads are cleared as well. Settings and the signed-in session stay.</string>
+    <string name="settingsResetDatabaseExitHint">The app closes completely when the reset finishes. Open it again to continue.</string>
     <string name="autoDownloadChatTypesTitle">Auto-download in</string>
     <string name="autoDownloadChatTypesDetail">Only chats of the ticked kinds fetch media on their own.</string>
     <string name="autoDownloadChatContacts">Contacts</string>

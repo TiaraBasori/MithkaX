@@ -4222,6 +4222,7 @@
     <string name="aboutUpdatePrereleasesDetail">把预发布和测试版本也作为更新提供。关闭时只检查正式版本。</string>
     <string name="settingsResetDatabase">重置数据库</string>
     <string name="settingsResetDatabaseMessage">删除本地消息数据库并重新从服务器同步？媒体缓存、表情包、搜索记录、草稿和已保存的下载也会一并清除。设置和登录状态会保留。</string>
+    <string name="settingsResetDatabaseExitHint">重置完成后应用会完全退出，重新打开即可。</string>
     <string name="autoDownloadChatTypesTitle">自动下载范围</string>
     <string name="autoDownloadChatTypesDetail">仅勾选的聊天类型会自动下载媒体。</string>
     <string name="autoDownloadChatContacts">联系人</string>

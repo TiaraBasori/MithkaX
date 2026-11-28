@@ -12,6 +12,10 @@
 //  same confirm and run the same wipe, so the flow lives here instead of being
 //  copied into either page.
 //
+//  A clean run ends the app: every page in memory was built from the database
+//  that is now gone, and repainting them over it is what made the account look
+//  signed out until the next launch.
+//
 
 import 'package:flutter/material.dart';
 
@@ -20,17 +24,31 @@ import '../../components/app_icons.dart';
 import '../../components/toast.dart';
 import '../../components/ui_components.dart';
 import '../../l10n/app_localizations.dart';
+import '../../platform/app_exit.dart';
 import '../../theme/app_theme.dart';
 import 'local_database_reset.dart';
+
+Future<LocalDatabaseResetResult> _runLocalDatabaseReset() =>
+    LocalDatabaseReset.run();
 
 class ResetDatabaseSettingsRow extends StatefulWidget {
   const ResetDatabaseSettingsRow({
     super.key,
     this.rowKey = const ValueKey('settings-reset-database'),
+    this.runReset = _runLocalDatabaseReset,
+    this.quitApp = quitAppProcess,
   });
 
   /// Distinct keys let both settings pages be pumped in one test tree.
   final Key rowKey;
+
+  /// Runs the wipe; a widget test injects its own to prove the flow without a
+  /// live TDLib client.
+  final Future<LocalDatabaseResetResult> Function() runReset;
+
+  /// Ends the process after a clean reset. Reports whether it is going away:
+  /// iOS cannot terminate itself and must keep the recovered screen.
+  final Future<bool> Function() quitApp;
 
   @override
   State<ResetDatabaseSettingsRow> createState() =>
@@ -45,14 +63,26 @@ class _ResetDatabaseSettingsRowState extends State<ResetDatabaseSettingsRow> {
     final confirmed = await showAppConfirmDialog(
       context,
       title: AppStringKeys.settingsResetDatabase.l10n(context),
-      message: AppStringKeys.settingsResetDatabaseMessage.l10n(context),
+      message:
+          '${AppStringKeys.settingsResetDatabaseMessage.l10n(context)}\n\n'
+          '${AppStringKeys.settingsResetDatabaseExitHint.l10n(context)}',
       confirmText: AppStringKeys.historyClearAction.l10n(context),
       destructive: true,
     );
     if (!confirmed || !mounted) return;
     setState(() => _working = true);
     try {
-      final result = await LocalDatabaseReset.run();
+      final result = await widget.runReset();
+      if (result.ok) {
+        // Every page in memory described the database that was just deleted
+        // (TDLib reopened each account on a fresh one), so the app ends here
+        // instead of repainting half-stale state; the next launch rebuilds.
+        // Deliberately not gated on this row still being mounted: the wipe
+        // runs on after the page is popped, and the exit is what keeps the
+        // half-stale screens from being shown either way.
+        final exiting = await widget.quitApp();
+        if (!mounted || exiting) return;
+      }
       if (!mounted) return;
       // A failed account keeps its old database (the client rolls back), so the
       // toast must say so instead of claiming the whole reset succeeded.

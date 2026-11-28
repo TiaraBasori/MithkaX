@@ -5588,6 +5588,7 @@ abstract final class AppStringKeys {
   static const historyBadgeStyleTitle = 'historyBadgeStyleTitle';
   static const settingsResetDatabase = 'settingsResetDatabase';
   static const settingsResetDatabaseMessage = 'settingsResetDatabaseMessage';
+  static const settingsResetDatabaseExitHint = 'settingsResetDatabaseExitHint';
   static const settingsResetDatabaseDone = 'settingsResetDatabaseDone';
   static const settingsResetDatabaseFailed = 'settingsResetDatabaseFailed';
   static const historyClearDatabase = 'historyClearDatabase';

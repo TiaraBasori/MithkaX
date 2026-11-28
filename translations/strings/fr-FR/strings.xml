@@ -4240,6 +4240,7 @@
     <string name="aboutUpdatePrereleasesDetail">Proposer aussi les versions candidates et bêta comme mises à jour. Désactivé : seules les versions officielles.</string>
     <string name="settingsResetDatabase">Réinitialiser la base de données</string>
     <string name="settingsResetDatabaseMessage">Supprimer la base de données locale des messages et la resynchroniser depuis le serveur ? Les caches multimédias, les packs d’emoji, l’historique de recherche, les brouillons et les téléchargements enregistrés sont aussi effacés. Les réglages et la session sont conservés.</string>
+    <string name="settingsResetDatabaseExitHint">L’application se ferme complètement à la fin de la réinitialisation. Rouvrez-la pour continuer.</string>
     <string name="autoDownloadChatTypesTitle">Téléchargement auto dans</string>
     <string name="autoDownloadChatTypesDetail">Seuls les types de discussion cochés téléchargent des médias automatiquement.</string>
     <string name="autoDownloadChatContacts">Contacts</string>

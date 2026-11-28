@@ -4222,6 +4222,7 @@
     <string name="aboutUpdatePrereleasesDetail">リリース候補やベータ版も更新として提示します。オフの場合は正式版のみを確認します。</string>
     <string name="settingsResetDatabase">データベースをリセット</string>
     <string name="settingsResetDatabaseMessage">ローカルのメッセージデータベースを削除し、サーバーから再同期しますか？メディアキャッシュ、絵文字パック、検索履歴、下書き、保存済みのダウンロードも削除されます。設定とログイン状態は保持されます。</string>
+    <string name="settingsResetDatabaseExitHint">リセットが完了するとアプリは完全に終了します。もう一度起動してください。</string>
     <string name="autoDownloadChatTypesTitle">自動ダウンロードする場所</string>
     <string name="autoDownloadChatTypesDetail">チェックした種類のチャットだけがメディアを自動で取得します。</string>
     <string name="autoDownloadChatContacts">連絡先</string>

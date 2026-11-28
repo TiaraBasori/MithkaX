@@ -4222,6 +4222,7 @@
     <string name="aboutUpdatePrereleasesDetail">출시 후보와 베타 빌드도 업데이트로 제공합니다. 끄면 정식 릴리스만 확인합니다.</string>
     <string name="settingsResetDatabase">데이터베이스 초기화</string>
     <string name="settingsResetDatabaseMessage">로컬 메시지 데이터베이스를 삭제하고 서버에서 다시 동기화할까요? 미디어 캐시, 이모지 팩, 검색 기록, 임시 보관 메시지, 저장한 다운로드도 함께 지워집니다. 설정과 로그인 상태는 유지됩니다.</string>
+    <string name="settingsResetDatabaseExitHint">초기화가 끝나면 앱이 완전히 종료됩니다. 다시 실행해 주세요.</string>
     <string name="autoDownloadChatTypesTitle">자동 다운로드 대상</string>
     <string name="autoDownloadChatTypesDetail">선택한 종류의 채팅에서만 미디어를 자동으로 내려받습니다.</string>
     <string name="autoDownloadChatContacts">연락처</string>

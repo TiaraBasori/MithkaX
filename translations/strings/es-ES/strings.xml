@@ -4240,6 +4240,7 @@
     <string name="aboutUpdatePrereleasesDetail">Ofrecer también versiones candidatas y beta como actualizaciones. Desactivado: solo versiones oficiales.</string>
     <string name="settingsResetDatabase">Restablecer base de datos</string>
     <string name="settingsResetDatabaseMessage">¿Eliminar la base de datos local de mensajes y volver a sincronizarla desde el servidor? También se borran las cachés de medios, los paquetes de emoji, el historial de búsqueda, los borradores y las descargas guardadas. Los ajustes y la sesión se mantienen.</string>
+    <string name="settingsResetDatabaseExitHint">La aplicación se cerrará por completo al terminar el restablecimiento. Vuelve a abrirla para continuar.</string>
     <string name="autoDownloadChatTypesTitle">Descargar automáticamente en</string>
     <string name="autoDownloadChatTypesDetail">Solo los chats de los tipos marcados descargan medios por su cuenta.</string>
     <string name="autoDownloadChatContacts">Contactos</string>

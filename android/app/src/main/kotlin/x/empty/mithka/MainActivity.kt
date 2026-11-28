@@ -489,6 +489,15 @@ class MainActivity : FlutterFragmentActivity() {
                         quitAfterIconChange()
                         return@setMethodCallHandler
                     }
+                    // A database reset leaves every in-memory page describing
+                    // the database that was just deleted; the caller ends the
+                    // process instead of repainting half-stale state, and the
+                    // next launch rebuilds from the fresh one.
+                    "quit" -> {
+                        result.success(null)
+                        endProcess()
+                        return@setMethodCallHandler
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -1315,6 +1324,18 @@ class MainActivity : FlutterFragmentActivity() {
                 Log.w("MainActivity", "Could not apply the chosen launcher icon", e)
             }
         }
+        endProcess()
+    }
+
+    /**
+     * Ends the app's task and this process.
+     *
+     * Used by the two actions that must not keep painting the state they just
+     * replaced: a launcher-icon switch (the alias only lands once this process
+     * is gone) and a database reset (every in-memory page held the database
+     * that was just deleted, so the next launch has to rebuild them).
+     */
+    private fun endProcess() {
         finishAndRemoveTask()
         Process.killProcess(Process.myPid())
     }
