@@ -1655,6 +1655,19 @@ class _ChatListViewState extends State<ChatListView>
   final ChatListSwipeSession _chatListSwipeSession = ChatListSwipeSession();
   final ScrollController _folderTabScrollController = ScrollController();
   final Map<int?, GlobalKey> _folderTabKeys = {};
+
+  // The tab strip travels with the folder drag, the reference client's
+  // `selectTabWithId(id, progress)`: while the chat list is being pulled
+  // toward a neighbour, the strip slides the same fraction of the way toward
+  // that neighbour's tab instead of waiting for the landing animation.
+  double? _folderTabScrollFrom;
+  double? _folderTabScrollTo;
+  double _folderTabScrollAnchorProgress = 0;
+  int? _folderTabScrollFolderId;
+
+  /// The strip offset a folder drag starts from, so a reversed drag can put
+  /// the tabs back exactly where the finger found them.
+  double? _folderTabDragStartOffset;
   final Map<int?, GlobalKey> _sideFolderKeys = {};
   bool _foldersInSideRail = false;
   int _nextComposerFocusRequestId = 0;
@@ -1721,6 +1734,7 @@ class _ChatListViewState extends State<ChatListView>
       CurveTween(curve: AppMotion.standard),
     );
     _folderSettleController.addListener(_onFolderSettleTick);
+    _folderDrag.addListener(_onFolderDragTabScroll);
     _model.onAppear();
     _model.addListener(_onModel);
     widget.controller?.addListener(_onControllerRequest);
@@ -1943,6 +1957,7 @@ class _ChatListViewState extends State<ChatListView>
     _activeSlotSub?.cancel();
     widget.controller?.removeListener(_onControllerRequest);
     _folderSettleController.dispose();
+    _folderDrag.removeListener(_onFolderDragTabScroll);
     _folderDrag.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -2680,6 +2695,10 @@ class _ChatListViewState extends State<ChatListView>
     _folderSettleTarget = null;
     // Dropping the travel and swapping the folder in the same frame hands the
     // peek's position straight to the real list, so nothing jumps on landing.
+    // The tab strip's drag travel is dropped first: the same frame resets the
+    // drag notifier to zero, and the strip must stay where the drag left it.
+    _clearFolderTabScrollAnchor();
+    _folderTabDragStartOffset = null;
     _folderDrag.value = 0;
     if (target == null) {
       setState(() => _folderPeek = null);
@@ -2687,6 +2706,93 @@ class _ChatListViewState extends State<ChatListView>
       return;
     }
     _commitFolderSwitch(target, direction: direction);
+  }
+
+  /// Slides the strip with the folder drag. The reference client calls
+  /// `selectTabWithId(next, progress)` on every move; the tab strip smooth
+  /// scrolls to that tab while the list is still under the finger. Here the
+  /// strip follows the same progress fraction, which also covers a target tab
+  /// that is completely outside the viewport (all tabs are built).
+  void _onFolderDragTabScroll() {
+    final from = _folderTabScrollFrom;
+    final to = _folderTabScrollTo;
+    final width = _folderPagerWidth;
+    if (from == null || to == null || width <= 0) return;
+    if (!_folderTabScrollController.hasClients) return;
+    final position = _folderTabScrollController.position;
+    if (!position.hasContentDimensions) return;
+    final progress = (_folderDrag.value.abs() / width).clamp(0.0, 1.0);
+    final anchor = _folderTabScrollAnchorProgress;
+    final t = anchor >= 0.999
+        ? 1.0
+        : ((progress - anchor) / (1 - anchor)).clamp(0.0, 1.0);
+    final offset = ui.lerpDouble(from, to, t)!;
+    final clamped = offset.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((position.pixels - clamped).abs() < 0.1) return;
+    _folderTabScrollController.jumpTo(clamped);
+  }
+
+  /// Anchors the strip's travel for [neighbour] at the drag's current
+  /// [progress]; a null neighbour anchors back to the resting offset.
+  void _anchorFolderTabScroll(ChatFilterOption? neighbour, double progress) {
+    if (!_folderTabScrollController.hasClients) {
+      _clearFolderTabScrollAnchor();
+      return;
+    }
+    if (_folderTabScrollFolderId == neighbour?.folderId &&
+        _folderTabScrollTo != null) {
+      return;
+    }
+    final target = neighbour == null
+        ? _folderTabDragStartOffset
+        : _revealFolderTabOffset(neighbour.folderId);
+    if (target == null) {
+      _clearFolderTabScrollAnchor();
+      return;
+    }
+    final from = _folderTabScrollController.offset;
+    if ((from - target).abs() < 0.5) {
+      _clearFolderTabScrollAnchor();
+      return;
+    }
+    _folderTabScrollFrom = from;
+    _folderTabScrollTo = target;
+    _folderTabScrollAnchorProgress = progress.clamp(0.0, 1.0);
+    _folderTabScrollFolderId = neighbour?.folderId;
+  }
+
+  void _clearFolderTabScrollAnchor() {
+    _folderTabScrollFrom = null;
+    _folderTabScrollTo = null;
+    _folderTabScrollFolderId = null;
+    _folderTabScrollAnchorProgress = 0;
+  }
+
+  /// The minimal strip offset that brings [folderId]'s tab fully into view.
+  /// Requires the tab to be built, which the strip guarantees by laying every
+  /// tab out in a row (the reference can scroll to an unbuilt adapter
+  /// position; a lazy Flutter list cannot).
+  double? _revealFolderTabOffset(int? folderId) {
+    final ctx = _folderTabKeys[folderId]?.currentContext;
+    if (ctx == null) return null;
+    final renderBox = ctx.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return null;
+    final scrollableState = Scrollable.of(ctx);
+    final viewportBox =
+        scrollableState.context.findRenderObject() as RenderBox?;
+    if (viewportBox == null) return null;
+    final tabPos = renderBox.localToGlobal(Offset.zero);
+    final viewPos = viewportBox.localToGlobal(Offset.zero);
+    final tabLeft = tabPos.dx - viewPos.dx;
+    final tabRight = tabLeft + renderBox.size.width;
+    final viewportWidth = viewportBox.size.width;
+    final current = _folderTabScrollController.offset;
+    if (tabRight > viewportWidth) return current + (tabRight - viewportWidth);
+    if (tabLeft < 0) return current + tabLeft;
+    return current;
   }
 
   void _ensureFolderTabVisible(int? folderId, double direction) {
@@ -3132,6 +3238,10 @@ class _ChatListViewState extends State<ChatListView>
     }
     _folderDragActive = true;
     _folderDragHandled = true;
+    _clearFolderTabScrollAnchor();
+    _folderTabDragStartOffset = _folderTabScrollController.hasClients
+        ? _folderTabScrollController.offset
+        : null;
     // Once the folder drag owns this contact the list must stop scrolling in
     // the same gesture: the reference client cancels the list's scroll via
     // requestDisallowInterceptTouchEvent, and here swapping to
@@ -3158,6 +3268,9 @@ class _ChatListViewState extends State<ChatListView>
 
   void _applyFolderDragTravel(double travel) {
     final neighbour = _folderNeighbour(travel);
+    final progress = _folderPagerWidth <= 0
+        ? 0.0
+        : (_folderDrag.value.abs() / _folderPagerWidth).clamp(0.0, 1.0);
     if (!identical(neighbour, _folderPeek)) {
       setState(() {
         _folderPeek = neighbour;
@@ -3165,9 +3278,9 @@ class _ChatListViewState extends State<ChatListView>
       });
       if (neighbour != null) {
         _model.prefetchFolder(neighbour.folderId);
-        _ensureFolderTabVisible(neighbour.folderId, _folderPeekSide);
       }
     }
+    _anchorFolderTabScroll(neighbour, progress);
     _folderDrag.value = chatListFolderDragOffset(
       travel: travel,
       width: _folderPagerWidth,
@@ -3646,96 +3759,117 @@ class _ChatListViewState extends State<ChatListView>
         color: c.listHeaderTint,
         border: Border(bottom: BorderSide(color: c.divider, width: 0.5)),
       ),
-      child: ListView.separated(
+      // Every tab is laid out, not lazily built: a folder swipe can target a
+      // tab that is entirely outside the viewport, and a lazy horizontal list
+      // has no render object for it, so the strip could not travel to it (the
+      // reported "目标文件夹在屏幕外时没反应"). A row also keeps the drag's
+      // finger-locked scroll in [_onFolderDragTabScroll] addressable at once.
+      child: SingleChildScrollView(
+        key: const ValueKey('chat-folder-tabs'),
         controller: _folderTabScrollController,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        itemCount: _model.filters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 28),
-        itemBuilder: (context, index) {
-          final filter = _model.filters[index];
-          final selected = filter.folderId == selectedFolderId;
-          final peeked = filter.folderId == _folderPeek?.folderId;
-          final key = _folderTabKeys.putIfAbsent(
-            filter.folderId,
-            GlobalKey.new,
-          );
-          return GestureDetector(
-            key: key,
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _selectFilter(filter),
-            onLongPress: () => _showFolderMenu(filter, _folderTabRect(key)),
-            child: SizedBox(
-              height: tabHeight,
-              child: AnimatedBuilder(
-                animation: _folderDrag,
-                builder: (context, _) {
-                  final highlight = _folderTabHighlight(
-                    selected: selected,
-                    peeked: peeked,
-                  );
-                  final accent = Color.lerp(
-                    c.textSecondary,
-                    AppTheme.brand,
-                    highlight,
-                  );
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ChatFolderIcon(
-                            filter.isAll ? 'All' : filter.iconName,
-                            size: 17,
-                            color: accent ?? c.textSecondary,
-                          ),
-                          const SizedBox(width: AppSpacing.xs + 1),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 168),
-                            child: Text(
-                              filter.title.l10n(context),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTextSize.callout,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                                color: c.textPrimary,
-                              ),
-                            ),
-                          ),
-                          if (showBadges &&
-                              !filter.isAll &&
-                              filter.unreadChatCount > 0) ...[
-                            const SizedBox(width: 5),
-                            FolderUnreadBadge(
-                              label: badgeOverflow.format(
-                                filter.unreadChatCount,
-                              ),
-                              accent: filter.hasUnmutedUnread,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 7),
-                      Container(
-                        width: 38,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: AppTheme.brand.withValues(alpha: highlight),
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: Row(
+          children: [
+            for (var index = 0; index < _model.filters.length; index++) ...[
+              if (index > 0) const SizedBox(width: 28),
+              _chatFolderTabItem(
+                _model.filters[index],
+                tabHeight: tabHeight,
+                selectedFolderId: selectedFolderId,
+                showBadges: showBadges,
+                badgeOverflow: badgeOverflow,
+                c: c,
+              ),
+            ],
+          ],
+        ),
+      )._withChatFolderMouseDrag(context),
+    );
+  }
+
+  Widget _chatFolderTabItem(
+    ChatFilterOption filter, {
+    required double tabHeight,
+    required int? selectedFolderId,
+    required bool showBadges,
+    required UnreadBadgeOverflowMode badgeOverflow,
+    required AppColors c,
+  }) {
+    final selected = filter.folderId == selectedFolderId;
+    final peeked = filter.folderId == _folderPeek?.folderId;
+    final key = _folderTabKeys.putIfAbsent(filter.folderId, GlobalKey.new);
+    return GestureDetector(
+      key: key,
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _selectFilter(filter),
+      onLongPress: () => _showFolderMenu(filter, _folderTabRect(key)),
+      child: SizedBox(
+        height: tabHeight,
+        child: AnimatedBuilder(
+          animation: _folderDrag,
+          builder: (context, _) {
+            final highlight = _folderTabHighlight(
+              selected: selected,
+              peeked: peeked,
+            );
+            final accent = Color.lerp(
+              c.textSecondary,
+              AppTheme.brand,
+              highlight,
+            );
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ChatFolderIcon(
+                      filter.isAll ? 'All' : filter.iconName,
+                      size: 17,
+                      color: accent ?? c.textSecondary,
+                    ),
+                    const SizedBox(width: AppSpacing.xs + 1),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 168),
+                      child: Text(
+                        filter.title.l10n(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTextSize.callout,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: c.textPrimary,
                         ),
                       ),
+                    ),
+                    if (showBadges &&
+                        !filter.isAll &&
+                        filter.unreadChatCount > 0) ...[
+                      const SizedBox(width: 5),
+                      FolderUnreadBadge(
+                        label: badgeOverflow.format(filter.unreadChatCount),
+                        accent: filter.hasUnmutedUnread,
+                      ),
                     ],
-                  );
-                },
-              ),
-            ),
-          );
-        },
-      )._withChatFolderMouseDrag(context),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.brand.withValues(alpha: highlight),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
