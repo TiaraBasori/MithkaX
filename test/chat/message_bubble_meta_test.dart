@@ -215,7 +215,9 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('an album without a sender row carries no time', (tester) async {
+  testWidgets('an album without a sender row hangs its time under the card', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({'alwaysShowMessageTime': true});
     final preferences = await SharedPreferences.getInstance();
     final theme = ThemeController(preferences);
@@ -253,7 +255,76 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
+
+    final time = find.byKey(const ValueKey('messageTappedTimestamp'));
+    final card = tester.getRect(
+      find.byKey(const ValueKey('messageImageAlbumCard-41')),
+    );
+    expect(time, findsOneWidget);
+    final timeRect = tester.getRect(time);
+    // A 12dp strip the body reserves under the card: never on the photos, and
+    // never on whatever the list draws next.
+    expect(timeRect.top, greaterThanOrEqualTo(card.bottom - 1));
+    expect(timeRect.bottom, lessThanOrEqualTo(card.bottom + 12));
+    expect((timeRect.left - card.left).abs(), lessThan(1.5));
+    final label = tester.widget<Text>(time).data ?? '';
+    expect(RegExp(r'^\d{2}:\d{2}:\d{2}$').hasMatch(label), isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('hover arms an album time with the setting off', (tester) async {
+    final preferences = await SharedPreferences.getInstance();
+    final theme = ThemeController(preferences);
+    addTearDown(theme.dispose);
+    ChatMessage tile(int id) => ChatMessage(
+      id: id,
+      isOutgoing: false,
+      text: '',
+      date: 1700000000,
+      contentType: 'messageDocument',
+      senderId: 2,
+      document: MessageDocument(
+        fileName: '$id.pdf',
+        size: 10,
+        ext: 'pdf',
+        file: TdFileRef(id: id),
+      ),
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ThemeController>.value(
+        value: theme,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ImageMediaAlbumBubble(
+                messages: [tile(51), tile(52)],
+                peerTitle: 'Peer',
+                isGroup: false,
+                meId: 1,
+                onOpenImage: (message) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
     expect(find.byKey(const ValueKey('messageTappedTimestamp')), findsNothing);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('messageImageAlbumCard-51'))),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('messageTappedTimestamp')),
+      findsOneWidget,
+    );
+
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 2));
   });
