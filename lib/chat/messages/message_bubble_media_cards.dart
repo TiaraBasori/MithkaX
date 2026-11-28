@@ -70,8 +70,11 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
     return math.min(maxWidth, width.ceilToDouble());
   }
 
-  /// Pads grouped video or animation [media] of [size] out to the grouped
-  /// bubble width; separate media keeps its own width.
+  /// Grows grouped video or animation [media] to the grouped bubble width.
+  ///
+  /// The media CROPS into that width the way a photo does; the earlier version
+  /// centred the picture over a blurred fill, which read as a thumbnail that
+  /// shrank instead of filling its card.
   ({Widget media, double width}) _groupedVideoFrame(
     Widget media,
     Size size,
@@ -85,14 +88,20 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
       media: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => widget.bubble.onPlayVideo?.call(message),
-        child: SizedBox(
-          width: width,
-          height: size.height,
-          child: _letterboxFrame(
-            fillSource: message.image?.thumbnail ?? message.image,
-            childSize: size,
-            borderRadius: borderRadius,
-            child: media,
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: SizedBox(
+            width: width,
+            height: size.height,
+            child: FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: size.width,
+                height: size.height,
+                child: media,
+              ),
+            ),
           ),
         ),
       ),

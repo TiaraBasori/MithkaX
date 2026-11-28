@@ -124,9 +124,6 @@ const double _bubbleMetaBottom = 2;
 /// or a long tweet stretched the preview card over half the transcript.
 const int messageLinkPreviewDescriptionMaxLines = 6;
 
-/// Decoded side, in pixels, of the softened fill around a letterboxed photo.
-const int _letterboxFillPx = 12;
-
 /// The widest a message bubble may grow in a conversation lane [layoutWidth]
 /// wide: three quarters of the lane, capped on desktop windows.
 double messageBubbleMaxWidth(double layoutWidth, [TargetPlatform? platform]) {
@@ -5609,45 +5606,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       mediaWidth: frameSize.width,
       caption: caption,
       outgoing: outgoing,
-    );
-  }
-
-  /// Centres [child] in a wider or taller frame over a blurred-looking fill of
-  /// [fillSource], the way official clients pad narrow or small media.
-  Widget _letterboxFrame({
-    required TdFileRef? fillSource,
-    required Size childSize,
-    required BorderRadius borderRadius,
-    required Widget child,
-  }) {
-    return ClipRRect(
-      borderRadius: borderRadius,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // A few decoded pixels stretched over the frame read as the blur.
-          // A gaussian here needs an image-filter layer inside the bubble's
-          // clip, and on iOS that layer drew the photo and caption shifted
-          // out of the bubble, leaving a blank card.
-          if (fillSource != null)
-            TDImage(
-              photo: fillSource,
-              cornerRadius: 0,
-              cacheWidth: _letterboxFillPx,
-              cacheHeight: _letterboxFillPx,
-            )
-          else
-            const ColoredBox(color: Colors.black26),
-          ColoredBox(color: Colors.black.withValues(alpha: 0.10)),
-          Center(
-            child: SizedBox(
-              width: childSize.width,
-              height: childSize.height,
-              child: child,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
