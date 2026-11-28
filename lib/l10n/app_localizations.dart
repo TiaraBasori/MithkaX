@@ -4506,6 +4506,14 @@ abstract final class AppStringKeys {
       'storageUsageClearCacheForThisChat';
   static const storageUsageClearCachedMedia = 'storageUsageClearCachedMedia';
   static const storageUsageKeepMedia = 'storageUsageKeepMedia';
+  static const storageUsageKeepMedia1Month = 'storageUsageKeepMedia1Month';
+  static const storageUsageKeepMedia1Week = 'storageUsageKeepMedia1Week';
+  static const storageUsageKeepMedia3Days = 'storageUsageKeepMedia3Days';
+  static const storageUsageKeepMediaForever = 'storageUsageKeepMediaForever';
+  static const storageUsageCacheLimit16Gb = 'storageUsageCacheLimit16Gb';
+  static const storageUsageCacheLimit1Gb = 'storageUsageCacheLimit1Gb';
+  static const storageUsageCacheLimit5Gb = 'storageUsageCacheLimit5Gb';
+  static const storageUsageCacheLimitNoLimit = 'storageUsageCacheLimitNoLimit';
   static const storageUsageMaximumCacheSize = 'storageUsageMaximumCacheSize';
   static const storageUsageNoCachedChatMedia = 'storageUsageNoCachedChatMedia';
   static const storageUsageStorageByChat = 'storageUsageStorageByChat';

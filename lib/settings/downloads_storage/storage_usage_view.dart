@@ -21,6 +21,7 @@ import 'auto_download_settings_view.dart';
 import 'data_storage_service.dart';
 import 'download_location_view.dart';
 import 'downloads_view.dart';
+import 'reset_database_settings_row.dart';
 
 /// A normalized, immutable view of TDLib's fast and detailed storage reports.
 ///
@@ -245,17 +246,21 @@ class _StorageUsageViewState extends State<StorageUsageView> {
   static const _limitKey = 'storage.maxCacheBytes';
   static const _unlimitedSize = 9007199254740991;
   static const _foreverTtl = 2147483647;
-  static const _retentionOptions = <int, String>{
-    259200: '3 days',
-    604800: '1 week',
-    2592000: '1 month',
-    _foreverTtl: 'Forever',
+
+  /// Labels follow the app locale; the stored values are the TDLib seconds /
+  /// bytes, so a locale change never moves a saved choice.
+  static Map<int, String> get _retentionOptions => <int, String>{
+    259200: AppStrings.t(AppStringKeys.storageUsageKeepMedia3Days),
+    604800: AppStrings.t(AppStringKeys.storageUsageKeepMedia1Week),
+    2592000: AppStrings.t(AppStringKeys.storageUsageKeepMedia1Month),
+    _foreverTtl: AppStrings.t(AppStringKeys.storageUsageKeepMediaForever),
   };
-  static const _limitOptions = <int, String>{
-    1073741824: '1 GB',
-    5368709120: '5 GB',
-    17179869184: '16 GB',
-    _unlimitedSize: 'No limit',
+
+  static Map<int, String> get _limitOptions => <int, String>{
+    1073741824: AppStrings.t(AppStringKeys.storageUsageCacheLimit1Gb),
+    5368709120: AppStrings.t(AppStringKeys.storageUsageCacheLimit5Gb),
+    17179869184: AppStrings.t(AppStringKeys.storageUsageCacheLimit16Gb),
+    _unlimitedSize: AppStrings.t(AppStringKeys.storageUsageCacheLimitNoLimit),
   };
 
   StorageSnapshot? _snapshot;
@@ -469,6 +474,17 @@ class _StorageUsageViewState extends State<StorageUsageView> {
             _policyCard(desktopDense: desktopDense),
             SizedBox(height: desktopDense ? 10 : 12),
             _relatedStorageCard(desktopDense: desktopDense),
+            SizedBox(height: desktopDense ? 10 : 12),
+            // The wide local wipe belongs where a reader looks for storage.
+            // This page IS 数据与存储 (the settings hub routes here); the old
+            // row lived on GeneralSettingsView, a page no destination opens.
+            const SettingsCard(
+              children: [
+                ResetDatabaseSettingsRow(
+                  rowKey: ValueKey('storage-reset-database'),
+                ),
+              ],
+            ),
           ],
         );
       },

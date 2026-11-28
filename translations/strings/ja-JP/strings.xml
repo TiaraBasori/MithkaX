@@ -3429,6 +3429,14 @@
     <string name="storageUsageClearCacheForValue1">{value1} のキャッシュをクリアしますか?</string>
     <string name="storageUsageClearCachedMedia">キャッシュされたメディアをクリアしますか?</string>
     <string name="storageUsageKeepMedia">キャッシュの保存期間</string>
+    <string name="storageUsageKeepMedia3Days">3日</string>
+    <string name="storageUsageKeepMedia1Week">1週間</string>
+    <string name="storageUsageKeepMedia1Month">1か月</string>
+    <string name="storageUsageKeepMediaForever">永久</string>
+    <string name="storageUsageCacheLimit1Gb">1 GB</string>
+    <string name="storageUsageCacheLimit5Gb">5 GB</string>
+    <string name="storageUsageCacheLimit16Gb">16 GB</string>
+    <string name="storageUsageCacheLimitNoLimit">制限なし</string>
     <string name="storageUsageMaximumCacheSize">最大キャッシュサイズ</string>
     <string name="storageUsageNoCachedChatMedia">キャッシュされたチャット メディアはありません。</string>
     <string name="storageUsageStorageByChat">チャットによるストレージ</string>

@@ -3441,6 +3441,14 @@
     <string name="storageUsageClearCacheForValue1">Cache für {value1} leeren?</string>
     <string name="storageUsageClearCachedMedia">Zwischengespeicherte Medien löschen?</string>
     <string name="storageUsageKeepMedia">Medien behalten</string>
+    <string name="storageUsageKeepMedia3Days">3 Tage</string>
+    <string name="storageUsageKeepMedia1Week">1 Woche</string>
+    <string name="storageUsageKeepMedia1Month">1 Monat</string>
+    <string name="storageUsageKeepMediaForever">Für immer</string>
+    <string name="storageUsageCacheLimit1Gb">1 GB</string>
+    <string name="storageUsageCacheLimit5Gb">5 GB</string>
+    <string name="storageUsageCacheLimit16Gb">16 GB</string>
+    <string name="storageUsageCacheLimitNoLimit">Keine Begrenzung</string>
     <string name="storageUsageMaximumCacheSize">Maximale Cache-Größe</string>
     <string name="storageUsageNoCachedChatMedia">Keine zwischengespeicherten Chat-Medien.</string>
     <string name="storageUsageStorageByChat">Speicherung per Chat</string>

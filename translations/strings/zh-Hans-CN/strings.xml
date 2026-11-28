@@ -3429,6 +3429,14 @@
     <string name="storageUsageClearCacheForValue1">清除 {value1} 的缓存吗？</string>
     <string name="storageUsageClearCachedMedia">清除缓存媒体？</string>
     <string name="storageUsageKeepMedia">媒体文件保留时间</string>
+    <string name="storageUsageKeepMedia3Days">3 天</string>
+    <string name="storageUsageKeepMedia1Week">1 周</string>
+    <string name="storageUsageKeepMedia1Month">1 个月</string>
+    <string name="storageUsageKeepMediaForever">永久</string>
+    <string name="storageUsageCacheLimit1Gb">1 GB</string>
+    <string name="storageUsageCacheLimit5Gb">5 GB</string>
+    <string name="storageUsageCacheLimit16Gb">16 GB</string>
+    <string name="storageUsageCacheLimitNoLimit">不限制</string>
     <string name="storageUsageMaximumCacheSize">缓存大小限制</string>
     <string name="storageUsageNoCachedChatMedia">没有缓存的聊天媒体。</string>
     <string name="storageUsageStorageByChat">通过聊天存储</string>

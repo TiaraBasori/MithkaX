@@ -3429,6 +3429,14 @@
     <string name="storageUsageClearCacheForValue1">{value1}의 캐시를 지우시겠습니까?</string>
     <string name="storageUsageClearCachedMedia">캐시된 미디어를 지우시겠습니까?</string>
     <string name="storageUsageKeepMedia">미디어 저장 기간</string>
+    <string name="storageUsageKeepMedia3Days">3일</string>
+    <string name="storageUsageKeepMedia1Week">1주</string>
+    <string name="storageUsageKeepMedia1Month">1개월</string>
+    <string name="storageUsageKeepMediaForever">영구</string>
+    <string name="storageUsageCacheLimit1Gb">1 GB</string>
+    <string name="storageUsageCacheLimit5Gb">5 GB</string>
+    <string name="storageUsageCacheLimit16Gb">16 GB</string>
+    <string name="storageUsageCacheLimitNoLimit">제한 없음</string>
     <string name="storageUsageMaximumCacheSize">최대 캐시 크기</string>
     <string name="storageUsageNoCachedChatMedia">캐시된 채팅 미디어가 없습니다.</string>
     <string name="storageUsageStorageByChat">채팅을 통한 저장</string>
