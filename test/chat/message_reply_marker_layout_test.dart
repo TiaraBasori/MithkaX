@@ -57,6 +57,7 @@ void main() {
                   message: message,
                   peerTitle: 'Peer',
                   isGroup: false,
+                  forceShowTimestamp: true,
                 ),
               ],
             ),
@@ -125,23 +126,21 @@ void main() {
               'quoted line that is long enough to wrap elsewhere';
     await pumpBubble(tester, message);
 
-    final band = find.byKey(const ValueKey('messageBandTime-3'));
-    expect(band, findsOneWidget, reason: 'the time rides the outside band');
-    final time = tester.widget<Text>(
-      find.descendant(of: band, matching: find.byType(Text)).first,
-    );
-    // A bubble-less sticker draws its band on the page. The theme's outgoing
+    final timeFinder = find.byKey(const ValueKey('messageTappedTimestamp'));
+    expect(timeFinder, findsOneWidget, reason: 'the time floats outside');
+    final time = tester.widget<Text>(timeFinder);
+    // A bubble-less sticker draws its label on the page. The theme's outgoing
     // bubble ink is white, which vanished on a light wallpaper.
     expect(time.style?.color?.computeLuminance(), lessThan(0.5));
 
-    // The time lives UNDER the sticker, never on it.
+    // The time sits UNDER the sticker, never on it.
     final sticker = tester.getRect(
       find.byKey(const ValueKey('messageStaticStickerPaint-3')),
     );
     expect(
-      tester.getRect(band).top,
-      greaterThanOrEqualTo(sticker.bottom),
-      reason: 'the band row hangs below the sticker, not over it',
+      tester.getRect(timeFinder).top,
+      greaterThan(sticker.bottom - 6),
+      reason: 'the label hangs below the sticker, not over it',
     );
 
     final preview = tester

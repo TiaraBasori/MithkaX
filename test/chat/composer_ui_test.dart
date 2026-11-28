@@ -629,12 +629,11 @@ void main() {
         lessThanOrEqualTo(surface.right + 1),
         reason: 'the read tick never passes the bubble border',
       );
-      final time = find.byKey(const ValueKey('messageTappedTimestamp'));
-      expect(time, findsOneWidget);
+      // The timestamp is armed by the setting, a tap or hover — never by
+      // default, so this plain bubble carries none.
       expect(
-        tester.getRect(time).top,
-        greaterThan(surface.bottom - 1),
-        reason: 'the send time floats below the bubble',
+        find.byKey(const ValueKey('messageTappedTimestamp')),
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('messageCompactReplies-1')),

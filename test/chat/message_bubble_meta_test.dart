@@ -1,14 +1,16 @@
 //
 //  message_bubble_meta_test.dart
 //
-//  Every message carries its send time OUTSIDE, on the band under the bubble,
-//  leading the view/forward/reply chips and right-aligned to the bubble's own
-//  edge. A corner stamp costs a strip of every bubble and lands ON the artwork
-//  of a photo, sticker or album, so this suite pins the outside geometry.
+//  The send time reads OUTSIDE the surface, the pre-1.14 way: a floating label
+//  58dp in from the row's trailing edge and 5dp past its bottom, armed by the
+//  theme setting, a tap or hover; a leading slot on the chip band when the
+//  bubble has one; beside the sender name in a group. This suite pins all
+//  three, plus the clock-only label.
 //
 
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chat/messages/image_media_album_bubble.dart';
@@ -51,6 +53,7 @@ void main() {
     WidgetTester tester,
     ChatMessage message, {
     bool outgoing = true,
+    bool forceShowTimestamp = true,
   }) async {
     final preferences = await SharedPreferences.getInstance();
     final theme = ThemeController(preferences);
@@ -66,7 +69,7 @@ void main() {
                 peerTitle: 'Channel',
                 isGroup: false,
                 meId: 1,
-                forceShowTimestamp: true,
+                forceShowTimestamp: forceShowTimestamp,
                 showChannelPostStats: true,
               ),
             ),
@@ -93,20 +96,21 @@ void main() {
     viewCount: viewCount,
   );
 
-  testWidgets('the send time floats under the bubble, 58dp in', (tester) async {
-    await pumpBubble(tester, message(viewCount: 42));
+  testWidgets('an armed time floats under the bubble, 58dp in', (tester) async {
+    // No band chips on this message, so the floating label carries the time.
+    await pumpBubble(tester, message());
     final time = find.byKey(const ValueKey('messageTappedTimestamp'));
-    final bubble = find.byKey(const ValueKey('messageTextBubble-9'));
-    expect(time, findsOneWidget);
-    expect(bubble, findsOneWidget);
-
-    final timeRect = tester.getRect(time);
-    final bubbleRect = tester.getRect(bubble);
+    final bubble = tester.getRect(
+      find.byKey(const ValueKey('messageTextBubble-9')),
+    );
     final row = tester.getRect(find.byType(MessageBubble));
+    expect(time, findsOneWidget);
+    final timeRect = tester.getRect(time);
     // Its pre-1.14 place: 58dp in from the row's trailing side, hanging 5dp
-    // past the row's bottom edge (below the band when one shows).
+    // past the row's bottom edge.
     expect((row.right - timeRect.right - 58).abs(), lessThan(1.5));
     expect((timeRect.bottom - row.bottom - 5).abs(), lessThan(1.5));
+    expect(timeRect.top, greaterThan(bubble.bottom - 6));
     // Clock only, never a date.
     final label = tester.widget<Text>(time).data ?? '';
     expect(
@@ -114,66 +118,64 @@ void main() {
       isTrue,
       reason: 'the label reads $label',
     );
-    // The views chip keeps its own row under the bubble.
-    final views = tester.getRect(find.byKey(const ValueKey('messageViews-9')));
-    expect(views.top, greaterThanOrEqualTo(bubbleRect.bottom - 1));
   });
 
-  testWidgets('a bubble without outside chips still shows its time', (
+  testWidgets('an outgoing bubble with a band leads it with the time', (
     tester,
   ) async {
-    await pumpBubble(tester, message());
-    expect(find.byKey(const ValueKey('messageViews-9')), findsNothing);
+    await pumpBubble(tester, message(viewCount: 42));
+    final bubble = tester.getRect(
+      find.byKey(const ValueKey('messageTextBubble-9')),
+    );
+    final views = tester.getRect(find.byKey(const ValueKey('messageViews-9')));
     final time = find.byKey(const ValueKey('messageTappedTimestamp'));
     expect(time, findsOneWidget);
-    final row = tester.getRect(find.byType(MessageBubble));
-    expect(tester.getRect(time).bottom, greaterThan(row.bottom - 6));
+    final timeRect = tester.getRect(time);
+    // The band row hangs under the bubble; the time leads it, left of the chip.
+    expect(timeRect.top, greaterThanOrEqualTo(bubble.bottom - 1));
+    expect(timeRect.right, lessThanOrEqualTo(views.left));
+    expect((views.center.dy - timeRect.center.dy).abs(), lessThan(6));
   });
 
-  testWidgets('an incoming message puts its time in the same place', (
+  testWidgets('without the setting and without hover no time shows', (
     tester,
   ) async {
-    await pumpBubble(tester, message(outgoing: false), outgoing: false);
-    final time = tester.getRect(
-      find.byKey(const ValueKey('messageTappedTimestamp')),
+    await pumpBubble(tester, message(), forceShowTimestamp: false);
+    expect(find.byKey(const ValueKey('messageTappedTimestamp')), findsNothing);
+    // Hover brings it in.
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('messageTextBubble-9'))),
     );
-    final row = tester.getRect(find.byType(MessageBubble));
-    expect((time.left - row.left - 58).abs(), lessThan(1.5));
-    expect((time.bottom - row.bottom - 5).abs(), lessThan(1.5));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('messageTappedTimestamp')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('an album keeps its time under the card, caption or not', (
+  testWidgets('a group album carries the time after the sender name', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({'alwaysShowMessageTime': true});
     final preferences = await SharedPreferences.getInstance();
     final theme = ThemeController(preferences);
     addTearDown(theme.dispose);
-    final albumCaption = ChatMessage(
-      id: 31,
-      isOutgoing: true,
-      text: 'Caption',
+    ChatMessage tile(int id, String text) => ChatMessage(
+      id: id,
+      isOutgoing: false,
+      text: text,
       date: 1700000000,
       contentType: 'messageDocument',
-      senderId: 1,
+      senderId: 2,
+      senderName: 'Alice',
       document: MessageDocument(
-        fileName: 'a.pdf',
+        fileName: '$id.pdf',
         size: 10,
         ext: 'pdf',
-        file: TdFileRef(id: 1),
-      ),
-    );
-    final albumSecond = ChatMessage(
-      id: 32,
-      isOutgoing: true,
-      text: '',
-      date: 1700000000,
-      contentType: 'messageDocument',
-      senderId: 1,
-      document: MessageDocument(
-        fileName: 'b.pdf',
-        size: 10,
-        ext: 'pdf',
-        file: TdFileRef(id: 2),
+        file: TdFileRef(id: id),
       ),
     );
     await tester.pumpWidget(
@@ -183,9 +185,9 @@ void main() {
           home: Scaffold(
             body: Center(
               child: ImageMediaAlbumBubble(
-                messages: [albumCaption, albumSecond],
+                messages: [tile(31, 'Caption'), tile(32, '')],
                 peerTitle: 'Channel',
-                isGroup: false,
+                isGroup: true,
                 meId: 1,
                 onOpenImage: (message) {},
               ),
@@ -196,35 +198,35 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    final timeRect = tester.getRect(
-      find.byKey(const ValueKey('messageTappedTimestamp')),
+    final header = tester.getRect(
+      find.byKey(const ValueKey('messageSenderHeader-31')),
+    );
+    final time = tester.getRect(
+      find.byKey(const ValueKey('messageTappedTimestamp')).first,
     );
     final card = tester.getRect(
       find.byKey(const ValueKey('messageImageAlbumCard-31')),
     );
-    expect(
-      timeRect.bottom,
-      greaterThan(card.bottom - 1),
-      reason: 'album time $timeRect must hang under the card $card',
-    );
+    // The pre-1.14 slot sits on the name's line, above the card.
+    expect(header.contains(time.center), isTrue);
+    expect(time.top, lessThan(card.top));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('a caption-less album keeps the time under the photos', (
-    tester,
-  ) async {
+  testWidgets('an album without a sender row carries no time', (tester) async {
+    SharedPreferences.setMockInitialValues({'alwaysShowMessageTime': true});
     final preferences = await SharedPreferences.getInstance();
     final theme = ThemeController(preferences);
     addTearDown(theme.dispose);
     ChatMessage tile(int id) => ChatMessage(
       id: id,
-      isOutgoing: true,
+      isOutgoing: false,
       text: '',
       date: 1700000000,
       contentType: 'messageDocument',
-      senderId: 1,
+      senderId: 2,
       document: MessageDocument(
         fileName: '$id.pdf',
         size: 10,
@@ -240,7 +242,7 @@ void main() {
             body: Center(
               child: ImageMediaAlbumBubble(
                 messages: [tile(41), tile(42)],
-                peerTitle: 'Channel',
+                peerTitle: 'Peer',
                 isGroup: false,
                 meId: 1,
                 onOpenImage: (message) {},
@@ -251,19 +253,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
-
-    final timeRect = tester.getRect(
-      find.byKey(const ValueKey('messageTappedTimestamp')),
-    );
-    final tileRect = tester.getRect(
-      find.byKey(const ValueKey('messageImageAlbumTile-41')),
-    );
-    expect(
-      timeRect.top,
-      greaterThanOrEqualTo(tileRect.bottom - 6),
-      reason: 'the time must sit outside the pictures, below them',
-    );
-
+    expect(find.byKey(const ValueKey('messageTappedTimestamp')), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 2));
   });

@@ -177,10 +177,16 @@ void main() {
     ];
     expect(bubbles, isNotEmpty);
     for (final stamp in stamps) {
+      // Either under the bubble (the floating label or the band) or on the
+      // sender's line above it; never painted on the bubble itself.
       expect(
-        bubbles.any((bubble) => stamp.bottom > bubble.bottom - 1),
+        bubbles.every(
+          (bubble) =>
+              !(bubble.contains(stamp.topLeft) &&
+                  bubble.contains(stamp.bottomRight)),
+        ),
         isTrue,
-        reason: 'stamp $stamp must hang under one of $bubbles',
+        reason: 'stamp $stamp must not sit on one of $bubbles',
       );
     }
 

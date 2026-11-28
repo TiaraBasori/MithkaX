@@ -397,6 +397,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   bool _showTappedTimestamp = false;
 
+  /// The detail timestamp an outgoing bubble with a chip band draws as the
+  /// band's leading item. Set per build of [_row]; [_withFloatingBand]
+  /// consumes it and reports back through [_bandTimestampShown] so the
+  /// floating overlay never draws the same timestamp twice.
+  Widget? _pendingBandTimestamp;
+  bool _bandTimestampShown = false;
+
+  // Hover feeds nothing but the 10px timestamp, so it rides a notifier: a
+  // setState here rebuilt the entire bubble on every pointer crossing, and on
+  // desktop the cursor crosses a bubble boundary on most scroll frames.
+  final ValueNotifier<bool> _hoveringTimestamp = ValueNotifier(false);
+
   double? _layoutWidth;
 
   final Set<String> _expandedQuotes = {};
@@ -882,6 +894,8 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     _lastTapUpPosition = isTap ? event.position : null;
   }
 
+  void _setTimestampHover(bool hovering) => _hoveringTimestamp.value = hovering;
+
   void _handleTap(bool alwaysShowTime) {
     if (!alwaysShowTime) {
       setState(() => _showTappedTimestamp = !_showTappedTimestamp);
@@ -1273,6 +1287,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     _sensitiveContentController.removeListener(_handleSensitiveContentChange);
     _swipe.dispose();
     _contentFlash.dispose();
+    _hoveringTimestamp.dispose();
     _voice.dispose();
     for (final r in _linkRecognizers) {
       r.dispose();
@@ -1334,14 +1349,23 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   Widget _row(bool outgoing) {
     final detailForced =
         widget.bubble.forceShowTimestamp || _theme.alwaysShowMessageTime;
+    // A visible timestamp is armed by the setting or a tap; hover keeps its own
+    // notifier. A group message with a sender name carries the time in that
+    // header instead, and an outgoing bubble with a chip band leads it with the
+    // time — both suppress the floating label.
+    final showDetailTime = detailForced || _showTappedTimestamp;
+    final timeInSenderHeader =
+        widget.bubble.isGroup && !outgoing && message.senderName != null;
+    _bandTimestampShown = false;
+    _pendingBandTimestamp = outgoing && showDetailTime
+        ? IgnorePointer(child: _messageDetailTimestamp())
+        : null;
     final platform = Theme.of(context).platform;
     final desktopInteraction = isDesktopTargetPlatform(platform);
     final desktopTouchInteraction = _supportsDesktopTouchGestures(platform);
-    // Every bubble carries its send time INSIDE, in the bottom-right corner the
-    // reference client uses (`ChatMessageCell.drawTimeInternal`: `layoutHeight −
-    // 6.5dp − timeLayout.height`, right edge at `backgroundWidth − 9dp`). The
-    // old floating label below the bubble and the band's leading timestamp both
-    // sat outside the surface; neither exists any more.
+    // The time itself is never drawn inside the surface: it floats under the
+    // row, leads the chip band of an outgoing bubble, or sits beside the sender
+    // name in a group — the pre-1.14 arrangement.
     final contentBody = _contentBody(outgoing);
     // The update blink wraps only the bubble's body: reaction chips, buttons
     // and the avatar keep their ink while a bot-edited body flashes.
@@ -1496,7 +1520,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (widget.bubble.isGroup && message.senderName != null)
-                        _senderHeader(),
+                        _senderHeader(showDetailTime: showDetailTime),
                       // The badge Row is a no-op wrapper without a badge, and
                       // the Column already left-aligns the bubble.
                       if (widget.bubble.showRepeat)
@@ -1515,25 +1539,38 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               ],
       ),
     );
-    // The send time floats under the message, exactly where it sat before
-    // 1.14: 58dp in from the avatar side, hanging 5dp past the bubble's bottom
-    // edge, 10pt tertiary ink. It used to appear only on hover or with the
-    // always-show setting; it is always on now.
+    // The send time floats under the message where it sat before 1.14: 58dp
+    // in from the avatar side, hanging 5dp past the bubble's bottom edge, 10pt
+    // tertiary ink — on hover, after a tap, or always when the theme asks.
     //
-    // The Stack and the Positioned stay put whatever the label does, so a
-    // toggled timestamp never re-parents the bubble and re-inflates every
-    // child element (spoilers, inline video, map thumbnails).
-    final row = Stack(
-      clipBehavior: Clip.none,
-      children: [
-        messageRow,
-        Positioned(
-          left: outgoing ? null : 58,
-          right: outgoing ? 58 : null,
-          bottom: -5,
-          child: IgnorePointer(child: _messageDetailTimestamp()),
-        ),
-      ],
+    // The Stack and the Positioned stay put whatever the timestamp does: a tap
+    // toggles `_showTappedTimestamp` and a late sender name flips
+    // `timeInSenderHeader`, and dropping either wrapper would re-parent the
+    // whole bubble and re-inflate every child element (spoilers, inline video,
+    // map thumbnails). Hover therefore only ever swaps the Positioned's child.
+    final row = MouseRegion(
+      onEnter: (_) => _setTimestampHover(true),
+      onExit: (_) => _setTimestampHover(false),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          messageRow,
+          if (!timeInSenderHeader && !_bandTimestampShown)
+            Positioned(
+              left: outgoing ? null : 58,
+              right: outgoing ? 58 : null,
+              bottom: -5,
+              child: showDetailTime
+                  ? IgnorePointer(child: _messageDetailTimestamp())
+                  : ValueListenableBuilder<bool>(
+                      valueListenable: _hoveringTimestamp,
+                      builder: (context, hovering, _) => hovering
+                          ? IgnorePointer(child: _messageDetailTimestamp())
+                          : const SizedBox.shrink(),
+                    ),
+            ),
+        ],
+      ),
     );
     return _maybeGhost(row, outgoing);
   }
@@ -1553,7 +1590,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// for the name-colour resolution and the role switch on every message.
   /// The sender line of an incoming group message. The send time is not part
   /// of it: it rides the band under the message.
-  Widget _senderHeader() {
+  Widget _senderHeader({required bool showDetailTime}) {
     final theme = _theme;
     final showMemberTags = theme.showMemberTags;
     final showSenderRole = switch (message.senderRole) {
@@ -1609,6 +1646,28 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                     )
                   : null,
             ),
+          ),
+          const SizedBox(width: 5),
+          // The pre-1.14 slot beside the name: a fixed 96dp box that holds the
+          // clock when the timestamp is armed and only on hover otherwise, so
+          // the name never shifts as messages scroll past.
+          SizedBox(
+            width: 96,
+            height: 14,
+            child: showDetailTime
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: _messageDetailTimestamp(),
+                  )
+                : ValueListenableBuilder<bool>(
+                    valueListenable: _hoveringTimestamp,
+                    builder: (context, hovering, _) => hovering
+                        ? Align(
+                            alignment: Alignment.centerLeft,
+                            child: _messageDetailTimestamp(),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
           ),
         ],
       ),
@@ -2177,6 +2236,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         viewsChip != null ||
         forwardsChip != null;
     if (!hasChips) return child;
+    // The armed timestamp leads the band, the pre-1.14 order: `09:59:00` and
+    // then the counters. The overlay stands down while it does.
+    final bandTimestamp = outgoing ? _pendingBandTimestamp : null;
+    _bandTimestampShown = bandTimestamp != null;
     // The edited mark rides the band's chip language like its siblings.
     final editedChip = showEditedChip
         ? IgnorePointer(
@@ -2197,6 +2260,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         : null;
     // One 4px gap between neighbours, whichever marks a bubble carries.
     final bandChips = <Widget>[
+      ?bandTimestamp,
       ?viewsChip,
       ?forwardsChip,
       if (showReplies)

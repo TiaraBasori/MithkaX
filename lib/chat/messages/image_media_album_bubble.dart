@@ -312,6 +312,17 @@ class ImageMediaAlbumBubble extends StatelessWidget {
               roleAfterName: isDesktopTargetPlatform(),
             ),
           ),
+          if (theme.alwaysShowMessageTime) ...[
+            const SizedBox(width: 5),
+            SizedBox(
+              width: 96,
+              height: 14,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _albumMetaRow(context, first),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -630,40 +641,27 @@ class ImageMediaAlbumBubble extends StatelessWidget {
               : () => onOpenComments?.call(interactionOwner),
         ),
     ];
-    // The send time floats under the card in the same place a bubble's does
-    // (58dp in from the trailing side, hanging 5dp below the edge), and the
-    // counter band, when one shows, keeps its own row under it.
-    final hasBand = bandChips.isNotEmpty;
+    if (bandChips.isEmpty) return card;
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Padding(
-          padding: EdgeInsets.only(bottom: hasBand ? 19 : 0),
-          child: card,
-        ),
+        Padding(padding: const EdgeInsets.only(bottom: 19), child: card),
         Positioned(
-          left: outgoing ? null : 58,
-          right: outgoing ? 58 : null,
-          bottom: hasBand ? 14 : -5,
-          child: IgnorePointer(child: _albumMetaRow(context, interactionOwner)),
-        ),
-        if (hasBand)
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < bandChips.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    bandChips[i],
-                  ],
+          right: 0,
+          bottom: 0,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < bandChips.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 4),
+                  bandChips[i],
                 ],
-              ),
+              ],
             ),
           ),
+        ),
       ],
     );
   }
