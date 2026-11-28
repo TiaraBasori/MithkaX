@@ -6559,13 +6559,15 @@ class _ReplyEmojiGlyph {
   const _ReplyEmojiGlyph(
     this.dx,
     this.dy,
-    this.scale, {
+    this.scale,
+    this.alpha, {
     this.quoteOnly = false,
   });
 
   final double dx;
   final double dy;
   final double scale;
+  final double alpha;
   final bool quoteOnly;
 }
 
@@ -6587,15 +6589,15 @@ class _ReplyEmojiWatermark extends StatelessWidget {
   final bool hasQuote;
 
   static const List<_ReplyEmojiGlyph> _glyphs = [
-    _ReplyEmojiGlyph(4, -6.33, 1.0),
-    _ReplyEmojiGlyph(30, 3, 0.78),
-    _ReplyEmojiGlyph(46, -17, 0.6),
-    _ReplyEmojiGlyph(69.66, -0.666, 0.87),
-    _ReplyEmojiGlyph(98, -12.6, 1.03),
-    _ReplyEmojiGlyph(51, 24, 1.0),
-    _ReplyEmojiGlyph(6.33, 20, 0.77),
-    _ReplyEmojiGlyph(-19, 12, 0.8, quoteOnly: true),
-    _ReplyEmojiGlyph(-22, 36, 0.7, quoteOnly: true),
+    _ReplyEmojiGlyph(4, -6.33, 1.0, 1.0),
+    _ReplyEmojiGlyph(30, 3, 0.78, 0.9),
+    _ReplyEmojiGlyph(46, -17, 0.6, 0.6),
+    _ReplyEmojiGlyph(69.66, -0.666, 0.87, 0.7),
+    _ReplyEmojiGlyph(98, -12.6, 1.03, 0.3),
+    _ReplyEmojiGlyph(51, 24, 1.0, 0.5),
+    _ReplyEmojiGlyph(6.33, 20, 0.77, 0.7),
+    _ReplyEmojiGlyph(-19, 12, 0.8, 0.6, quoteOnly: true),
+    _ReplyEmojiGlyph(-22, 36, 0.7, 0.5, quoteOnly: true),
   ];
 
   @override
@@ -6614,21 +6616,30 @@ class _ReplyEmojiWatermark extends StatelessWidget {
           children: [
             for (var i = 0; i < _glyphs.length; i++)
               if (!_glyphs[i].quoteOnly || hasQuote)
-                Positioned(
-                  key: ValueKey('messageReplySenderEmojiStatusGlyph$i'),
-                  left: x0 - _glyphs[i].dx - 5 * _glyphs[i].scale,
-                  top: y0 + _glyphs[i].dy - 5 * _glyphs[i].scale,
-                  width: 10 * _glyphs[i].scale,
-                  height: 10 * _glyphs[i].scale,
-                  child: Opacity(
-                    opacity: 0.30,
-                    child: CustomEmojiView(
-                      id: id,
-                      size: 10 * _glyphs[i].scale,
-                      color: color,
-                      animate: false,
-                    ),
-                  ),
+                Builder(
+                  builder: (_) {
+                    final glyph = _glyphs[i];
+                    // exteraless sets the drawable bounds to ±dp(10)*scale,
+                    // i.e. a 20dp glyph at scale 1, and dims every entry by
+                    // 0.30 * its own alpha multiplier.
+                    final size = 20 * glyph.scale;
+                    return Positioned(
+                      key: ValueKey('messageReplySenderEmojiStatusGlyph$i'),
+                      left: x0 - glyph.dx - size / 2,
+                      top: y0 + glyph.dy - size / 2,
+                      width: size,
+                      height: size,
+                      child: Opacity(
+                        opacity: 0.30 * glyph.alpha,
+                        child: CustomEmojiView(
+                          id: id,
+                          size: size,
+                          color: color,
+                          animate: false,
+                        ),
+                      ),
+                    );
+                  },
                 ),
           ],
         ),
