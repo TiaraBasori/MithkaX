@@ -596,10 +596,7 @@ class ImageMediaAlbumBubble extends StatelessWidget {
         showChannelPostStats &&
         !interactionOwner.isService &&
         !interactionOwner.isContentRestricted;
-    // Every send time reads OUTSIDE the card: on the band, under the photos,
-    // never on the picture and never in the caption's corner.
     final bandChips = <Widget>[
-      _albumMetaRow(context, interactionOwner),
       if (stats && interactionOwner.viewCount > 0)
         MessageChannelStatChip(
           key: ValueKey('messageViews-${interactionOwner.id}'),
@@ -633,45 +630,54 @@ class ImageMediaAlbumBubble extends StatelessWidget {
               : () => onOpenComments?.call(interactionOwner),
         ),
     ];
-    if (bandChips.isEmpty) return card;
+    // The send time floats under the card in the same place a bubble's does
+    // (58dp in from the trailing side, hanging 5dp below the edge), and the
+    // counter band, when one shows, keeps its own row under it.
+    final hasBand = bandChips.isNotEmpty;
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Padding(padding: const EdgeInsets.only(bottom: 19), child: card),
+        Padding(
+          padding: EdgeInsets.only(bottom: hasBand ? 19 : 0),
+          child: card,
+        ),
         Positioned(
-          right: 0,
-          bottom: 0,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var i = 0; i < bandChips.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 4),
-                  bandChips[i],
+          left: outgoing ? null : 58,
+          right: outgoing ? 58 : null,
+          bottom: hasBand ? 14 : -5,
+          child: IgnorePointer(child: _albumMetaRow(context, interactionOwner)),
+        ),
+        if (hasBand)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < bandChips.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 4),
+                    bandChips[i],
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }
 
-  /// The album's send time. The caption block carries it under the text; a
-  /// caption-less grid carries it under the photos. Never on the picture.
+  /// The album's send time, clock only, floating under the card.
   Widget _albumMetaRow(BuildContext context, ChatMessage owner) {
-    final theme = context.watch<ThemeController>();
     return Text(
-      theme.alwaysShowMessageTime
-          ? DateText.messageDetailLabel(owner.date)
-          : DateText.bubbleLabel(owner.date),
+      DateText.clockLabel(owner.date),
       key: const ValueKey('messageTappedTimestamp'),
       maxLines: 1,
       textScaler: TextScaler.noScaling,
       style: TextStyle(
-        fontSize: AppTextSize.chatTime,
-        height: 1.1,
+        fontSize: 10,
+        height: 1.2,
         color: context.colors.textTertiary,
       ),
     );

@@ -51,6 +51,13 @@ class DateText {
         '${_two(date.hour)}:${_two(date.minute)}:${_two(date.second)}';
   }
 
+  /// Clock-only timestamp: `09:59:00`, the label under a message.
+  static String clockLabel(int unix) {
+    if (unix <= 0) return '';
+    final date = DateTime.fromMillisecondsSinceEpoch(unix * 1000);
+    return '${_two(date.hour)}:${_two(date.minute)}:${_two(date.second)}';
+  }
+
   /// Reply quote timestamp.
   static String quoteLabel(int unix) {
     if (unix <= 0) return '';

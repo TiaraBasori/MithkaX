@@ -93,27 +93,30 @@ void main() {
     viewCount: viewCount,
   );
 
-  testWidgets('the send time rides the band under the bubble', (tester) async {
+  testWidgets('the send time floats under the bubble, 58dp in', (tester) async {
     await pumpBubble(tester, message(viewCount: 42));
-    final time = find.byKey(const ValueKey('messageBandTime-9'));
+    final time = find.byKey(const ValueKey('messageTappedTimestamp'));
     final bubble = find.byKey(const ValueKey('messageTextBubble-9'));
     expect(time, findsOneWidget);
     expect(bubble, findsOneWidget);
 
     final timeRect = tester.getRect(time);
     final bubbleRect = tester.getRect(bubble);
+    final row = tester.getRect(find.byType(MessageBubble));
+    // Its pre-1.14 place: 58dp in from the row's trailing side, hanging 5dp
+    // past the row's bottom edge (below the band when one shows).
+    expect((row.right - timeRect.right - 58).abs(), lessThan(1.5));
+    expect((timeRect.bottom - row.bottom - 5).abs(), lessThan(1.5));
+    // Clock only, never a date.
+    final label = tester.widget<Text>(time).data ?? '';
     expect(
-      timeRect.top,
-      greaterThanOrEqualTo(bubbleRect.bottom - 1),
-      reason: 'time $timeRect must sit below the bubble $bubbleRect',
+      RegExp(r'^\d{2}:\d{2}:\d{2}$').hasMatch(label),
+      isTrue,
+      reason: 'the label reads $label',
     );
-    // The time leads the chip cluster; the cluster is what hugs the bubble's
-    // own right edge.
-    expect((bubbleRect.right - timeRect.right).abs(), greaterThan(0));
-    // The views chip shares the row, to the right of the time.
+    // The views chip keeps its own row under the bubble.
     final views = tester.getRect(find.byKey(const ValueKey('messageViews-9')));
-    expect((views.center.dy - timeRect.center.dy).abs(), lessThan(6));
-    expect(views.left, greaterThan(timeRect.right));
+    expect(views.top, greaterThanOrEqualTo(bubbleRect.bottom - 1));
   });
 
   testWidgets('a bubble without outside chips still shows its time', (
@@ -121,12 +124,10 @@ void main() {
   ) async {
     await pumpBubble(tester, message());
     expect(find.byKey(const ValueKey('messageViews-9')), findsNothing);
-    final time = find.byKey(const ValueKey('messageBandTime-9'));
-    final bubble = tester.getRect(
-      find.byKey(const ValueKey('messageTextBubble-9')),
-    );
+    final time = find.byKey(const ValueKey('messageTappedTimestamp'));
     expect(time, findsOneWidget);
-    expect(tester.getRect(time).top, greaterThanOrEqualTo(bubble.bottom - 1));
+    final row = tester.getRect(find.byType(MessageBubble));
+    expect(tester.getRect(time).bottom, greaterThan(row.bottom - 6));
   });
 
   testWidgets('an incoming message puts its time in the same place', (
@@ -134,13 +135,11 @@ void main() {
   ) async {
     await pumpBubble(tester, message(outgoing: false), outgoing: false);
     final time = tester.getRect(
-      find.byKey(const ValueKey('messageBandTime-9')),
+      find.byKey(const ValueKey('messageTappedTimestamp')),
     );
-    final bubble = tester.getRect(
-      find.byKey(const ValueKey('messageTextBubble-9')),
-    );
-    expect(time.top, greaterThanOrEqualTo(bubble.bottom - 1));
-    expect((bubble.left - time.left).abs(), lessThan(4));
+    final row = tester.getRect(find.byType(MessageBubble));
+    expect((time.left - row.left - 58).abs(), lessThan(1.5));
+    expect((time.bottom - row.bottom - 5).abs(), lessThan(1.5));
   });
 
   testWidgets('an album keeps its time under the card, caption or not', (
@@ -204,9 +203,9 @@ void main() {
       find.byKey(const ValueKey('messageImageAlbumCard-31')),
     );
     expect(
-      timeRect.top,
-      greaterThanOrEqualTo(card.bottom - 1),
-      reason: 'album time $timeRect must sit under the card $card',
+      timeRect.bottom,
+      greaterThan(card.bottom - 1),
+      reason: 'album time $timeRect must hang under the card $card',
     );
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -261,7 +260,7 @@ void main() {
     );
     expect(
       timeRect.top,
-      greaterThanOrEqualTo(tileRect.bottom),
+      greaterThanOrEqualTo(tileRect.bottom - 6),
       reason: 'the time must sit outside the pictures, below them',
     );
 

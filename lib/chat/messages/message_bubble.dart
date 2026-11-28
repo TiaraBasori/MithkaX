@@ -1515,10 +1515,27 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               ],
       ),
     );
-    // The timestamp lives inside the bubble now (see `_bubbleMeta`), so this
-    // row only carries the message itself — no floating label, no hover
-    // overlay, and no second Positioned to keep alive.
-    return _maybeGhost(messageRow, outgoing);
+    // The send time floats under the message, exactly where it sat before
+    // 1.14: 58dp in from the avatar side, hanging 5dp past the bubble's bottom
+    // edge, 10pt tertiary ink. It used to appear only on hover or with the
+    // always-show setting; it is always on now.
+    //
+    // The Stack and the Positioned stay put whatever the label does, so a
+    // toggled timestamp never re-parents the bubble and re-inflates every
+    // child element (spoilers, inline video, map thumbnails).
+    final row = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        messageRow,
+        Positioned(
+          left: outgoing ? null : 58,
+          right: outgoing ? 58 : null,
+          bottom: -5,
+          child: IgnorePointer(child: _messageDetailTimestamp()),
+        ),
+      ],
+    );
+    return _maybeGhost(row, outgoing);
   }
 
   /// Ghost styling for a deleted message's kept copy (Telegram §1.4
@@ -2052,33 +2069,53 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// the composed bubble - comment row included - and therefore always hangs
   /// BELOW that row, never between the post body and it.
   Widget _withFloatingMeta(Widget body, bool outgoing, {bool meta = true}) {
-    final withMeta = _withBubbleMeta(body, outgoing, meta: meta);
+    final withTick = _withDeliveryTick(body, outgoing, meta: meta);
     return _withFloatingBand(
-      _withCommentsOnly(withMeta, outgoing),
+      _withCommentsOnly(withTick, outgoing),
       outgoing,
       meta: meta,
     );
   }
 
-  /// The send time — plus the outgoing delivery tick on its right, the
-  /// reference client's `12:34 ✓✓` order — drawn INSIDE the bubble's
-  /// bottom-right corner. `_bubbleBackground` reserves the strip it sits in.
-  ///
-  /// `meta: false` is for cards that already render their own footer (gift,
-  /// Gram transfer): their footer owns the message's meta line.
-  Widget _withBubbleMeta(Widget child, bool outgoing, {bool meta = true}) {
-    // Every send time reads OUTSIDE the message, in the band under it: the
-    // floating label the bubble used to carry put the stamp on the artwork of
-    // a photo or a sticker, and a corner stamp costs a strip of every bubble.
-    return child;
+  /// The delivery tick is ink on the bubble's inside corner — it never
+  /// reserves a strip below the bubble. The edited mark replaces it, as it
+  /// always has. The send time lives outside, in the floating label under the
+  /// bubble, so the corner holds only the tick.
+  Widget _withDeliveryTick(Widget child, bool outgoing, {bool meta = true}) {
+    if (!(meta && outgoing && !message.isEdited)) return child;
+    final usesMediaOverlayColor =
+        message.animatedSticker != null ||
+        message.videoSticker != null ||
+        message.isDice ||
+        (message.stickerFileId != null && message.image != null) ||
+        ((message.video != null || message.image != null) &&
+            (_caption()?.trim().isEmpty ?? true));
+    final tickColor = _messageColors != null && !usesMediaOverlayColor
+        ? _messageTimeColor(outgoing)
+        : outgoing
+        ? _outgoingTextColor.withValues(alpha: 0.72)
+        : _colors.textTertiary;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          right: 5,
+          bottom: 3,
+          child: IgnorePointer(child: _deliveryTick(color: tickColor)),
+        ),
+      ],
+    );
   }
 
-  String _bubbleMetaLabel() =>
-      widget.bubble.forceShowTimestamp ||
-          _theme.alwaysShowMessageTime ||
-          _showTappedTimestamp
-      ? DateText.messageDetailLabel(message.date)
-      : DateText.bubbleLabel(message.date);
+  /// The floating send time under the bubble: `09:59:00`, never a date.
+  Widget _messageDetailTimestamp() => Text(
+    DateText.clockLabel(message.date),
+    key: const ValueKey('messageTappedTimestamp'),
+    maxLines: 1,
+    textScaler: TextScaler.noScaling,
+    style: TextStyle(fontSize: 10, height: 1.2, color: _colors.textTertiary),
+  );
 
   /// The band under the bubble's outside edge: one chip language for the
   /// whole band, and its right edge is the bubble's own right edge.
@@ -2133,35 +2170,12 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
             }),
           )
         : null;
-    // Bubble-less content (photo, sticker, round video) keeps its send time in
-    // this band: the reference puts it under the media, never on top of it.
-    final timeChip = meta && !message.isService
-        ? Row(
-            key: ValueKey('messageBandTime-${message.id}'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _bubbleMetaLabel(),
-                style: TextStyle(
-                  fontSize: AppTextSize.chatTime,
-                  height: 1.1,
-                  color: chipForeground,
-                ),
-              ),
-              if (outgoing) ...[
-                const SizedBox(width: 3),
-                _deliveryTick(color: chipForeground),
-              ],
-            ],
-          )
-        : null;
     final hasChips =
         showReplies ||
         ghostMarker != null ||
         showEditedChip ||
         viewsChip != null ||
-        forwardsChip != null ||
-        timeChip != null;
+        forwardsChip != null;
     if (!hasChips) return child;
     // The edited mark rides the band's chip language like its siblings.
     final editedChip = showEditedChip
@@ -2183,7 +2197,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         : null;
     // One 4px gap between neighbours, whichever marks a bubble carries.
     final bandChips = <Widget>[
-      ?timeChip,
       ?viewsChip,
       ?forwardsChip,
       if (showReplies)
