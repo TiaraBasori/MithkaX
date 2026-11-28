@@ -956,14 +956,24 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   bool _computeDrawsOnCanvas() {
     if (message.isService) return true;
+    // These kinds are drawn without a bubble whatever their text says. Their
+    // text is a generated label, not a caption: TDLib sends no caption field
+    // for a sticker, so `message.text` carries `[Sticker 🌟]` / `[Video
+    // message]` / the dice emoji. Treating that label as a caption put the
+    // white outgoing-bubble ink back on the reply marker and send time, which
+    // is exactly the white-on-white report for a sticker reply.
+    if (switch (message.contentType) {
+      'messageSticker' ||
+      'messageAnimatedEmoji' ||
+      'messageVideoNote' ||
+      'messageDice' => true,
+      _ => false,
+    }) {
+      return true;
+    }
     if (message.text.trim().isNotEmpty) return false;
     return switch (message.contentType) {
-      'messageSticker' ||
-      'messageVideoNote' ||
-      'messageAnimation' ||
-      'messagePhoto' ||
-      'messageVideo' ||
-      'messageDice' => true,
+      'messageAnimation' || 'messagePhoto' || 'messageVideo' => true,
       _ => false,
     };
   }

@@ -113,7 +113,10 @@ void main() {
           ChatMessage(
               id: 3,
               isOutgoing: true,
-              text: '',
+              // TDLib's real sticker text: a generated label, NOT a caption.
+              // Treating it as a caption is what kept the white bubble ink
+              // on the marker despite the page-ink rule.
+              text: '[Sticker 🌟]',
               date: 1,
               contentType: 'messageSticker',
               stickerFileId: 7,
