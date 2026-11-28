@@ -5144,6 +5144,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       maxLines: maxLines,
       entities: spaced.entities,
       fontSize: AppTextSize.callout,
+      // A fade paints a vertical gradient over the LAST line's bottom half,
+      // which reads as something covering the preview. The reply panel
+      // truncates with an ellipsis instead.
+      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -5159,6 +5163,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     List<MessageTextEntity>? entities,
     double fontSize = 15,
     bool bodyLeading = true,
+    TextOverflow? overflow,
   }) {
     final effectiveFontSize = _chatFontSize(fontSize);
     final children = _entitySpans(
@@ -5199,16 +5204,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     // (tint filter, Lottie), which swaps the canvas mid-paint: the fade lands
     // as a dark band and everything painted after it in the bubble shifts out
     // of place. Inline widgets therefore truncate with an ellipsis instead.
-    final overflow = maxLines == null
-        ? TextOverflow.clip
-        : children.any(_containsWidgetSpan)
-        ? TextOverflow.ellipsis
-        : TextOverflow.fade;
+    final effectiveOverflow =
+        overflow ??
+        (maxLines == null
+            ? TextOverflow.clip
+            : children.any(_containsWidgetSpan)
+            ? TextOverflow.ellipsis
+            : TextOverflow.fade);
     return Builder(
       builder: (context) => RichText(
         textScaler: MediaQuery.textScalerOf(context),
         maxLines: maxLines,
-        overflow: overflow,
+        overflow: effectiveOverflow,
         textHeightBehavior: hasCustomEmoji
             ? const TextHeightBehavior(
                 applyHeightToFirstAscent: false,

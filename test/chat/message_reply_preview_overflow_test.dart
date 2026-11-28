@@ -106,8 +106,13 @@ void main() {
     expect(preview.overflow, TextOverflow.ellipsis);
   });
 
-  testWidgets('a plain-text reply preview keeps its fade', (tester) async {
+  testWidgets('a plain-text reply preview truncates without a fade', (
+    tester,
+  ) async {
+    // `TextOverflow.fade` fades the last line vertically, over the bottom half
+    // of its glyphs: the preview read as something covering it. Truncate with
+    // an ellipsis instead, for emoji and plain text alike.
     final preview = await pumpReplyPreview(tester, const []);
-    expect(preview.overflow, TextOverflow.fade);
+    expect(preview.overflow, TextOverflow.ellipsis);
   });
 }
