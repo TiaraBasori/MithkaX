@@ -21,20 +21,30 @@ import io.flutter.plugin.common.MethodChannel
  *
  * `performHapticFeedback` is the platform's own effect, which is the only path
  * that produces a felt tick on every device (a raw `Vibrator` waveform of a
- * few milliseconds is dropped outright by some HALs). Both ignore flags bypass
- * the system "touch vibration" switch, so the tick still fires with it off.
+ * few milliseconds is dropped outright by some HALs). The intensity is
+ * therefore exactly the reference client's: it also only ever fires these
+ * constants. BOTH ignore flags are passed, as the reference client does for
+ * its interface ticks (`MediaController`, `AndroidUtil.performHapticFeedback`,
+ * `PasscodeActivity`): `FLAG_IGNORE_VIEW_SETTING` keeps the tick alive when a
+ * view has haptics disabled, and `FLAG_IGNORE_GLOBAL_SETTING` keeps it alive
+ * when the system touch-vibration switch is off. Passing only the view flag
+ * silenced the whole app on devices with that switch off — the fork's own
+ * in-app vibration switch is what the user controls here.
  *
- * A raw one-shot covers a refused request (unattached window), and Dart falls
- * back again when this answers false — a tick can never disappear silently.
+ * A refused request answers false and Dart falls back to Flutter's own channel
+ * (the same constants, no flags), and a request the window cannot take at all
+ * is covered by a short one-shot vibration — a tick can never disappear
+ * silently. The one-shot is a FALLBACK only: the platform constant is always
+ * preferred, so the intensity stays the device's.
  */
 class HapticsPlugin(
     private val activity: Activity,
     messenger: BinaryMessenger,
 ) :
     MethodChannel.MethodCallHandler {
-    private val appContext = activity.applicationContext
     private val channel = MethodChannel(messenger, CHANNEL)
     private val handler = Handler(Looper.getMainLooper())
+    private val appContext = activity.applicationContext
 
     /** Manager first, legacy service after it: some ROMs ship no manager. */
     @Suppress("DEPRECATION")
@@ -85,7 +95,12 @@ class HapticsPlugin(
         return view.performHapticFeedback(constant, FLAGS)
     }
 
-    /** Only used when the platform haptic was refused; a plain buzz, no waveform. */
+    /**
+     * Only used when the platform haptic was refused (an unattached window, a
+     * ROM that drops the constant): a short one-shot so the tick is still felt.
+     * Never the primary path — DEFAULT_AMPLITUDE is louder than any platform
+     * tick, which is why the reference client has no such call for its UI.
+     */
     @Suppress("DEPRECATION")
     private fun oneShot(kind: String?): Boolean {
         val target = vibrator ?: return false
@@ -116,7 +131,15 @@ class HapticsPlugin(
     companion object {
         const val CHANNEL = "mithka/haptics"
 
-        /** Ignore the view's own switch and the system touch-vibration one. */
+        /**
+         * Ignore the view's own switch AND the system touch-vibration one.
+         *
+         * This is what the reference client passes for its interface ticks
+         * (`MediaController`, `AndroidUtil.performHapticFeedback`); without the
+         * global flag every tick went silent on a phone whose system
+         * touch-vibration switch is off. The in-app Vibration switch stays the
+         * authority on whether this app may buzz.
+         */
         private const val FLAGS = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING or
             HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
 

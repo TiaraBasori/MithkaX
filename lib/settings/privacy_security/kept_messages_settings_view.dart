@@ -25,6 +25,7 @@ import '../../history/message_history_store.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_theme.dart';
+import '../downloads_storage/reset_database_settings_row.dart';
 import '../local_premium.dart';
 import '../profile_account/message_history_transfer_view.dart';
 import 'ghost_mode_settings_view.dart';
@@ -271,6 +272,9 @@ class _TransferSection extends StatelessWidget {
         ),
         _BadgeStyleRow(),
         const _ClearDatabaseRow(),
+        const ResetDatabaseSettingsRow(
+          rowKey: ValueKey('kept-messages-reset-database'),
+        ),
       ],
     );
   }

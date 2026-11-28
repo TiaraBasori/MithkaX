@@ -583,6 +583,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
 
   FVideoActions? _reusablePlayerActions;
 
+  // A device-side breadcrumb: the surface keeps a three-finger tap for itself so
+  // a player whose chrome never shows can still hand back what it saw.
+  final Set<int> _diagnosticPointers = <int>{};
+  Timer? _diagnosticPointerTimer;
+  int _chromeBuilds = 0;
+  int _surfaceTaps = 0;
+  bool _lastChromeVisible = false;
+
   /// Control visibility for the loading chrome, which mithka owns until the
   /// package player takes over. Reset whenever playback re-enters loading.
   bool _loadingControlsVisible = true;
@@ -913,19 +921,80 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     // A rightward swipe from the left edge slides the page away with the
     // finger so the player can be left from the surface itself.
     final drag = _dismissDx;
-    if (drag == 0) return player;
+    if (drag == 0) return _withPlayerDiagnostics(player);
     final progress = (drag / videoDismissDragDistance).clamp(0.0, 1.0);
-    return ColoredBox(
-      color: Colors.black,
-      child: Transform.translate(
-        key: const ValueKey('video-dismiss-drag'),
-        offset: Offset(drag, 0),
-        child: Transform.scale(
-          scale: 1 - progress * 0.06,
-          child: Opacity(opacity: 1 - progress * 0.3, child: player),
+    return _withPlayerDiagnostics(
+      ColoredBox(
+        color: Colors.black,
+        child: Transform.translate(
+          key: const ValueKey('video-dismiss-drag'),
+          offset: Offset(drag, 0),
+          child: Transform.scale(
+            scale: 1 - progress * 0.06,
+            child: Opacity(opacity: 1 - progress * 0.3, child: player),
+          ),
         ),
       ),
     );
+  }
+
+  /// Wraps the player in the breadcrumb listener.
+  ///
+  /// Three fingers held together for a moment copy a snapshot of what the
+  /// player believes — presentation, size, chrome bookkeeping, controller state
+  /// — so a player that shows no controls on a phone can be diagnosed without a
+  /// logcat session.
+  Widget _withPlayerDiagnostics(Widget child) {
+    return Listener(onPointerDown: _handleDiagnosticPointer, child: child);
+  }
+
+  void _handleDiagnosticPointer(PointerDownEvent event) {
+    _diagnosticPointers.add(event.pointer);
+    _diagnosticPointerTimer?.cancel();
+    if (_diagnosticPointers.length < 3) {
+      _diagnosticPointerTimer = Timer(
+        const Duration(milliseconds: 700),
+        _diagnosticPointers.clear,
+      );
+      return;
+    }
+    _diagnosticPointers.clear();
+    _copyPlayerDiagnostics();
+  }
+
+  void _copyPlayerDiagnostics() {
+    final media = MediaQuery.of(context);
+    final controller = _controller;
+    final value = controller?.value;
+    final report = <String>[
+      'mithkax video player',
+      'presentation: ${widget.presentation.name}',
+      'media: ${media.size.width.toStringAsFixed(1)}x'
+          '${media.size.height.toStringAsFixed(1)} @'
+          '${media.devicePixelRatio.toStringAsFixed(2)}',
+      'padding: ${media.padding}',
+      'insets: ${media.viewInsets.bottom.toStringAsFixed(1)}',
+      'route: ${ModalRoute.of(context)?.settings.name ?? '-'}',
+      'chrome builds: $_chromeBuilds, visible: $_lastChromeVisible, '
+          'surface taps: $_surfaceTaps',
+      'on-demand panel: $_onDemandPanelVisible, '
+          'standalone: ${_usesStandaloneFullscreenLayout(context)}',
+      'pip: system=$_systemPiPActive handoff=$_systemPiPHandoff '
+          'busy=$_systemPiPBusy',
+      'controller: ${value == null ? 'none' : 'ready=${value.isInitialized} playing=${value.isPlaying} '
+                'buffering=${value.isBuffering} '
+                'ended=${value.isCompleted} '
+                'size=${value.size.width.toInt()}x'
+                '${value.size.height.toInt()} '
+                'at=${value.position.inMilliseconds}ms'
+                '/${value.duration.inMilliseconds}ms'}',
+      'failed: $_failed, loading: ${_controller == null}',
+      'video: ${widget.video.id} '
+          '${widget.width ?? 0}x${widget.height ?? 0} '
+          '${widget.video.mimeType ?? ''}',
+    ].join('\n');
+    Clipboard.setData(ClipboardData(text: report));
+    if (mounted) showToast(context, AppStringKeys.profileDetailCopied);
   }
 
   Widget _playbackSurface(VideoPlayerController? controller) {
@@ -1119,6 +1188,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
 
   Widget _playerChrome(BuildContext context, FVideoChromeScope scope) {
     _reusablePlayerActions = scope.actions;
+    _chromeBuilds++;
+    _lastChromeVisible = scope.snapshot.controlsVisible;
     // The chrome's speed controls ask the package to apply the next step.
     // Routing that through the hold's serializer keeps one newest desired
     // rate, so a speed step and a hold cannot land out of order.
@@ -1220,15 +1291,16 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                         end: safePadding.right + 14,
                         child: Row(
                           children: [
-                            _playerChromeIconButton(
-                              icon: HeroAppIcons.xmark,
-                              label: scope.labels.close,
-                              onTap: _close,
-                              size: 52,
-                              iconSize: 27,
-                              cornerRadius: 26,
-                            ),
-                            const SizedBox(width: 16),
+                            if (!FVideoDesktopWindows.isCurrentWindow) ...[
+                              _playerChromeIconButton(
+                                icon: HeroAppIcons.xmark,
+                                label: scope.labels.close,
+                                onTap: _close,
+                                size: 48,
+                                iconSize: 26,
+                              ),
+                              const SizedBox(width: 12),
+                            ],
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1241,6 +1313,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                                       color: Colors.white,
                                       fontSize: 17,
                                       fontWeight: FontWeight.w400,
+                                      shadows: _videoChromeIconShadows,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -1254,6 +1327,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                                       ),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w400,
+                                      shadows: _videoChromeIconShadows,
                                     ),
                                   ),
                                 ],
@@ -1273,10 +1347,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                               },
                               size: 44,
                               iconSize: 21,
-                              cornerRadius: 22,
-                              backgroundColor: _debuggerVisible
-                                  ? const Color(0xD92C6565)
-                                  : const Color(0xB82C2C2E),
+                              iconColor: _debuggerVisible
+                                  ? const Color(0xFF24DDD9)
+                                  : Colors.white,
                             ),
                             const SizedBox(width: 8),
                             _playerChromeIconButton(
@@ -1285,7 +1358,6 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                               onTap: _toggleMoreMenu,
                               size: 44,
                               iconSize: 23,
-                              cornerRadius: 22,
                               focusNode: _moreButtonFocusNode,
                             ),
                           ],
@@ -1359,14 +1431,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                                         label: scope.labels.fullscreen,
                                         onTap: widget.onToggleFullscreen!,
                                         size: 44,
-                                        iconSize: 20,
-                                        cornerRadius: 10,
-                                        backgroundColor: const Color(
-                                          0x9A1B1D1E,
-                                        ),
-                                        borderColor: Colors.white.withValues(
-                                          alpha: 0.26,
-                                        ),
+                                        iconSize: 21,
                                       ),
                               )
                             : _MithkaVideoBottomChrome(
@@ -1412,14 +1477,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                                             : scope.labels.fullscreen,
                                         onTap: widget.onToggleFullscreen!,
                                         size: 44,
-                                        iconSize: 20,
-                                        cornerRadius: 10,
-                                        backgroundColor: const Color(
-                                          0x9A1B1D1E,
-                                        ),
-                                        borderColor: Colors.white.withValues(
-                                          alpha: 0.26,
-                                        ),
+                                        iconSize: 21,
                                       ),
                               ),
                       ),
@@ -1486,10 +1544,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                   label: scope.labels.fullscreen,
                   onTap: widget.onToggleFullscreen!,
                   size: 44,
-                  iconSize: 20,
-                  cornerRadius: 10,
-                  backgroundColor: const Color(0x9A1B1D1E),
-                  borderColor: Colors.white.withValues(alpha: 0.26),
+                  iconSize: 21,
                 );
           final controls = Stack(
             fit: StackFit.expand,
@@ -1516,16 +1571,17 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                 rect: geometry.headerRect,
                 child: Row(
                   children: [
-                    _playerChromeIconButton(
-                      icon: HeroAppIcons.xmark,
-                      label: scope.labels.close,
-                      onTap: _close,
-                      size: 52,
-                      iconSize: 27,
-                      cornerRadius: 26,
-                    ),
+                    if (!FVideoDesktopWindows.isCurrentWindow) ...[
+                      _playerChromeIconButton(
+                        icon: HeroAppIcons.xmark,
+                        label: scope.labels.close,
+                        onTap: _close,
+                        size: 48,
+                        iconSize: 26,
+                      ),
+                      if (geometry.wide) const SizedBox(width: 12),
+                    ],
                     if (geometry.wide) ...[
-                      const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1539,6 +1595,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                                 color: Colors.white,
                                 fontSize: 17,
                                 fontWeight: FontWeight.w400,
+                                shadows: _videoChromeIconShadows,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -1550,6 +1607,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                                 color: Colors.white.withValues(alpha: 0.74),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w400,
+                                shadows: _videoChromeIconShadows,
                               ),
                             ),
                           ],
@@ -1571,10 +1629,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                       },
                       size: 44,
                       iconSize: 21,
-                      cornerRadius: 22,
-                      backgroundColor: _debuggerVisible
-                          ? const Color(0xD92C6565)
-                          : const Color(0xB82C2C2E),
+                      iconColor: _debuggerVisible
+                          ? const Color(0xFF24DDD9)
+                          : Colors.white,
                     ),
                     const SizedBox(width: 8),
                     _playerChromeIconButton(
@@ -1583,7 +1640,6 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                       onTap: _toggleMoreMenu,
                       size: 44,
                       iconSize: 23,
-                      cornerRadius: 22,
                       focusNode: _moreButtonFocusNode,
                     ),
                   ],
@@ -1683,12 +1739,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
         onPressed: _toggleOnDemandPanel,
         size: const Size.square(44),
         iconSize: 21,
-        backgroundColor: _onDemandPanelVisible
-            ? const Color(0xD92C6565)
-            : const Color(0x8A1B1D1E),
-        borderColor: Colors.white.withValues(
-          alpha: _onDemandPanelVisible ? 0.32 : 0.24,
-        ),
+        iconColor: _onDemandPanelVisible
+            ? const Color(0xFF24DDD9)
+            : Colors.white,
         expanded: _onDemandPanelVisible,
       ),
     );
@@ -1700,9 +1753,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
     required VoidCallback onTap,
     required double size,
     required double iconSize,
-    required double cornerRadius,
-    Color backgroundColor = const Color(0xB82C2C2E),
+    double cornerRadius = 10,
+    Color backgroundColor = Colors.transparent,
     Color? borderColor,
+    Color iconColor = Colors.white,
     FocusNode? focusNode,
   }) {
     return _FocusableVideoIconButton(
@@ -1712,7 +1766,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       size: Size.square(size),
       iconSize: iconSize,
       backgroundColor: backgroundColor,
-      borderColor: borderColor ?? Colors.white.withValues(alpha: 0.15),
+      borderColor: borderColor,
+      iconColor: iconColor,
       cornerRadius: cornerRadius,
       focusNode: focusNode,
     );
@@ -2166,6 +2221,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
       // drag a gesture has to be, so the release is that tap. Finish it here:
       // no other recognizer can, and a position step must not be committed.
       _cancelPlaybackGesture();
+      _surfaceTaps++;
       _reusablePlayerActions?.toggleControls();
       return;
     }
@@ -3059,21 +3115,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                                   color: Colors.black.withValues(alpha: 0.22),
                                 ),
                                 Center(
-                                  child: Container(
-                                    width: compact ? 58 : 72,
-                                    height: compact ? 58 : 72,
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.68,
-                                      ),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: AppIcon(
-                                      HeroAppIcons.play,
-                                      color: Colors.white,
-                                      size: compact ? 30 : 38,
-                                    ),
+                                  child: AppIcon(
+                                    HeroAppIcons.play,
+                                    color: Colors.white,
+                                    size: compact ? 36 : 46,
+                                    shadows: _videoChromeIconShadows,
                                   ),
                                 ),
                                 Positioned(
@@ -3650,13 +3696,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
             size: Size.square(size),
             iconSize: math.max(18, size * 0.44),
             opacity: _systemPiPBusy ? 0 : 0.92,
-            backgroundColor: _modeMenuVisible
-                ? const Color(0xE238383A)
-                : const Color(0xB82C2C2E),
-            borderColor: Colors.white.withValues(
-              alpha: _modeMenuVisible ? 0.24 : 0.12,
-            ),
-            cornerRadius: math.max(22, size / 2),
+            iconColor: _modeMenuVisible
+                ? const Color(0xFF24DDD9)
+                : Colors.white,
             focusNode: _modeButtonFocusNode,
             semanticValue: directFullscreenRestore ? null : currentModeLabel,
             expanded: directFullscreenRestore ? null : _modeMenuVisible,
@@ -3674,8 +3716,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView>
                   curve: Curves.easeOut,
                   child: AppIcon(
                     HeroAppIcons.chevronDown,
-                    color: Colors.white.withValues(alpha: 0.72),
+                    color: Colors.white.withValues(alpha: 0.85),
                     size: 8,
+                    shadows: _videoChromeIconShadows,
                   ),
                 ),
               ),

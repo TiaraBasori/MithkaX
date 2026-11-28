@@ -40,6 +40,34 @@ typedef MediaAlbumImageBuilder =
 /// The production visual-media album row shared by chats and appearance
 /// previews. Keeping the preview on this renderer ensures album geometry,
 /// sender titles, name treatments, timestamps, and bubble colors stay honest.
+/// Arms the album's clock while the pointer is over it. The album is stateless
+/// and its time used to be unconditional; hover is the only local state this
+/// needs, so it lives in this one small box instead of the album's fields.
+class _AlbumHover extends StatefulWidget {
+  const _AlbumHover({required this.builder});
+
+  final Widget Function(BuildContext context, bool hovering) builder;
+
+  @override
+  State<_AlbumHover> createState() => _AlbumHoverState();
+}
+
+class _AlbumHoverState extends State<_AlbumHover> {
+  bool _hovering = false;
+
+  void _setHovering(bool value) {
+    if (_hovering == value) return;
+    setState(() => _hovering = value);
+  }
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => _setHovering(true),
+    onExit: (_) => _setHovering(false),
+    child: widget.builder(context, _hovering),
+  );
+}
+
 class ImageMediaAlbumBubble extends StatelessWidget {
   const ImageMediaAlbumBubble({
     super.key,
@@ -146,10 +174,15 @@ class ImageMediaAlbumBubble extends StatelessWidget {
   ChatMessage get _first => messages.first;
 
   @override
-  Widget build(BuildContext context) =>
-      ContentSizeScope(child: Builder(builder: _buildContent));
+  Widget build(BuildContext context) => ContentSizeScope(
+    child: _AlbumHover(
+      builder: (context, hovering) => Builder(
+        builder: (context) => _buildContent(context, hovering: hovering),
+      ),
+    ),
+  );
 
-  Widget _buildContent(BuildContext context) {
+  Widget _buildContent(BuildContext context, {required bool hovering}) {
     final first = _first;
     final outgoing = isOutgoingTranscriptMessage(first, meId);
     final avatarTitle = outgoing
@@ -211,17 +244,35 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                         : (reaction) =>
                               onToggleReaction!(reactionOwner, reaction),
                     onShowUsers: onShowReactionUsers,
+                    meId: meId,
+                    meName: meName.l10n(context),
+                    mePhoto: mePhoto,
+                    peerTitle: peerTitle,
+                    peerPhoto: peerPhoto,
                   ),
                 ],
               );
-        final body = outgoing
+        // The album follows the bubble's rules: the clock shares the sender's
+        // line when there is one, and otherwise hangs under the card at its
+        // own edge. It is armed by the always-show setting or by hover —
+        // exactly what arms a bubble's floating label.
+        final hasSenderRow = !outgoing && isGroup && first.senderName != null;
+        final theme = context.watch<ThemeController>();
+        final showsTime = theme.alwaysShowMessageTime || hovering;
+        final timedMedia = hasSenderRow || !showsTime
             ? media
+            : _withAlbumTime(
+                media,
+                outgoing: outgoing,
+                label: _albumMetaRow(context, first),
+              );
+        final body = outgoing
+            ? timedMedia
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (isGroup && first.senderName != null)
-                    _senderHeader(context),
-                  media,
+                  if (hasSenderRow) _senderHeader(context, showTime: showsTime),
+                  timedMedia,
                 ],
               );
 
@@ -250,7 +301,28 @@ class ImageMediaAlbumBubble extends StatelessWidget {
     );
   }
 
-  Widget _senderHeader(BuildContext context) {
+  /// The clock under the card: a 12dp strip the body reserves, so it never
+  /// lands on the photos, on the reaction chips, or on the album below.
+  Widget _withAlbumTime(
+    Widget body, {
+    required bool outgoing,
+    required Widget label,
+  }) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Padding(padding: const EdgeInsets.only(bottom: 12), child: body),
+        Positioned(
+          left: outgoing ? null : 0,
+          right: outgoing ? 0 : null,
+          bottom: 0,
+          child: IgnorePointer(child: label),
+        ),
+      ],
+    );
+  }
+
+  Widget _senderHeader(BuildContext context, {required bool showTime}) {
     final first = _first;
     final colors = context.colors;
     final theme = context.watch<ThemeController>();
@@ -307,24 +379,14 @@ class ImageMediaAlbumBubble extends StatelessWidget {
               roleAfterName: isDesktopTargetPlatform(),
             ),
           ),
-          if (theme.alwaysShowMessageTime) ...[
+          if (showTime) ...[
             const SizedBox(width: 5),
             SizedBox(
               width: 96,
               height: 14,
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  DateText.messageDetailLabel(first.date),
-                  key: const ValueKey('messageTappedTimestamp'),
-                  maxLines: 1,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 10,
-                    height: 1.2,
-                    color: colors.textTertiary,
-                  ),
-                ),
+                child: _albumMetaRow(context, first),
               ),
             ),
           ],
@@ -502,76 +564,86 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                             },
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(6, 7, 6, 3),
-                        child: Builder(
-                          builder: (context) {
-                            final selectionContent = Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                DesktopMessageQuoteSource(
-                                  key: ValueKey((
-                                    captionMessage.id,
-                                    captionText,
-                                  )),
-                                  message: captionMessage,
-                                  displayedText: replacesOriginal
-                                      ? ''
-                                      : captionText,
-                                  onChanged: onDesktopQuoteChanged,
-                                  child: _captionText(
-                                    captionText,
-                                    captionEntities,
-                                    displayedTextColor,
-                                    displayedLinkColor,
-                                    replacesOriginal: replacesOriginal,
-                                  ),
-                                ),
-                                if (showsTranslationBlock) ...[
-                                  const SizedBox(height: 7),
-                                  _translationBlock(
-                                    context,
-                                    captionMessage,
-                                    outgoing: outgoing,
-                                    baseTextColor: baseTextColor,
-                                    linkColor: baseLinkColor,
-                                  ),
-                                ],
-                              ],
-                            );
-                            if (!selecting &&
-                                isDesktopTargetPlatform(
-                                  Theme.of(context).platform,
-                                )) {
-                              return Listener(
-                                onPointerDown: (event) {
-                                  if (event.buttons == kSecondaryMouseButton) {
-                                    onLongPress?.call(
-                                      captionMessage,
-                                      Rect.fromLTWH(
-                                        event.position.dx,
-                                        event.position.dy,
-                                        0,
-                                        0,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Builder(
+                              builder: (context) {
+                                final selectionContent = Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    DesktopMessageQuoteSource(
+                                      key: ValueKey((
+                                        captionMessage.id,
+                                        captionText,
+                                      )),
+                                      message: captionMessage,
+                                      displayedText: replacesOriginal
+                                          ? ''
+                                          : captionText,
+                                      onChanged: onDesktopQuoteChanged,
+                                      child: _captionText(
+                                        captionText,
+                                        captionEntities,
+                                        displayedTextColor,
+                                        displayedLinkColor,
+                                        replacesOriginal: replacesOriginal,
                                       ),
-                                      MessageActionSource.normal,
-                                    );
-                                  }
-                                },
-                                child: DesktopMessageTextSelectionArea(
+                                    ),
+                                    if (showsTranslationBlock) ...[
+                                      const SizedBox(height: 7),
+                                      _translationBlock(
+                                        context,
+                                        captionMessage,
+                                        outgoing: outgoing,
+                                        baseTextColor: baseTextColor,
+                                        linkColor: baseLinkColor,
+                                      ),
+                                    ],
+                                  ],
+                                );
+                                if (!selecting &&
+                                    isDesktopTargetPlatform(
+                                      Theme.of(context).platform,
+                                    )) {
+                                  return Listener(
+                                    onPointerDown: (event) {
+                                      if (event.buttons ==
+                                          kSecondaryMouseButton) {
+                                        onLongPress?.call(
+                                          captionMessage,
+                                          Rect.fromLTWH(
+                                            event.position.dx,
+                                            event.position.dy,
+                                            0,
+                                            0,
+                                          ),
+                                          MessageActionSource.normal,
+                                        );
+                                      }
+                                    },
+                                    child: DesktopMessageTextSelectionArea(
+                                      child: selectionContent,
+                                    ),
+                                  );
+                                }
+                                final selectionKey = mobileTextSelectionAreaKey;
+                                if (selectionKey == null) {
+                                  return selectionContent;
+                                }
+                                return MobileMessageTextSelectionArea(
+                                  selectionAreaKey: selectionKey,
+                                  onSelectionChanged:
+                                      onMobileTextSelectionChanged,
+                                  onDisposed:
+                                      onMobileTextSelectionDisposed ?? () {},
                                   child: selectionContent,
-                                ),
-                              );
-                            }
-                            final selectionKey = mobileTextSelectionAreaKey;
-                            if (selectionKey == null) return selectionContent;
-                            return MobileMessageTextSelectionArea(
-                              selectionAreaKey: selectionKey,
-                              onSelectionChanged: onMobileTextSelectionChanged,
-                              onDisposed:
-                                  onMobileTextSelectionDisposed ?? () {},
-                              child: selectionContent,
-                            );
-                          },
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -658,6 +730,21 @@ class ImageMediaAlbumBubble extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// The album's send time, clock only, floating under the card.
+  Widget _albumMetaRow(BuildContext context, ChatMessage owner) {
+    return Text(
+      DateText.clockLabel(owner.date),
+      key: const ValueKey('messageTappedTimestamp'),
+      maxLines: 1,
+      textScaler: TextScaler.noScaling,
+      style: TextStyle(
+        fontSize: 10,
+        height: 1.2,
+        color: context.colors.textTertiary,
+      ),
     );
   }
 

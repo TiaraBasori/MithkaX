@@ -605,12 +605,11 @@ void main() {
       );
     });
 
-    testWidgets('the read tick stays on the bubble corner, not the band', (
+    testWidgets('the read tick stays on the bubble corner, outside the band', (
       tester,
     ) async {
-      // A plain read outgoing message carries no band mark: the read
-      // circle is ink on the bubble's inside corner, and the band never
-      // reserves a strip for it.
+      // The send time floats under the row; the tick is ink on the bubble's
+      // inside corner and never reserves a strip of its own.
       final message = bandMessage(outgoing: true);
       await pumpBand(tester, message, isRead: true);
 
@@ -630,7 +629,12 @@ void main() {
         lessThanOrEqualTo(surface.right + 1),
         reason: 'the read tick never passes the bubble border',
       );
-      // Nothing renders below the bubble: no band, no reserved strip.
+      // The timestamp is armed by the setting, a tap or hover — never by
+      // default, so this plain bubble carries none.
+      expect(
+        find.byKey(const ValueKey('messageTappedTimestamp')),
+        findsNothing,
+      );
       expect(
         find.byKey(const ValueKey('messageCompactReplies-1')),
         findsNothing,

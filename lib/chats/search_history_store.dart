@@ -93,6 +93,18 @@ class SearchHistoryStore extends ChangeNotifier {
       });
 
   /// Forgets every search of [userId].
+  /// Wipes every account's recorded searches. The local-database reset uses
+  /// this: a search history is cache, not a setting.
+  Future<void> clearAll() => _serial(() async {
+    final prefs = await _preferences();
+    for (final key in prefs.getKeys().toList(growable: false)) {
+      if (!key.startsWith(_keyPrefix)) continue;
+      await prefs.remove(key);
+    }
+    _cached.clear();
+    notifyListeners();
+  });
+
   Future<void> clear(int? userId) => _serial(() async {
     if (userId == null) return;
     final current = await load(userId);

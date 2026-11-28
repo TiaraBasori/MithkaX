@@ -115,6 +115,12 @@ extension AppLocalizationsContext on BuildContext {
 }
 
 abstract final class AppStringKeys {
+  static const autoDownloadChatTypesTitle = 'autoDownloadChatTypesTitle';
+  static const autoDownloadChatTypesDetail = 'autoDownloadChatTypesDetail';
+  static const autoDownloadChatContacts = 'autoDownloadChatContacts';
+  static const autoDownloadChatPrivate = 'autoDownloadChatPrivate';
+  static const autoDownloadChatGroups = 'autoDownloadChatGroups';
+  static const autoDownloadChatChannels = 'autoDownloadChatChannels';
   static const storageDownloadLocation = 'storageDownloadLocation';
   static const storageDownloadCacheLocation = 'storageDownloadCacheLocation';
   static const storageDownloadSaveFolder = 'storageDownloadSaveFolder';
@@ -1554,6 +1560,15 @@ abstract final class AppStringKeys {
       'composerLongMessageRichTextPrompt';
   static const composerLongMessageTitle = 'composerLongMessageTitle';
   static const composerMarkdownSupportHint = 'composerMarkdownSupportHint';
+  static const composerLinkPreviewTitle = 'composerLinkPreviewTitle';
+  static const composerLinkPreviewAbove = 'composerLinkPreviewAbove';
+  static const composerLinkPreviewBelow = 'composerLinkPreviewBelow';
+  static const composerLinkPreviewOff = 'composerLinkPreviewOff';
+  static const composerLinkPreviewEnable = 'composerLinkPreviewEnable';
+  static const composerLinkPreviewDisable = 'composerLinkPreviewDisable';
+  static const composerLinkPreviewOptionsSubtitle =
+      'composerLinkPreviewOptionsSubtitle';
+  static const composerLinkPreviewOptionDone = 'composerLinkPreviewOptionDone';
   static const composerReplyToName = 'composerReplyToName';
   static const composerReplyToQuoteName = 'composerReplyToQuoteName';
   static const composerReplyToExternalName = 'composerReplyToExternalName';
@@ -4491,6 +4506,14 @@ abstract final class AppStringKeys {
       'storageUsageClearCacheForThisChat';
   static const storageUsageClearCachedMedia = 'storageUsageClearCachedMedia';
   static const storageUsageKeepMedia = 'storageUsageKeepMedia';
+  static const storageUsageKeepMedia1Month = 'storageUsageKeepMedia1Month';
+  static const storageUsageKeepMedia1Week = 'storageUsageKeepMedia1Week';
+  static const storageUsageKeepMedia3Days = 'storageUsageKeepMedia3Days';
+  static const storageUsageKeepMediaForever = 'storageUsageKeepMediaForever';
+  static const storageUsageCacheLimit16Gb = 'storageUsageCacheLimit16Gb';
+  static const storageUsageCacheLimit1Gb = 'storageUsageCacheLimit1Gb';
+  static const storageUsageCacheLimit5Gb = 'storageUsageCacheLimit5Gb';
+  static const storageUsageCacheLimitNoLimit = 'storageUsageCacheLimitNoLimit';
   static const storageUsageMaximumCacheSize = 'storageUsageMaximumCacheSize';
   static const storageUsageNoCachedChatMedia = 'storageUsageNoCachedChatMedia';
   static const storageUsageStorageByChat = 'storageUsageStorageByChat';
@@ -4987,6 +5010,9 @@ abstract final class AppStringKeys {
   static const presenceLastSeenWithinWeek = 'presenceLastSeenWithinWeek';
   static const presenceLastSeenWithinMonth = 'presenceLastSeenWithinMonth';
   static const aboutCheckForUpdates = 'aboutCheckForUpdates';
+  static const aboutUpdatePrereleases = 'aboutUpdatePrereleases';
+  static const aboutUpdatePrereleasesDetail = 'aboutUpdatePrereleasesDetail';
+
   static const aboutCheckingForUpdates = 'aboutCheckingForUpdates';
   static const aboutUpToDate = 'aboutUpToDate';
   static const aboutUpdateAvailable = 'aboutUpdateAvailable';
@@ -5560,6 +5586,10 @@ abstract final class AppStringKeys {
   static const historyBadgeStyleIcon = 'historyBadgeStyleIcon';
   static const historyBadgeStyleText = 'historyBadgeStyleText';
   static const historyBadgeStyleTitle = 'historyBadgeStyleTitle';
+  static const settingsResetDatabase = 'settingsResetDatabase';
+  static const settingsResetDatabaseMessage = 'settingsResetDatabaseMessage';
+  static const settingsResetDatabaseDone = 'settingsResetDatabaseDone';
+  static const settingsResetDatabaseFailed = 'settingsResetDatabaseFailed';
   static const historyClearDatabase = 'historyClearDatabase';
   static const historyClearDatabaseMessage = 'historyClearDatabaseMessage';
   static const historyDatabaseClearedToast = 'historyDatabaseClearedToast';

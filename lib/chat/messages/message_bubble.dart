@@ -24,6 +24,7 @@ import 'package:provider/provider.dart';
 import '../../call/call_elapsed_text.dart';
 import '../../components/app_icons.dart';
 import '../../components/document_file_icon.dart';
+import '../../components/full_page_back_swipe.dart';
 import '../../components/photo_avatar.dart';
 import '../../components/toast.dart';
 import '../../components/ui_components.dart';
@@ -102,6 +103,13 @@ const EdgeInsets messageTextBubblePadding = EdgeInsets.symmetric(
 /// Corner radius of an ordinary text message bubble.
 const double messageTextBubbleRadius = 6;
 
+/// The strip reserved inside a surface bubble for the send time (and tick).
+///
+/// The reference client draws the time at `layoutHeight − 6.5dp −
+/// timeLayout.height` and its text bubbles keep the same room at the bottom;
+/// 15dp is one 12sp line plus the corner inset.
+const double messageBubbleMetaStrip = 15;
+
 /// Line cap for a link preview's description.
 ///
 /// exteraless lays the description out with `maxLines = 6` (3 in its compact
@@ -110,9 +118,6 @@ const double messageTextBubbleRadius = 6;
 /// tweet is capped like everything else. Without the cap a Telegraph article
 /// or a long tweet stretched the preview card over half the transcript.
 const int messageLinkPreviewDescriptionMaxLines = 6;
-
-/// Decoded side, in pixels, of the softened fill around a letterboxed photo.
-const int _letterboxFillPx = 12;
 
 /// The widest a message bubble may grow in a conversation lane [layoutWidth]
 /// wide: three quarters of the lane, capped on desktop windows.
@@ -268,8 +273,9 @@ class MessageBubble extends StatelessWidget {
   final ValueChanged<ChatMessage>? onApplyMessageBubble;
   final ValueChanged<ChatMessage>? onOpenSticker;
 
-  /// Opens a GIF/motion message in the image viewer, which loops it over its
-  /// still without video chrome. Falls back to [onPlayVideo] when unset.
+  /// Opens a GIF/motion message. A motion MP4 opens in the player, because a
+  /// looping picture page has no transport to pause, scrub or mute it with.
+  /// Falls back to [onPlayVideo] when unset.
   final ValueChanged<ChatMessage>? onOpenAnimation;
   final ValueChanged<ChatMessage>? onPlayVideo;
   final ValueChanged<ChatMessage>? onPlayMusic;
@@ -391,15 +397,15 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   bool _showTappedTimestamp = false;
 
-  /// The detail timestamp a banded outgoing bubble wants to draw as the
-  /// leading item of its band. Set per build of [_row]; [_withFloatingBand]
+  /// The detail timestamp an outgoing bubble with a chip band draws as the
+  /// band's leading item. Set per build of [_row]; [_withFloatingBand]
   /// consumes it and reports back through [_bandTimestampShown] so the
   /// floating overlay never draws the same timestamp twice.
   Widget? _pendingBandTimestamp;
   bool _bandTimestampShown = false;
 
-  // Hover feeds nothing but the 10px detail timestamp, so it rides a notifier:
-  // a setState here rebuilt the entire bubble on every pointer crossing, and on
+  // Hover feeds nothing but the 10px timestamp, so it rides a notifier: a
+  // setState here rebuilt the entire bubble on every pointer crossing, and on
   // desktop the cursor crosses a bubble boundary on most scroll frames.
   final ValueNotifier<bool> _hoveringTimestamp = ValueNotifier(false);
 
@@ -888,13 +894,13 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     _lastTapUpPosition = isTap ? event.position : null;
   }
 
+  void _setTimestampHover(bool hovering) => _hoveringTimestamp.value = hovering;
+
   void _handleTap(bool alwaysShowTime) {
     if (!alwaysShowTime) {
       setState(() => _showTappedTimestamp = !_showTappedTimestamp);
     }
   }
-
-  void _setTimestampHover(bool hovering) => _hoveringTimestamp.value = hovering;
 
   ChatMessage get message => widget.bubble.message;
 
@@ -910,6 +916,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   late MessageBubbleBackgroundSpec _bubbleBackgroundStyle;
 
   late bool _showsMessageBubbleSurface;
+
+  /// Whether this message paints its content straight on the chat page, with
+  /// no bubble under it: a sticker, a round video, or media with no caption.
+  ///
+  /// Those surfaces sit on the wallpaper or the page colour, so they must take
+  /// the PAGE's ink. The theme's bubble ink is white for outgoing messages, and
+  /// a white reply marker or send time on a light page is invisible.
+  late bool _drawsOnCanvas;
 
   late TelegramCloudTheme? _activeCloudTheme;
 
@@ -930,12 +944,28 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     _activeCloudTheme = _theme.themingEnabled
         ? _theme.cloudThemeFor(_brightness)
         : null;
+    _drawsOnCanvas = _computeDrawsOnCanvas();
     _messageColors =
         !_showsMessageBubbleSurface ||
+            _drawsOnCanvas ||
             !_theme.themingEnabled ||
             _usesDecorativeBubbleBackground
         ? null
         : widget.bubble.messageColors ?? _activeCloudTheme?.messageColors;
+  }
+
+  bool _computeDrawsOnCanvas() {
+    if (message.isService) return true;
+    if (message.text.trim().isNotEmpty) return false;
+    return switch (message.contentType) {
+      'messageSticker' ||
+      'messageVideoNote' ||
+      'messageAnimation' ||
+      'messagePhoto' ||
+      'messageVideo' ||
+      'messageDice' => true,
+      _ => false,
+    };
   }
 
   bool get _usesDecorativeBubbleBackground =>
@@ -959,7 +989,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       Color.alphaBlend(_colors.linkBlue.withValues(alpha: 0.22), base);
 
   Color get _outgoingTextColor {
-    if (!_showsMessageBubbleSurface) return _colors.textPrimary;
+    if (!_showsMessageBubbleSurface || _drawsOnCanvas) {
+      return _colors.textPrimary;
+    }
     if (!_theme.themingEnabled) {
       return AppTheme.bubbleOutgoingText;
     }
@@ -992,7 +1024,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   }
 
   Color get _incomingTextColor {
-    if (!_showsMessageBubbleSurface) return _colors.textPrimary;
+    if (!_showsMessageBubbleSurface || _drawsOnCanvas) {
+      return _colors.textPrimary;
+    }
     return _bubbleBackgroundStyle.foregroundColor ??
         widget.bubble.incomingBubbleTextColor ??
         _activeCloudTheme?.incomingTextColor ??
@@ -1051,9 +1085,15 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   /// The reply line/name colour: the quoted author's accent colour when the
   /// setting is on and the quote resolved one, else the theme's reply line.
+  ///
+  /// Our OWN bubble never takes the quoted author's colour: the reference
+  /// client overrides every reply colour with the outgoing reply line (our
+  /// text colour) once the message is ours, because a peer accent at 10% is
+  /// invisible on the brand fill and its name can clash with the bubble ink.
+  /// Incoming replies keep the accent.
   Color _replyAccentColor(bool outgoing) {
     final fallback = _messageReplyLineColor(outgoing);
-    if (!_theme.replyQuoteSenderStyle) return fallback;
+    if (outgoing || !_theme.replyQuoteSenderStyle) return fallback;
     final accentColorId = message.replyToSenderAccentColorId;
     if (accentColorId < 0) return fallback;
     final cloudTheme = _theme.cloudThemeFor(_brightness);
@@ -1159,12 +1199,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     required BorderRadius borderRadius,
     BoxConstraints constraints = const BoxConstraints(),
     bool containsAttachedComments = false,
+    bool reserveMeta = true,
   }) {
+    final innerPadding = padding;
     if (!_showsMessageBubbleSurface) {
       return Container(
         key: key,
         constraints: constraints,
-        padding: padding,
+        padding: innerPadding,
         child: child,
       );
     }
@@ -1177,7 +1219,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         constraints: constraints,
         padding: _usesDecorativeBubbleBackground
             ? _bubbleBackgroundStyle.contentPadding
-            : padding,
+            : innerPadding,
         child: child,
       );
     }
@@ -1186,7 +1228,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       background: _bubbleBackgroundStyle,
       fallbackColor: outgoing ? _outgoingBubbleColor : _incomingBubbleColor,
       fallbackBorderRadius: borderRadius,
-      fallbackPadding: padding,
+      fallbackPadding: innerPadding,
       fallbackBorder: outgoing || _messageColors != null
           ? null
           : Border.all(color: _colors.divider, width: 0.5),
@@ -1305,21 +1347,25 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       platform == TargetPlatform.windows || platform == TargetPlatform.linux;
 
   Widget _row(bool outgoing) {
-    final alwaysShowTime =
+    final detailForced =
         widget.bubble.forceShowTimestamp || _theme.alwaysShowMessageTime;
-    final showDetailTime = alwaysShowTime || _showTappedTimestamp;
+    // A visible timestamp is armed by the setting or a tap; hover keeps its own
+    // notifier. A group message with a sender name carries the time in that
+    // header instead, and an outgoing bubble with a chip band leads it with the
+    // time — both suppress the floating label.
+    final showDetailTime = detailForced || _showTappedTimestamp;
     final timeInSenderHeader =
         widget.bubble.isGroup && !outgoing && message.senderName != null;
-    final platform = Theme.of(context).platform;
-    final desktopInteraction = isDesktopTargetPlatform(platform);
-    final desktopTouchInteraction = _supportsDesktopTouchGestures(platform);
-    // Own messages read their meta on one line: the send time leads the band
-    // of outside chips. Only a visible timestamp is armed — hover keeps its
-    // floating overlay, and a bubble without a band keeps it too.
     _bandTimestampShown = false;
     _pendingBandTimestamp = outgoing && showDetailTime
         ? IgnorePointer(child: _messageDetailTimestamp())
         : null;
+    final platform = Theme.of(context).platform;
+    final desktopInteraction = isDesktopTargetPlatform(platform);
+    final desktopTouchInteraction = _supportsDesktopTouchGestures(platform);
+    // The time itself is never drawn inside the surface: it floats under the
+    // row, leads the chip band of an outgoing bubble, or sits beside the sender
+    // name in a group — the pre-1.14 arrangement.
     final contentBody = _contentBody(outgoing);
     // The update blink wraps only the bubble's body: reaction chips, buttons
     // and the avatar keep their ink while a bot-edited body flashes.
@@ -1336,7 +1382,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         child: GestureDetector(
           key: _bubbleKey,
           behavior: HitTestBehavior.opaque,
-          onTap: () => _handleTap(alwaysShowTime),
+          onTap: () => _handleTap(detailForced),
           // A long press on a link opens the link's own menu; everywhere else it
           // is the message's menu (exteraless checks the pressed span first).
           onLongPressStart:
@@ -1386,6 +1432,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                   outgoing: outgoing,
                   onToggle: widget.bubble.onToggleReaction,
                   onShowUsers: widget.bubble.onShowReactionUsers,
+                  meId: widget.bubble.meId,
+                  meName: widget.bubble.meName.l10n(context),
+                  mePhoto: widget.bubble.mePhoto,
+                  peerTitle: widget.bubble.peerTitle,
+                  peerPhoto: widget.bubble.peerPhoto,
                 ),
               ],
             ),
@@ -1488,11 +1539,15 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               ],
       ),
     );
+    // The send time floats under the message where it sat before 1.14: 58dp
+    // in from the avatar side, hanging 5dp past the bubble's bottom edge, 10pt
+    // tertiary ink — on hover, after a tap, or always when the theme asks.
+    //
     // The Stack and the Positioned stay put whatever the timestamp does: a tap
-    // toggles _showTappedTimestamp and a late sender name flips
-    // timeInSenderHeader, and dropping either wrapper would re-parent the whole
-    // bubble and re-inflate every child element (spoilers, inline video, map
-    // thumbnails). Hover therefore only ever swaps the Positioned's child.
+    // toggles `_showTappedTimestamp` and a late sender name flips
+    // `timeInSenderHeader`, and dropping either wrapper would re-parent the
+    // whole bubble and re-inflate every child element (spoilers, inline video,
+    // map thumbnails). Hover therefore only ever swaps the Positioned's child.
     final row = MouseRegion(
       onEnter: (_) => _setTimestampHover(true),
       onExit: (_) => _setTimestampHover(false),
@@ -1501,9 +1556,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         children: [
           messageRow,
           if (!timeInSenderHeader && !_bandTimestampShown)
-            _detailTimestampOverlay(
-              outgoing,
-              showDetailTime
+            Positioned(
+              left: outgoing ? null : 58,
+              right: outgoing ? 58 : null,
+              bottom: -5,
+              child: showDetailTime
                   ? IgnorePointer(child: _messageDetailTimestamp())
                   : ValueListenableBuilder<bool>(
                       valueListenable: _hoveringTimestamp,
@@ -1529,15 +1586,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     return Opacity(opacity: 0.55, child: child);
   }
 
-  Widget _detailTimestampOverlay(bool outgoing, Widget child) => Positioned(
-    left: outgoing ? null : 58,
-    right: outgoing ? 58 : null,
-    bottom: -5,
-    child: child,
-  );
-
   /// Only an incoming group message reads any of this — a 1:1 chat used to pay
   /// for the name-colour resolution and the role switch on every message.
+  /// The sender line of an incoming group message. The send time is not part
+  /// of it: it rides the band under the message.
   Widget _senderHeader({required bool showDetailTime}) {
     final theme = _theme;
     final showMemberTags = theme.showMemberTags;
@@ -1596,6 +1648,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
             ),
           ),
           const SizedBox(width: 5),
+          // The pre-1.14 slot beside the name: a fixed 96dp box that holds the
+          // clock when the timestamp is armed and only on hover otherwise, so
+          // the name never shifts as messages scroll past.
           SizedBox(
             width: 96,
             height: 14,
@@ -1632,18 +1687,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       child: avatar,
     );
   }
-
-  Widget _messageDetailTimestamp() => Text(
-    DateText.messageDetailLabel(message.date),
-    key: const ValueKey('messageTappedTimestamp'),
-    maxLines: 1,
-    textScaler: TextScaler.noScaling,
-    style: TextStyle(
-      fontSize: AppTextSize.chatTime,
-      height: 1.2,
-      color: _colors.textTertiary,
-    ),
-  );
 
   Widget _repeatBadge() => GestureDetector(
     key: const ValueKey('messageRepeatBadge'),
@@ -2093,9 +2136,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     );
   }
 
-  /// The delivery tick is ink on the bubble's inside corner - it never
+  /// The delivery tick is ink on the bubble's inside corner — it never
   /// reserves a strip below the bubble. The edited mark replaces it, as it
-  /// always has.
+  /// always has. The send time lives outside, in the floating label under the
+  /// bubble, so the corner holds only the tick.
   Widget _withDeliveryTick(Widget child, bool outgoing, {bool meta = true}) {
     if (!(meta && outgoing && !message.isEdited)) return child;
     final usesMediaOverlayColor =
@@ -2122,6 +2166,15 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       ],
     );
   }
+
+  /// The floating send time under the bubble: `09:59:00`, never a date.
+  Widget _messageDetailTimestamp() => Text(
+    DateText.clockLabel(message.date),
+    key: const ValueKey('messageTappedTimestamp'),
+    maxLines: 1,
+    textScaler: TextScaler.noScaling,
+    style: TextStyle(fontSize: 10, height: 1.2, color: _colors.textTertiary),
+  );
 
   /// The band under the bubble's outside edge: one chip language for the
   /// whole band, and its right edge is the bubble's own right edge.
@@ -2182,10 +2235,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         showEditedChip ||
         viewsChip != null ||
         forwardsChip != null;
-    // The send time only joins a band that is already there: a bubble without
-    // chips keeps the floating timestamp and its zero-height geometry.
-    final bandTimestamp = outgoing && hasChips ? _pendingBandTimestamp : null;
     if (!hasChips) return child;
+    // The armed timestamp leads the band, the pre-1.14 order: `09:59:00` and
+    // then the counters. The overlay stands down while it does.
+    final bandTimestamp = outgoing ? _pendingBandTimestamp : null;
     _bandTimestampShown = bandTimestamp != null;
     // The edited mark rides the band's chip language like its siblings.
     final editedChip = showEditedChip
@@ -2207,6 +2260,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         : null;
     // One 4px gap between neighbours, whichever marks a bubble carries.
     final bandChips = <Widget>[
+      ?bandTimestamp,
       ?viewsChip,
       ?forwardsChip,
       if (showReplies)
@@ -2243,10 +2297,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (bandTimestamp != null) ...[
-                    bandTimestamp,
-                    if (bandChips.isNotEmpty) const SizedBox(width: 8),
-                  ],
                   for (var i = 0; i < bandChips.length; i++) ...[
                     if (i > 0) const SizedBox(width: 4),
                     bandChips[i],
@@ -2472,6 +2522,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         padding: EdgeInsets.zero,
         borderRadius: BorderRadius.circular(AppRadius.card),
         containsAttachedComments: true,
+        // The comment row owns the bottom of this card; the meta line sits
+        // above it, inside the body's own bubble, so no strip is reserved here.
+        reserveMeta: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2801,6 +2854,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
             mainAxisSize: MainAxisSize.min,
             children: messageSelectableParts,
           );
+    final replyPanel = includeReplyQuote && message.replyPreviewText != null
+        ? _replyQuote(outgoing)
+        : null;
+    final body = _mobileSelectableText(messageSelectableContent);
+    // ONE width for the marker and the body, the way the reference draws a
+    // reply: the line spans the bubble and the text sits under it. Both go in a
+    // stretched column inside an intrinsic-width box, so the bubble is as wide
+    // as the wider of the two (clamped to the lane) and a two-word marker over a
+    // paragraph lines up instead of sitting in a box of its own. Rich blocks
+    // carry a LayoutBuilder, which cannot answer an intrinsic query, so those
+    // bubbles keep the marker at its own width.
+    final shareReplyWidth = replyPanel != null && displayRichBlocks.isEmpty;
     final parts = <Widget>[
       // The forward attribution rides INSIDE the bubble, above the text,
       // where it has always lived; only via-bot differs below.
@@ -2812,11 +2877,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         _viaBotHeader(outgoing),
         const SizedBox(height: 3),
       ],
-      if (includeReplyQuote && message.replyPreviewText != null) ...[
-        _replyQuote(outgoing),
-        const SizedBox(height: 5),
+      if (shareReplyWidth)
+        IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [replyPanel, const SizedBox(height: 5), body],
+          ),
+        )
+      else ...[
+        if (replyPanel != null) ...[replyPanel, const SizedBox(height: 5)],
+        body,
       ],
-      _mobileSelectableText(messageSelectableContent),
       if (_showsAiSummary) ...[
         const SizedBox(height: 7),
         _aiSummaryBlock(outgoing),
@@ -3416,7 +3488,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         height: size.height,
         child: TDImage(
           photo: image,
-          fit: BoxFit.contain,
           cacheWidth: _cachePx(size.width),
           cacheHeight: _cachePx(size.height),
           showProgress: true,
@@ -3842,12 +3913,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               : c.divider.withValues(alpha: 0.8),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: _LatexView(
-          expression: expression,
-          style: TextStyle(fontSize: 15, color: base),
-          display: true,
+      child: ExcludeFromBackSwipe(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _LatexView(
+            expression: expression,
+            style: TextStyle(fontSize: 15, color: base),
+            display: true,
+          ),
         ),
       ),
     );
@@ -3985,14 +4058,16 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         ],
         ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Table(
-              defaultColumnWidth: const IntrinsicColumnWidth(),
-              border: block.isBordered
-                  ? TableBorder.all(color: border, width: 0.8)
-                  : null,
-              children: rows,
+          child: ExcludeFromBackSwipe(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                defaultColumnWidth: const IntrinsicColumnWidth(),
+                border: block.isBordered
+                    ? TableBorder.all(color: border, width: 0.8)
+                    : null,
+                children: rows,
+              ),
             ),
           ),
         ),
@@ -4882,28 +4957,35 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       child: Container(
         key: const ValueKey('messageReplyQuote'),
         decoration: BoxDecoration(
-          color: line.withValues(alpha: 0.10),
+          color: line.withValues(
+            alpha: _brightness == Brightness.dark ? 0.12 : 0.10,
+          ),
           borderRadius: BorderRadius.circular(4),
           border: Border(left: BorderSide(color: line, width: 3)),
         ),
-        padding: const EdgeInsets.fromLTRB(10, 3, 6, 4),
+        padding: EdgeInsets.fromLTRB(
+          message.replyToImage != null ? 8 : 10,
+          5,
+          10,
+          5,
+        ),
         child: IgnorePointer(
           child: Row(
             children: [
               if (message.replyToImage != null) ...[
                 SizedBox(
                   key: const ValueKey('messageReplyStickerThumb'),
-                  width: 37,
-                  height: 37,
+                  width: 34,
+                  height: 34,
                   child: TDImage(
                     photo:
                         message.replyToImage?.thumbnail ?? message.replyToImage,
                     cornerRadius: 4,
-                    cacheWidth: _cachePx(37),
-                    cacheHeight: _cachePx(37),
+                    cacheWidth: _cachePx(34),
+                    cacheHeight: _cachePx(34),
                   ),
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(width: 5),
               ],
               Expanded(
                 child: Column(
@@ -4921,7 +5003,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                                   TextSpan(
                                     text: sender,
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                               ],
@@ -4956,7 +5038,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: AppTextSize.messageBody(),
+                          fontSize: AppTextSize.callout,
                           height: 1.3,
                           color: faded,
                         ),
@@ -4973,11 +5055,12 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   /// 引用 quote block shown above a reply's text.
   ///
-  /// exteraless's reply line, not a second bubble: a faint wash in the quoted
-  /// author's colour, a 3px rule, the author in that colour with their custom
-  /// emoji status watermark, then the quoted body at the message's own size.
-  /// The settings switch turns the author styling off and leaves one plain
-  /// theme-coloured marker.
+  /// exteraless's reply line, not a second bubble: a faint wash, a 3px rule,
+  /// the author in the accent with their custom emoji status watermark, then
+  /// the quoted body one step below the message's size. An INCOMING reply
+  /// takes the quoted author's colour; our own bubble keeps the bubble's ink
+  /// (see [_replyAccentColor]). The settings switch turns the author styling
+  /// off and leaves one plain theme-coloured marker.
   Widget _replyQuote(bool outgoing) {
     final line = _replyAccentColor(outgoing);
     final faded = _messageReplyTextColor(outgoing);
@@ -4989,77 +5072,90 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final statusId = _replyShowsSenderEmoji
         ? message.replyToSenderEmojiStatusId
         : 0;
+    final hasThumb = message.replyToImage != null;
+    // The reference client's reply panel: a content-sized rounded block, a
+    // 3dp accent rule on the leading edge, the accent at 10% behind it (12% on
+    // a dark page), a bold 14pt author and a 14pt preview — one line, or five
+    // for an explicit quote. It never stretches to the bubble's width: a short
+    // reply to a short message is a short panel.
+    // No Align/Expanded wrapper: either would take the bubble's full width and
+    // stretch a two-word panel across the row. The column's start alignment
+    // keeps the hugged panel on the leading edge.
     return GestureDetector(
       key: const ValueKey('messageReplyOpenOriginal'),
       behavior: HitTestBehavior.opaque,
       onTap: openOriginal,
       child: Container(
         key: const ValueKey('messageReplyQuote'),
-        width: double.infinity,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: line.withValues(alpha: 0.10),
+          color: line.withValues(
+            alpha: _brightness == Brightness.dark ? 0.12 : 0.10,
+          ),
           borderRadius: BorderRadius.circular(4),
           border: Border(left: BorderSide(color: line, width: 3)),
         ),
         child: Stack(
           children: [
-            if (statusId != 0) ...[
+            if (statusId != 0)
+              // The status emoji is a watermark on the AUTHOR line only. It used
+              // to be two 46/26dp glyphs pinned to the panel's corners, which
+              // put a 14% wash of colour directly behind the quoted text — the
+              // preview read as smudged. Clip it to the first line's height.
               Positioned(
-                right: -10,
-                top: -12,
+                top: -7,
+                right: -6,
                 child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.14,
-                    child: StatusEmojiView(
-                      key: const ValueKey('messageReplySenderEmojiStatus'),
-                      id: statusId,
-                      size: 46,
-                      color: line,
-                      animate: false,
+                  child: ClipRect(
+                    child: SizedBox(
+                      width: 52,
+                      height: 30,
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Opacity(
+                          opacity: 0.12,
+                          child: StatusEmojiView(
+                            key: const ValueKey(
+                              'messageReplySenderEmojiStatus',
+                            ),
+                            id: statusId,
+                            size: 40,
+                            color: line,
+                            animate: false,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-              Positioned(
-                right: 26,
-                bottom: -12,
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.10,
-                    child: StatusEmojiView(
-                      id: statusId,
-                      size: 26,
-                      color: line,
-                      animate: false,
-                    ),
-                  ),
-                ),
-              ),
-            ],
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 3, 6, 4),
+              // The thumbnail sits at 8/5 in the reference panel and the
+              // text starts 3pt after it; without a thumbnail the text
+              // takes the panel's own 10pt inset.
+              padding: EdgeInsets.fromLTRB(hasThumb ? 8 : 10, 5, 10, 5),
               child: IgnorePointer(
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (message.replyToImage != null) ...[
                       SizedBox(
                         key: const ValueKey('messageReplyMediaPreview'),
-                        width: 37,
-                        height: 37,
+                        width: 34,
+                        height: 34,
                         child: TDImage(
                           photo:
                               message.replyToImage?.thumbnail ??
                               message.replyToImage,
                           cornerRadius: 4,
-                          cacheWidth: _cachePx(37),
-                          cacheHeight: _cachePx(37),
+                          cacheWidth: _cachePx(34),
+                          cacheHeight: _cachePx(34),
                         ),
                       ),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 5),
                     ],
-                    Expanded(
+                    Flexible(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -5069,7 +5165,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                               TextSpan(
                                 text: sender,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               maxLines: 1,
@@ -5106,7 +5202,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     unicode: true,
   );
 
-  /// The quoted reply's two-line preview, spaced like the body it answers.
+  /// The quoted reply's preview, spaced like the body it answers and set one
+  /// step below it (14pt at the default body size), the reference client's
+  /// reply-text size.
   Widget _replyPreviewText(Color faded, bool outgoing, {int maxLines = 1}) {
     final spaced = _displaySpacing(
       message.replyPreviewText ?? '',
@@ -5122,7 +5220,11 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       false,
       maxLines: maxLines,
       entities: spaced.entities,
-      fontSize: AppTextSize.messageBody(),
+      fontSize: AppTextSize.callout,
+      // A fade paints a vertical gradient over the LAST line's bottom half,
+      // which reads as something covering the preview. The reply panel
+      // truncates with an ellipsis instead.
+      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -5138,6 +5240,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     List<MessageTextEntity>? entities,
     double fontSize = 15,
     bool bodyLeading = true,
+    TextOverflow? overflow,
   }) {
     final effectiveFontSize = _chatFontSize(fontSize);
     final children = _entitySpans(
@@ -5178,16 +5281,18 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     // (tint filter, Lottie), which swaps the canvas mid-paint: the fade lands
     // as a dark band and everything painted after it in the bubble shifts out
     // of place. Inline widgets therefore truncate with an ellipsis instead.
-    final overflow = maxLines == null
-        ? TextOverflow.clip
-        : children.any(_containsWidgetSpan)
-        ? TextOverflow.ellipsis
-        : TextOverflow.fade;
+    final effectiveOverflow =
+        overflow ??
+        (maxLines == null
+            ? TextOverflow.clip
+            : children.any(_containsWidgetSpan)
+            ? TextOverflow.ellipsis
+            : TextOverflow.fade);
     return Builder(
       builder: (context) => RichText(
         textScaler: MediaQuery.textScalerOf(context),
         maxLines: maxLines,
-        overflow: overflow,
+        overflow: effectiveOverflow,
         textHeightBehavior: hasCustomEmoji
             ? const TextHeightBehavior(
                 applyHeightToFirstAscent: false,
@@ -5351,19 +5456,21 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                   ),
                 ),
               ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-              child: _richText(
-                text,
-                base,
-                link,
-                start,
-                end,
-                false,
-                false,
-                entities: entities,
-                fontSize: codeSize,
+            ExcludeFromBackSwipe(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+                child: _richText(
+                  text,
+                  base,
+                  link,
+                  start,
+                  end,
+                  false,
+                  false,
+                  entities: entities,
+                  fontSize: codeSize,
+                ),
               ),
             ),
           ],
@@ -5379,7 +5486,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   Widget _imageContent(TdFileRef image, bool outgoing) {
     final geometry = _imagePreviewGeometry();
-    final imageSize = geometry.contentSize;
     final caption = _caption();
     final grouped = _groupsMediaCaption(caption);
     final frameSize = Size(
@@ -5388,42 +5494,27 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           : geometry.frameSize.width,
       geometry.frameSize.height,
     );
-    final usesBlurredFrame =
-        geometry.needsBlurredFill ||
-        frameSize.width > geometry.frameSize.width + 0.5;
     final mediaRadius = grouped && _showsMessageBubbleSurface ? 0.0 : 10.0;
     final mediaBorderRadius = _messageBorderRadius(mediaRadius);
+    // The thumbnail CROPS into the frame the geometry chose: the shape is the
+    // target, the photo fills it. The old blurred-letterbox branch shrank the
+    // picture inside bars instead, which read as a stretched, padded card.
     final media = GestureDetector(
       onTap: () => widget.bubble.onOpenImage?.call(message),
       child: SizedBox(
         width: frameSize.width,
         height: frameSize.height,
-        child: usesBlurredFrame
-            ? _letterboxFrame(
-                fillSource: image.thumbnail ?? image,
-                childSize: imageSize,
-                borderRadius: mediaBorderRadius,
-                child: TDImage(
-                  photo: image,
-                  cornerRadius: 0,
-                  fit: BoxFit.contain,
-                  cacheWidth: _cachePx(imageSize.width),
-                  cacheHeight: _cachePx(imageSize.height),
-                  showProgress: true,
-                ),
-              )
-            : ClipRRect(
-                key: ValueKey('messageMediaClip-${message.id}'),
-                borderRadius: mediaBorderRadius,
-                child: TDImage(
-                  photo: image,
-                  cornerRadius: 0,
-                  fit: BoxFit.contain,
-                  cacheWidth: _cachePx(imageSize.width),
-                  cacheHeight: _cachePx(imageSize.height),
-                  showProgress: true,
-                ),
-              ),
+        child: ClipRRect(
+          key: ValueKey('messageMediaClip-${message.id}'),
+          borderRadius: mediaBorderRadius,
+          child: TDImage(
+            photo: image,
+            cornerRadius: 0,
+            cacheWidth: _cachePx(frameSize.width),
+            cacheHeight: _cachePx(frameSize.height),
+            showProgress: true,
+          ),
+        ),
       ),
     );
     final mediaWithApplyAction = widget.bubble.onApplyMessageBubble == null
@@ -5489,45 +5580,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       mediaWidth: frameSize.width,
       caption: caption,
       outgoing: outgoing,
-    );
-  }
-
-  /// Centres [child] in a wider or taller frame over a blurred-looking fill of
-  /// [fillSource], the way official clients pad narrow or small media.
-  Widget _letterboxFrame({
-    required TdFileRef? fillSource,
-    required Size childSize,
-    required BorderRadius borderRadius,
-    required Widget child,
-  }) {
-    return ClipRRect(
-      borderRadius: borderRadius,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // A few decoded pixels stretched over the frame read as the blur.
-          // A gaussian here needs an image-filter layer inside the bubble's
-          // clip, and on iOS that layer drew the photo and caption shifted
-          // out of the bubble, leaving a blank card.
-          if (fillSource != null)
-            TDImage(
-              photo: fillSource,
-              cornerRadius: 0,
-              cacheWidth: _letterboxFillPx,
-              cacheHeight: _letterboxFillPx,
-            )
-          else
-            const ColoredBox(color: Colors.black26),
-          ColoredBox(color: Colors.black.withValues(alpha: 0.10)),
-          Center(
-            child: SizedBox(
-              width: childSize.width,
-              height: childSize.height,
-              child: child,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -5727,6 +5779,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final size = _stickerSize();
     return _stickerTap(
       SizedBox(
+        key: ValueKey('messageStaticStickerPaint-${message.id}'),
         width: size.width,
         height: size.height,
         child: TDImage(
@@ -5892,6 +5945,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           child: LoopingVideoView(
             file: message.video!,
             fallback: message.image,
+            // The looping view defaults to `contain`; a GIF that does not
+            // match its 60% frame would then shrink inside bars instead of
+            // filling the bubble the way a photo does.
+            fit: BoxFit.cover,
             showDownloadProgress: true,
           ),
         ),
@@ -6344,7 +6401,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
               height: 180,
               child: TDImage(
                 photo: doc.file,
-                fit: BoxFit.contain,
                 cornerRadius: 4,
                 showProgress: true,
               ),

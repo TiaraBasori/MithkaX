@@ -96,7 +96,9 @@ void main() {
     expect(decoration.shape, BoxShape.circle);
   });
 
-  testWidgets('a media hit leads with its rounded thumbnail', (tester) async {
+  testWidgets('a hit in the Media tab leads with its rounded thumbnail', (
+    tester,
+  ) async {
     final scratch = Directory.systemTemp.createTempSync('search_thumb');
     addTearDown(() => scratch.deleteSync(recursive: true));
     final path = '${scratch.path}/thumb.png';

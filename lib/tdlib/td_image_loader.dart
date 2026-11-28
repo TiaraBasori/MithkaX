@@ -123,6 +123,15 @@ class TdFileCenter {
     return path(ref.id, accountSlot: slot, priority: priority);
   }
 
+  /// Drops every resolved path of [slot]. A local database reset deletes the
+  /// files those paths point at; leaving them cached would paint a broken
+  /// image until TDLib happened to re-emit each file update.
+  void clearSlot(int slot) {
+    final prefix = '$slot:';
+    _cache.removeWhere((key, _) => key.startsWith(prefix));
+    _downloadedRanges.removeWhere((key, _) => key.startsWith(prefix));
+  }
+
   /// The already-resolved path for [ref], or null when nothing is cached.
   ///
   /// [pathFor] is async even on a pure cache hit, so a reader that awaits it

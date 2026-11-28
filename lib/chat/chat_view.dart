@@ -141,6 +141,7 @@ import 'links_search/link_handler.dart';
 import 'media/image_preview.dart';
 import 'media/media_download_service.dart';
 import 'media/media_library_saver.dart';
+import 'media/media_prefetch.dart';
 import 'media/music_player_controller.dart';
 import 'media/video_playback_queue.dart';
 import 'media/video_player_view.dart';
@@ -800,6 +801,12 @@ class _ChatViewState extends State<ChatView> {
 
   Map<int, _TranscriptEntry> _trackedTranscriptEntries = const {};
 
+  /// Off-screen warm window bookkeeping for the transcript: the entry range
+  /// already prefetched, and the entry starts that were on screen last pass.
+  (int, int)? _prefetchedRange;
+  final Set<int> _visibleEntryStarts = <int>{};
+  final Set<int> _visibleEntryStartsThisPass = <int>{};
+
   final Map<int, RenderBox> _mountedTranscriptEntries = {};
 
   bool _bottomGapCorrectionScheduled = false;
@@ -852,6 +859,11 @@ class _ChatViewState extends State<ChatView> {
   int _actionReactionAvailabilityGeneration = 0;
   bool? _actionMessageLinkAvailable;
   bool? _actionCanReply;
+
+  /// `messageProperties.can_be_deleted_*`. Null while the query is in flight
+  /// and whenever it failed: the menu keeps its Delete row hidden until the
+  /// server says this account may delete the message.
+  bool? _actionCanDelete;
 
   int _actionPropertiesGeneration = 0;
   Offset?
@@ -4948,6 +4960,9 @@ class _ChatViewState extends State<ChatView> {
             MobileMessageActionMenuStyle.dropdown;
     final verticalMenu = desktopMenu || mobileDropdown;
     final reactionAvailability = _actionReactionAvailability;
+    final expandedReactionSize = reactionAvailability == null
+        ? Size.zero
+        : _expandedReactionSize(reactionAvailability);
     final showReactions = messageActionShowsReactionControls(
       isCall: target.isCall,
       availability: reactionAvailability,
@@ -4978,6 +4993,7 @@ class _ChatViewState extends State<ChatView> {
       allowHideSender: _canHideSender(target),
       allowCopyMessageLink:
           !target.isCall && _actionMessageLinkAvailable == true,
+      allowDelete: _actionCanDelete == true,
       allowViewEdits: _actionTargetHasEdits(target),
       source: _actionSource,
       showingOriginalTranslation: _showOriginalTranslationMessageIds.contains(
@@ -5004,7 +5020,7 @@ class _ChatViewState extends State<ChatView> {
     final reactionH = !showReactions
         ? 0.0
         : _reactionExpanded
-        ? _expandedPickerSize.height
+        ? expandedReactionSize.height
         : QuickReactionBar.heightFor(context);
     final preferredMenuH = actionMenu.preferredHeightFor(context);
     double reactionTop, menuTop, menuH;
@@ -5049,7 +5065,7 @@ class _ChatViewState extends State<ChatView> {
             pointer: rect?.topLeft ?? Offset(10, topSafe),
             viewport: screenSize,
             menuSize: _reactionExpanded
-                ? _expandedPickerSize
+                ? expandedReactionSize
                 : Size(verticalMenuWidth, desktopStripH + menuH),
             topSafe: topSafe,
             bottomSafe: bottomSafe,
@@ -5069,18 +5085,33 @@ class _ChatViewState extends State<ChatView> {
               builder: (context, _) {
                 final availability = reactionAvailability!;
                 if (expandedReactions) {
-                  final picker = _expandedReactionPicker(availability);
+                  final picker = _expandedReactionPicker(
+                    availability,
+                    expandedReactionSize,
+                  );
                   return desktopMenu
                       ? picker
                       : Align(alignment: align, child: picker);
                 }
-                final reactions = _quickReactionChoices(availability);
+                // One row that already holds every reaction the message
+                // allows needs no expand button: the picker would only
+                // reopen the same set.
+                final capacity = desktopMenu
+                    ? MenuReactionBar.maxReactionCount
+                    : QuickReactionBar.fittedCapacity(screenW - 24);
+                final fitsAll =
+                    availability.choices.isNotEmpty &&
+                    availability.choices.length <= capacity;
+                final reactions = fitsAll
+                    ? availability.choices
+                    : _quickReactionChoices(availability);
                 if (desktopMenu) {
                   return SizedBox(
                     width: verticalMenuWidth,
                     child: MenuReactionBar(
                       reactions: reactions,
                       onReaction: _reactQuick,
+                      showExpand: !fitsAll,
                       onExpand: () => setState(() => _reactionExpanded = true),
                     ),
                   );
@@ -5090,6 +5121,7 @@ class _ChatViewState extends State<ChatView> {
                   child: QuickReactionBar(
                     reactions: reactions,
                     onReaction: _reactQuick,
+                    showExpand: !fitsAll,
                     onExpand: () => setState(() => _reactionExpanded = true),
                   ),
                 );
@@ -5115,17 +5147,59 @@ class _ChatViewState extends State<ChatView> {
 
   static const _menuReactionGap = 4.0;
 
-  static const _expandedPickerSize = Size(300, 268);
+  /// The expanded picker is a 7-column grid that hugs the emoji it actually
+  /// has: a message whose availability lists two reactions used to open a
+  /// 300pt card with two emoji in one corner. Cell size and padding mirror the
+  /// grid below, and the tab strip keeps its fixed height.
+  static const double _reactionCellExtent = 40;
+  static const double _reactionGridPadding = 10;
+  static const double _reactionTabStripHeight = 46;
+  static const int _reactionGridColumns = 7;
 
-  Widget _expandedReactionPicker(MessageReactionAvailability availability) {
+  /// The emoji shown on the active tab of the expanded picker (the standard
+  /// set, or the selected custom pack).
+  int _expandedReactionCount(
+    MessageReactionAvailability availability,
+    List<CustomEmojiPack> packs,
+  ) {
+    if (_reactionTab == 'standard') return availability.choices.length;
+    final id = int.tryParse(_reactionTab);
+    for (final pack in packs) {
+      if (pack.id != id) continue;
+      return pack.emoji.where((item) => item.customEmojiId != 0).length;
+    }
+    return availability.choices.length;
+  }
+
+  Size _expandedReactionSize(MessageReactionAvailability availability) {
+    final packs = availability.allowArbitraryCustom
+        ? EmojiStore.shared.customPacks
+        : const <CustomEmojiPack>[];
+    final count = _expandedReactionCount(availability, packs);
+    final columns = math.min(_reactionGridColumns, math.max(1, count));
+    final rows = math.max(1, (count / columns).ceil());
+    return Size(
+      _reactionGridPadding * 2 + columns * _reactionCellExtent,
+      _reactionGridPadding * 2 +
+          rows * _reactionCellExtent +
+          _reactionTabStripHeight,
+    );
+  }
+
+  Widget _expandedReactionPicker(
+    MessageReactionAvailability availability,
+    Size size,
+  ) {
     final store = EmojiStore.shared;
     final palette = MessageActionPalette.of(context);
     final packs = availability.allowArbitraryCustom
         ? store.customPacks
         : const <CustomEmojiPack>[];
+    final count = _expandedReactionCount(availability, packs);
+    final columns = math.min(_reactionGridColumns, math.max(1, count));
     return Container(
-      width: _expandedPickerSize.width,
-      height: _expandedPickerSize.height,
+      width: size.width,
+      height: size.height,
       decoration: BoxDecoration(
         color: palette.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -5134,7 +5208,9 @@ class _ChatViewState extends State<ChatView> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          Expanded(child: _reactionContent(packs, availability, palette)),
+          Expanded(
+            child: _reactionContent(packs, availability, palette, columns),
+          ),
           _reactionTabStrip(packs, palette),
         ],
       ),
@@ -5145,6 +5221,7 @@ class _ChatViewState extends State<ChatView> {
     List<CustomEmojiPack> packs,
     MessageReactionAvailability availability,
     MessageActionPalette palette,
+    int columns,
   ) {
     const reactionEmojiSize = 26.0;
     if (_reactionTab != 'standard') {
@@ -5158,8 +5235,8 @@ class _ChatViewState extends State<ChatView> {
       }
       if (pack != null) {
         return GridView.count(
-          crossAxisCount: 7,
-          padding: const EdgeInsets.all(10),
+          crossAxisCount: columns,
+          padding: const EdgeInsets.all(_reactionGridPadding),
           children: [
             for (final item in pack.emoji)
               if (item.customEmojiId != 0)
@@ -5179,8 +5256,8 @@ class _ChatViewState extends State<ChatView> {
       }
     }
     return GridView.count(
-      crossAxisCount: 7,
-      padding: const EdgeInsets.all(10),
+      crossAxisCount: columns,
+      padding: const EdgeInsets.all(_reactionGridPadding),
       children: [
         for (final reaction in availability.choices)
           GestureDetector(

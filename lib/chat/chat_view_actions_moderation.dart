@@ -586,7 +586,7 @@ extension _ChatViewActions on _ChatViewState {
     if (message.video == null) return;
     final session = _videoSession(message);
     if (supportsDesktopVideoWindows) {
-      unawaited(_openDesktopVideoWindow(session, muted: muted));
+      unawaited(_openDesktopVideoWindow(session, message, muted: muted));
       return;
     }
     if (VideoSplitController.instance.isOpen) {
@@ -607,12 +607,20 @@ extension _ChatViewActions on _ChatViewState {
   }
 
   Future<void> _openDesktopVideoWindow(
-    VideoSplitSession session, {
+    VideoSplitSession session,
+    ChatMessage message, {
     required bool muted,
   }) async {
     final opened = await DesktopVideoWindowService.instance.open(
       session,
       muted: muted,
+      // The window's Share forwards this message from this chat, which must
+      // still be open to show the picker.
+      onShare: () async {
+        if (!mounted) return false;
+        await _forwardMessage(message);
+        return true;
+      },
     );
     if (!opened && mounted) {
       showToast(context, AppStringKeys.videoPlayerLoadFailed);
@@ -744,28 +752,13 @@ extension _ChatViewActions on _ChatViewState {
     unawaited(openImagePreview(context, items: items, startIndex: startIndex));
   }
 
-  /// A GIF is a looping picture, not a video: open it in the image viewer,
-  /// which plays the MP4 over its still without a seek bar or duration chrome.
+  /// A motion message opens in the player, not the picture viewer.
+  ///
+  /// TDLib files a silent MP4 as an animation, which is still a video the
+  /// reader will want to pause, scrub or mute — the viewer's looping page has
+  /// no transport at all, which reads as a broken player.
   void _openAnimation(ChatMessage message) {
-    if (message.video == null || message.image == null) {
-      _playVideo(message);
-      return;
-    }
-    final gallery = animationGalleryFor(_vm.messages, message);
-    final start = gallery.indexWhere((m) => m.id == message.id);
-    unawaited(
-      openImagePreview(
-        context,
-        items: [for (final m in gallery) m.image!],
-        animations: [for (final m in gallery) m.video],
-        startIndex: start,
-        messageActions: _imageMessageActions(gallery),
-        metadata: MediaMetadata.listFor(
-          gallery,
-          enabled: context.read<ThemeController>().mediaMetadataEnabled,
-        ),
-      ),
-    );
+    _playVideo(message);
   }
 
   void _openSticker(ChatMessage message) {

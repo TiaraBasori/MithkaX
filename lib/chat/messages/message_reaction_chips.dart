@@ -1,18 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import '../../components/app_press_ripple.dart';
+import '../../components/photo_avatar.dart';
 import '../../tdlib/td_models.dart';
 import '../../theme/app_theme.dart';
 import '../stickers/custom_emoji.dart';
+import 'reaction_reactor_avatars.dart';
 
 /// The reaction buckets under a message bubble or media album.
-class MessageReactionChips extends StatelessWidget {
+///
+/// Laid out the way the reference client draws `ReactionsLayoutInBubble`: one
+/// 26dp chip per bucket, a 20dp emoji, a 13sp bold count, a fill at 15.6% of
+/// the accent and a pill corner — no border, no big raised pill. The bucket
+/// the reader chose is a SOLID accent chip with white ink, exactly like the
+/// reference; every other chip keeps the translucent tint. A bucket with at
+/// most three reactors (and at most three on the whole message) shows those
+/// reactors' overlapping avatars INSTEAD of its number, which is also what the
+/// reference client does; in a private chat the two participants stand in for
+/// the count.
+///
+/// A face only appears once its name or photo is known. The reference resolves
+/// reactors from its cache synchronously and omits whoever is missing; drawing
+/// an empty circle would read as a broken avatar, so an unresolved (or deleted)
+/// reactor keeps the count until a real identity arrives.
+///
+/// Sorting follows the reference too: a private chat leads with the bucket the
+/// reader chose, a group/channel with the biggest bucket.
+class MessageReactionChips extends StatefulWidget {
   const MessageReactionChips({
     super.key,
     required this.message,
     required this.outgoing,
     this.onToggle,
     this.onShowUsers,
+    this.meId,
+    this.meName,
+    this.mePhoto,
+    this.peerTitle,
+    this.peerPhoto,
   });
 
   final ChatMessage message;
@@ -21,64 +46,211 @@ class MessageReactionChips extends StatelessWidget {
   final void Function(ChatMessage message, MessageReaction reaction)?
   onShowUsers;
 
+  /// The two participants of a private chat, for the reference client's
+  /// two-avatar chips. Absent on cards that never show one.
+  final int? meId;
+  final String? meName;
+  final TdFileRef? mePhoto;
+  final String? peerTitle;
+  final TdFileRef? peerPhoto;
+
+  @override
+  State<MessageReactionChips> createState() => _MessageReactionChipsState();
+}
+
+class _MessageReactionChipsState extends State<MessageReactionChips> {
+  /// Resolved reactors by sender id. A null value means "asked, no answer
+  /// yet"; a failed or deleted sender stays null and never paints a face.
+  final Map<int, ReactionReactorAvatar?> _reactors = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveReactors();
+  }
+
+  @override
+  void didUpdateWidget(covariant MessageReactionChips oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.message.reactions, widget.message.reactions)) {
+      _resolveReactors();
+    }
+  }
+
+  /// One lookup per distinct reactor, bounded by the three faces a chip can
+  /// draw. The cache answers synchronously once warm; a first view fills in as
+  /// the profiles arrive.
+  void _resolveReactors() {
+    for (final reaction in widget.message.reactions) {
+      for (final reactor in reaction.reactors.take(3)) {
+        final id = reactor.senderId;
+        if (id == 0 || _reactors.containsKey(id)) continue;
+        final known = ReactionReactorAvatars.shared.peek(id);
+        _reactors[id] = known;
+        if (known != null) continue;
+        ReactionReactorAvatars.shared
+            .resolve(id)
+            .then((person) {
+              if (!mounted) return;
+              setState(() => _reactors[id] = person);
+            })
+            .catchError((_) => null);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final reactions = _sortedReactions();
+    final total = reactions.fold<int>(0, (sum, r) => sum + r.count);
     return Wrap(
-      spacing: 5,
-      runSpacing: 5,
-      alignment: outgoing ? WrapAlignment.end : WrapAlignment.start,
-      children: [for (final r in message.reactions) _chip(c, r)],
+      spacing: 4,
+      runSpacing: 4,
+      alignment: widget.outgoing ? WrapAlignment.end : WrapAlignment.start,
+      children: [for (final r in reactions) _chip(c, r, total)],
     );
   }
 
-  /// The emoji toggles the reaction; the count is a separate target that opens
-  /// the reactors sheet, so a multi-reaction chip no longer hides that list
-  /// behind an undiscoverable long press.
-  Widget _chip(AppColors c, MessageReaction r) {
-    final foreground = r.chosen ? AppTheme.brand : c.textSecondary;
+  /// A private chat ranks the chosen bucket first (then its own order); a
+  /// group/channel ranks by count. `List.sort` is not stable in Dart, so the
+  /// original index is the tie-breaker, exactly like the reference comparator's
+  /// `compareTied`.
+  List<MessageReaction> _sortedReactions() {
+    final entries = widget.message.reactions.indexed.toList();
+    final privateChat = _isPrivateChat;
+    entries.sort((a, b) {
+      final (i, first) = a;
+      final (j, second) = b;
+      if (privateChat) {
+        if (first.chosen != second.chosen) return first.chosen ? -1 : 1;
+      } else if (first.count != second.count) {
+        return second.count.compareTo(first.count);
+      }
+      return i.compareTo(j);
+    });
+    return [for (final entry in entries) entry.$2];
+  }
+
+  /// Private chats carry positive chat ids; groups and channels live in the
+  /// negative bands. A card preview without a chat id keeps the group rule.
+  bool get _isPrivateChat {
+    final chatId = widget.message.chatId;
+    return chatId != null && chatId > 0;
+  }
+
+  Widget _chip(AppColors c, MessageReaction r, int total) {
+    // Chosen: solid accent with white ink (the reference's selected chip).
+    // Others: the accent at 15.6% with the accent as ink.
+    final fill = r.chosen
+        ? AppTheme.brand
+        : AppTheme.brand.withValues(alpha: 0.156);
+    final foreground = r.chosen ? Colors.white : AppTheme.brand;
+    final avatars = _avatarSlot(r, total);
     return GestureDetector(
-      key: ValueKey('reactionChip-${message.id}-${_reactionKey(r)}'),
+      key: ValueKey('reactionChip-${widget.message.id}-${_reactionKey(r)}'),
       behavior: HitTestBehavior.opaque,
-      onTap: () => onToggle?.call(r),
-      onLongPress: () => onShowUsers?.call(message, r),
+      onTap: () => widget.onToggle?.call(r),
+      onLongPress: () => widget.onShowUsers?.call(widget.message, r),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        height: 26,
+        padding: EdgeInsets.only(
+          left: 8,
+          // 8 + emoji 20 + 4 + count + 8 is the reference chip's box; a lone
+          // emoji closes at 31pt (8 + 20 + 3), and an avatar stack keeps the
+          // reference's short 4pt tail.
+          right: avatars == null ? (r.count <= 1 ? 3 : 8) : 4,
+        ),
         decoration: BoxDecoration(
-          color: r.chosen
-              ? AppTheme.brand.withValues(alpha: 0.18)
-              : c.searchFill,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: r.chosen ? Border.all(color: AppTheme.brand) : null,
+          color: fill,
+          borderRadius: BorderRadius.circular(13),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            r.customEmojiId != 0
-                ? CustomEmojiView(
-                    id: r.customEmojiId,
-                    size: 16,
-                    color: foreground,
-                  )
-                : Text(r.emoji ?? '', style: const TextStyle(fontSize: 14)),
-            if (r.count > 1) _countTarget(r, foreground),
+            _glyph(r, foreground),
+            if (avatars != null) ...[
+              const SizedBox(width: 4),
+              avatars,
+            ] else if (r.count > 1)
+              _countTarget(r, foreground),
           ],
         ),
       ),
     );
   }
 
+  Widget _glyph(MessageReaction r, Color color) {
+    if (r.customEmojiId != 0) {
+      return CustomEmojiView(id: r.customEmojiId, color: color);
+    }
+    return Text(r.emoji ?? '', style: const TextStyle(fontSize: 20));
+  }
+
+  /// The avatars that replace the count, or null when this bucket keeps it.
+  ///
+  /// Mirrors `ReactionsLayoutInBubble`: a private chat always shows the two
+  /// participants (both on a 2-count bucket, otherwise the reader when chosen
+  /// and the peer when not); a group/channel only does so while the message has
+  /// at most three reactors in total, because beyond that the avatars no longer
+  /// name who reacted.
+  Widget? _avatarSlot(MessageReaction r, int total) {
+    final people = _isPrivateChat
+        ? _privateParticipants(r)
+        : _resolvedReactors(r, total);
+    if (people.isEmpty) return null;
+    return _AvatarsRow(
+      // The reaction is part of the key: two buckets in one private chat both
+      // draw a stack, and duplicate sibling keys break element reuse.
+      key: ValueKey('reactionAvatars-${widget.message.id}-${_reactionKey(r)}'),
+      people: people,
+    );
+  }
+
+  List<_AvatarPerson> _privateParticipants(MessageReaction r) {
+    // No reader id means this surface never told us who is who; the count is
+    // the honest thing to show.
+    if (widget.meId == null) return const [];
+    final me = _AvatarPerson(title: widget.meName ?? '', photo: widget.mePhoto);
+    final peer = _AvatarPerson(
+      title: widget.peerTitle ?? '',
+      photo: widget.peerPhoto,
+    );
+    final people = r.count == 2 ? [me, peer] : [if (r.chosen) me else peer];
+    return [
+      for (final person in people)
+        if (person.isKnown) person,
+    ];
+  }
+
+  List<_AvatarPerson> _resolvedReactors(MessageReaction r, int total) {
+    if (r.count > 3 || total > 3 || r.reactors.isEmpty) return const [];
+    return [
+      for (final reactor in r.reactors.take(3))
+        if (_reactors[reactor.senderId] case final person?
+            when !person.isDeleted && person.title.isNotEmpty)
+          _AvatarPerson(title: person.title, photo: person.photo),
+    ];
+  }
+
   Widget _countTarget(MessageReaction r, Color color) {
     final count = Padding(
       padding: const EdgeInsets.only(left: 4),
-      child: Text('${r.count}', style: TextStyle(fontSize: 12, color: color)),
+      child: Text(
+        '${r.count}',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
     );
-    final onShow = onShowUsers;
+    final onShow = widget.onShowUsers;
     // Without a list callback the count stays plain text, so the whole chip
     // keeps toggling the reaction exactly as before.
     if (onShow == null) return count;
     return Semantics(
-      key: ValueKey('reactionCount-${message.id}-${_reactionKey(r)}'),
+      key: ValueKey('reactionCount-${widget.message.id}-${_reactionKey(r)}'),
       button: true,
       label: AppStrings.t(AppStringKeys.chatReactionUsersCount, {
         'value1': r.count,
@@ -86,10 +258,9 @@ class MessageReactionChips extends StatelessWidget {
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => onShow(message, r),
+        onTap: () => onShow(widget.message, r),
         child: AppPressRipple(
           borderRadius: BorderRadius.circular(AppRadius.control),
-          color: color,
           child: count,
         ),
       ),
@@ -100,4 +271,53 @@ class MessageReactionChips extends StatelessWidget {
       reaction.customEmojiId != 0
       ? 'custom:${reaction.customEmojiId}'
       : 'emoji:${reaction.emoji ?? ''}';
+}
+
+/// One 20dp face of the avatar stack.
+class _AvatarPerson {
+  const _AvatarPerson({required this.title, this.photo});
+
+  final String title;
+  final TdFileRef? photo;
+
+  /// A face we can actually show: a name, a photo, or both.
+  bool get isKnown => title.isNotEmpty || photo != null;
+}
+
+/// The reference client's stack: 20dp faces, every further face inset by 16dp,
+/// no separator — the earlier face shows through as a crescent, exactly like
+/// `AvatarsDrawable` and its 0.8 step. A translucent ring in the chip's fill
+/// could not mask the face underneath, so there is none.
+class _AvatarsRow extends StatelessWidget {
+  const _AvatarsRow({super.key, required this.people});
+
+  final List<_AvatarPerson> people;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = people.length == 1 ? 20.0 : 20 + (people.length - 1) * 16.0;
+    return SizedBox(
+      height: 20,
+      width: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < people.length; i++)
+            Positioned(
+              left: i * 16.0,
+              top: 0,
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: PhotoAvatar(
+                  title: people[i].title,
+                  photo: people[i].photo,
+                  size: 20,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

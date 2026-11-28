@@ -2,15 +2,11 @@
 //  topic_badge_timestamp_clearance_test.dart
 //
 //  In a topics-enabled bot chat's "All topics" transcript the topic section
-//  badge sits directly under the previous message. A message can hang its
-//  detail timestamp below its own bubble (`alwaysShowMessageTime`, a tap or a
-//  hover), so the badge must keep clear of that floating row.
-//
-//  The transcript's row contract is: every row reserves top padding for the
-//  previous row's out-of-box paint (message rows 7, the time separator and the
-//  system banner 6). The topic section header reserved none, so with a topic
-//  name wide enough to reach the timestamp's column the badge's plate covered
-//  the timestamp text.
+//  badge sits directly under the previous message. Messages used to hang their
+//  detail timestamp BELOW the bubble (a floating row the badge could paint
+//  over); the time now lives inside the bubble, so a following row can never
+//  reach it. This suite pins both halves: the stamp is inside its bubble, and
+//  no badge plate overlaps a stamp.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -162,26 +158,37 @@ void main() {
       }
     }
 
-    // Pin the actual regression: the message that closes one topic hangs its
-    // timestamp 5px into the next row, and the badge that opens the following
-    // topic is that next row. It must sit directly under that stamp — far
-    // enough away to clear it, close enough that the assertion above is not
-    // passing because the badge drifted off somewhere else.
-    final lastPill = pills.last;
-    final adjacent = stamps
-        .where(
-          (stamp) =>
-              stamp.bottom <= lastPill.top + 1 &&
-              lastPill.top - stamp.bottom <= 8,
-        )
-        .toList();
-    expect(
-      adjacent,
-      hasLength(1),
-      reason:
-          'expected exactly one timestamp hanging right above the last '
-          'badge, at ${lastPill.top}; stamps were $stamps',
-    );
+    // Every stamp hangs under its message row now, so the clearance above is
+    // structural rather than a padding coincidence. Pin that too: a stamp that
+    // drifted back over the bubble would make the no-overlap check pass for the
+    // wrong reason on this fixture.
+    final bubbles = <Rect>[
+      for (final element
+          in find
+              .byWidgetPredicate(
+                (widget) =>
+                    widget.key is ValueKey<String> &&
+                    (widget.key as ValueKey<String>).value.startsWith(
+                      'messageTextBubble-',
+                    ),
+              )
+              .evaluate())
+        tester.getRect(find.byElementPredicate((e) => e == element)),
+    ];
+    expect(bubbles, isNotEmpty);
+    for (final stamp in stamps) {
+      // Either under the bubble (the floating label or the band) or on the
+      // sender's line above it; never painted on the bubble itself.
+      expect(
+        bubbles.every(
+          (bubble) =>
+              !(bubble.contains(stamp.topLeft) &&
+                  bubble.contains(stamp.bottomRight)),
+        ),
+        isTrue,
+        reason: 'stamp $stamp must not sit on one of $bubbles',
+      );
+    }
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 6));

@@ -17,6 +17,7 @@ import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/settings/about_view.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
+import 'package:mithka/update/update_checker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,6 +56,44 @@ void main() {
     // reads the appearance it was pumped with.
     await tester.pumpAndSettle();
   }
+
+  testWidgets('the pre-release opt-in sits above check-for-updates, off', (
+    tester,
+  ) async {
+    await pumpAbout(tester, Brightness.light);
+    final row = find.byKey(const ValueKey('about-update-prereleases'));
+    if (!UpdateChecker.supportsManualCheck) {
+      // A Play build has no manual update rows at all; nothing to pin.
+      expect(row, findsNothing);
+      return;
+    }
+    expect(row, findsOneWidget);
+    final box = tester.widget<AppCheckbox>(
+      find.descendant(of: row, matching: find.byType(AppCheckbox)),
+    );
+    expect(box.value, isFalse, reason: 'official releases are the default');
+    final checkRow = find.text(
+      AppStrings.t(AppStringKeys.aboutCheckForUpdates),
+    );
+    expect(checkRow, findsOneWidget);
+    expect(
+      tester.getRect(row).bottom,
+      lessThanOrEqualTo(tester.getRect(checkRow).top + 1),
+    );
+
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(UpdateChecker.includePrereleasesKey), isTrue);
+    expect(
+      tester
+          .widget<AppCheckbox>(
+            find.descendant(of: row, matching: find.byType(AppCheckbox)),
+          )
+          .value,
+      isTrue,
+    );
+  });
 
   testWidgets('the app name sits one gap under the mark', (tester) async {
     await pumpAbout(tester, Brightness.light);

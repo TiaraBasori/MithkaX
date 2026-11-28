@@ -39,6 +39,21 @@ const _languageNeutral = {
   'storyAuthoringContentMessage', // Message (fr)
   'storyAuthoringContentPhoto', // Photo (fr)
   'storyManagementAlbums', // Albums (fr)
+  // The text-size page previews a bilingual chat on purpose: the sample
+  // messages, names, percentages and formats carry no words to translate.
+  'contentSizePreview',
+  'contentSizePreviewIncoming',
+  'contentSizePreviewLine1',
+  'contentSizePreviewLine2',
+  'contentSizePreviewLine3',
+  'contentSizePreviewName1',
+  'contentSizePreviewName2',
+  'contentSizePreviewName3',
+  'contentSizePreviewOutgoing',
+  'contentSizePercent',
+  'contentSizeValue',
+  'contentSizeStandard', // Standard (de/fr)
+  'contentSizeConversation', // Conversation (fr)
 };
 
 const _coveredPrefixes = [
@@ -53,6 +68,7 @@ const _coveredPrefixes = [
   'composerMediaSearch',
   'contactShareEmpty',
   'appIconMotif',
+  'contentSize',
 ];
 
 /// Formats that carry no words of their own.
@@ -82,7 +98,7 @@ void main() {
         )
         .where((key) => !_untranslatable.contains(key))
         .toList();
-    expect(keys.length, greaterThan(300));
+    expect(keys.length, greaterThan(320));
 
     for (final locale in _locales) {
       final translated = await catalogue(locale);

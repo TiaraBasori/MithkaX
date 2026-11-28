@@ -584,21 +584,52 @@ abstract final class TDParse {
   }
 
   /// Parses message.interaction_info.reactions into reaction buckets.
+  ///
+  /// TDLib also reports `recent_reactions` (`messagePeerReaction`): the last
+  /// senders per bucket. The reference client draws their avatars instead of a
+  /// small count, so each bucket keeps the ids that match its own reaction.
   static List<MessageReaction> reactionsFrom(Map<String, dynamic> message) {
-    final list = message
-        .obj('interaction_info')
-        ?.obj('reactions')
-        ?.objects('reactions');
+    final reactions = message.obj('interaction_info')?.obj('reactions');
+    final list = reactions?.objects('reactions');
     if (list == null) return const [];
+    final recent = reactions?.objects('recent_reactions') ?? const [];
+    List<MessageReactor> reactorsFor(String? emoji, int customEmojiId) {
+      final out = <MessageReactor>[];
+      for (final entry in recent) {
+        final type = entry.obj('reaction') ?? entry.obj('type');
+        final matches = customEmojiId != 0
+            ? type?.type == 'reactionTypeCustomEmoji' &&
+                  (type?.int64('custom_emoji_id') ?? 0) == customEmojiId
+            : type?.type == 'reactionTypeEmoji' && type?.str('emoji') == emoji;
+        if (!matches) continue;
+        final sender = entry.obj('peer_id') ?? entry.obj('sender_id');
+        final senderId = switch (sender?.type) {
+          'messageSenderUser' => sender?.int64('user_id') ?? 0,
+          'messageSenderChat' => sender?.int64('chat_id') ?? 0,
+          _ => 0,
+        };
+        if (senderId == 0) continue;
+        out.add(
+          MessageReactor(senderId: senderId, date: entry.integer('date') ?? 0),
+        );
+      }
+      return out;
+    }
+
     return list.map((r) {
       final type = r.obj('type');
+      final emoji = type?.type == 'reactionTypeEmoji'
+          ? type?.str('emoji')
+          : null;
+      final customEmojiId = type?.type == 'reactionTypeCustomEmoji'
+          ? (type?.int64('custom_emoji_id') ?? 0)
+          : 0;
       return MessageReaction(
-        emoji: type?.type == 'reactionTypeEmoji' ? type?.str('emoji') : null,
-        customEmojiId: type?.type == 'reactionTypeCustomEmoji'
-            ? (type?.int64('custom_emoji_id') ?? 0)
-            : 0,
+        emoji: emoji,
+        customEmojiId: customEmojiId,
         count: r.integer('total_count') ?? 0,
         chosen: r.boolean('is_chosen') ?? false,
+        reactors: reactorsFor(emoji, customEmojiId),
       );
     }).toList();
   }

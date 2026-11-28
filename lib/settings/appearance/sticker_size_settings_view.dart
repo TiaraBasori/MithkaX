@@ -49,8 +49,10 @@ class StickerSizeSettingsView extends StatelessWidget {
                   child: _Sample(
                     label: AppStrings.t(AppStringKeys.historyKindAnimation),
                     child: _GifSample(
-                      width: (132 * scale).clamp(26, 185),
-                      height: (86 * scale).clamp(18, 120),
+                      // GIFs render at 60% of the photo budget; the sample
+                      // mirrors the transcript at the same preference.
+                      width: (132 * 0.6 * scale).clamp(14, 111),
+                      height: (86 * 0.6 * scale).clamp(9, 72),
                     ),
                   ),
                 ),

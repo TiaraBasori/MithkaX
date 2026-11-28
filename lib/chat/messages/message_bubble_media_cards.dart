@@ -70,8 +70,11 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
     return math.min(maxWidth, width.ceilToDouble());
   }
 
-  /// Pads grouped video or animation [media] of [size] out to the grouped
-  /// bubble width; separate media keeps its own width.
+  /// Grows grouped video or animation [media] to the grouped bubble width.
+  ///
+  /// The media CROPS into that width the way a photo does; the earlier version
+  /// centred the picture over a blurred fill, which read as a thumbnail that
+  /// shrank instead of filling its card.
   ({Widget media, double width}) _groupedVideoFrame(
     Widget media,
     Size size,
@@ -85,14 +88,20 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
       media: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => widget.bubble.onPlayVideo?.call(message),
-        child: SizedBox(
-          width: width,
-          height: size.height,
-          child: _letterboxFrame(
-            fillSource: message.image?.thumbnail ?? message.image,
-            childSize: size,
-            borderRadius: borderRadius,
-            child: media,
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: SizedBox(
+            width: width,
+            height: size.height,
+            child: FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: size.width,
+                height: size.height,
+                child: media,
+              ),
+            ),
           ),
         ),
       ),
@@ -120,17 +129,24 @@ extension _MessageBubbleMediaCards on _MessageBubbleState {
     return _imagePreviewGeometry().frameSize;
   }
 
+  /// GIFs render smaller than a photo of the same source: Telegram's own
+  /// animations sit around 200pt wide, while the 320pt photo budget read as an
+  /// oversized block in the transcript (the user's 100% default was "too
+  /// big"). 60% of the old budget keeps a 16:9 GIF near 258×145 at 100%, and
+  /// the sticker/GIF preference still scales from there.
+  static const _gifSizeBaseline = 0.6;
+
   /// A GIF's box: the same 320pt media budget as a photo, scaled by the one
   /// sticker/GIF size preference exteraless exposes. The lane caps the width so
   /// a larger setting grows tall GIFs instead of overflowing the bubble.
   Size _gifDisplaySize() {
-    final lane = _mediaMaxWidth();
+    final lane = _mediaMaxWidth() * _gifSizeBaseline;
     final scale = _theme.stickerMediaScale;
     return telegramDesktopMediaPreviewGeometry(
       sourceWidth: message.imageWidth,
       sourceHeight: message.imageHeight,
       availableWidth: math.min(lane, lane * scale),
-      maxHeight: telegramChatMediaPreviewMaxHeight * scale,
+      maxHeight: telegramChatMediaPreviewMaxHeight * _gifSizeBaseline * scale,
     ).frameSize;
   }
 

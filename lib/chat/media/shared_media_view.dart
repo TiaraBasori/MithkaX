@@ -1774,7 +1774,6 @@ class _SharedMediaViewState extends State<SharedMediaView> {
                       photo: message.image?.thumbnail ?? message.image,
                       accountSlot: _accountSlot,
                       cornerRadius: 0,
-                      fit: BoxFit.contain,
                     ),
             ),
             if (video != null) ...[
@@ -1935,7 +1934,6 @@ class _SharedMediaViewState extends State<SharedMediaView> {
                                 photo: message.image,
                                 accountSlot: _accountSlot,
                                 cornerRadius: 0,
-                                fit: BoxFit.contain,
                               ),
                       ),
                       Container(color: Colors.black.withValues(alpha: 0.12)),
@@ -2395,7 +2393,6 @@ class _SharedMediaViewState extends State<SharedMediaView> {
                                   photo: message.image,
                                   accountSlot: _accountSlot,
                                   cornerRadius: 0,
-                                  fit: BoxFit.contain,
                                 ),
                         ),
                         Container(color: Colors.black.withValues(alpha: 0.12)),

@@ -971,12 +971,33 @@ class SplashView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // The mark sits on the brand gradient, so it keeps the pale end
-            // of the ladder in either appearance — a brand-coloured fill on a
-            // brand-coloured page would vanish.
-            BrandMark(
-              size: AppMetric.splashMarkSize,
-              colors: brandMarkColors(Brightness.dark),
+            // Same body as everywhere else: the cold-start screen is the one
+            // place a reader sees the mark before any theme loads, so it must
+            // not be a second, paler logo.
+            //
+            // The mark's body and the page are both the brand ladder, so a
+            // white ring is what separates them; it is drawn inside the mark's
+            // box (the box itself is transparent), hugging the ink.
+            SizedBox.square(
+              dimension: AppMetric.splashMarkSize,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    key: const ValueKey('splashMarkRing'),
+                    width: AppMetric.splashMarkRingSize,
+                    height: AppMetric.splashMarkRingSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: AppMetric.splashMarkRingWidth,
+                      ),
+                    ),
+                  ),
+                  BrandMark(size: AppMetric.splashMarkSize),
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.lg + AppSpacing.sm),
             const SizedBox(

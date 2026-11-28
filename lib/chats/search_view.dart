@@ -2537,7 +2537,7 @@ class _SearchViewModel extends ChangeNotifier {
         if (!seen.add(key)) continue;
         parsed.add((message, chatId, source));
       }
-      final senderPhotos = await _senderPhotosFor(parsed);
+      final senderPhotos = await _senderPhotosFor(parsed, tab);
       if (!_isCurrent(tab, runId, trimmed)) return;
       final out = <_SearchHit>[
         for (final (message, chatId, source) in parsed)
@@ -2545,7 +2545,9 @@ class _SearchViewModel extends ChangeNotifier {
             message,
             chatId: chatId,
             source: source,
+            tab: tab,
             senderPhoto: senderPhotos[message.senderId],
+            senderKnown: senderPhotos.containsKey(message.senderId),
           ),
       ];
       _finish(tab, runId, trimmed, out);
@@ -2632,12 +2634,14 @@ class _SearchViewModel extends ChangeNotifier {
   /// result; one request per distinct sender fills every row.
   Future<Map<int, TdFileRef?>> _senderPhotosFor(
     List<(ChatMessage, int, _SearchSource)> messages,
+    SearchTab tab,
   ) async {
     final photos = <int, TdFileRef?>{};
     final pending = <int, Future<TdFileRef?>>{};
     for (final (message, _, source) in messages) {
-      // A media/music hit paints its own picture, so it needs no avatar.
-      if (_SearchHit._messageMediaThumb(message) != null) continue;
+      // The Media and Music tabs paint their own picture, so a hit with one
+      // needs no avatar; every other tab (including Messages) shows the sender.
+      if (_SearchHit._messageMediaThumb(message, tab) != null) continue;
       final id = message.senderId;
       if (id == null) continue;
       pending.putIfAbsent(
@@ -2717,13 +2721,20 @@ Future<TdFileRef?> messageSenderPhoto(
   }
 }
 
+/// The picture a message hit leads with for [tab]. Exposed so the tab rule
+/// (Media → thumbnail, Music → cover, Messages → sender avatar) stays testable.
+@visibleForTesting
+TdFileRef? searchTabMediaThumb(ChatMessage message, SearchTab tab) =>
+    _SearchHit._messageMediaThumb(message, tab);
+
 /// The leading image of a search row.
 ///
-/// Text, link, file and voice hits identify the message's SENDER with the same
-/// round avatar the chat list uses (not the chat the search found them in). A
-/// media hit shows its own thumbnail, and a music hit shows the track cover,
-/// both in a rounded square: the picture IS the result. Hits with no identity (a `tg://` link suggestion) keep their
-/// glyph in the same circle.
+/// Every result in the Chats/Messages/Links/Files/Voice tabs identifies the
+/// message's SENDER with the same round avatar the chat list uses (not the chat
+/// the search found it in, and not the message's content type). Only the Media
+/// tab shows a thumbnail and the Music tab a cover, both in a rounded square:
+/// there the picture IS the result. Hits with no identity (a `tg://` link
+/// suggestion) keep their glyph in the same circle.
 class SearchHitLeadingImage extends StatelessWidget {
   const SearchHitLeadingImage({
     super.key,
@@ -2848,13 +2859,15 @@ class _SearchHit {
     ChatMessage message, {
     required int chatId,
     required _SearchSource source,
+    required SearchTab tab,
     TdFileRef? senderPhoto,
+    bool senderKnown = false,
   }) {
     final document = message.document;
     final music = message.music;
     final title = document?.fileName ?? music?.title ?? _messageTitle(message);
     final subtitle = _messageSubtitle(message, source.title);
-    final media = _messageMediaThumb(message);
+    final media = _messageMediaThumb(message, tab);
     return _SearchHit(
       title: title,
       subtitle: subtitle,
@@ -2862,8 +2875,10 @@ class _SearchHit {
       date: message.date,
       sourceTitle: source.title,
       // A message hit identifies the person who wrote it, not the chat the
-      // search found it in. Media/music hits replace this with their picture.
-      photo: senderPhoto ?? source.photo,
+      // search found it in. A resolved sender with no photo keeps the monogram
+      // (sender; a chat photo would name the wrong peer). Media/music hits
+      // replace this with their picture.
+      photo: senderKnown ? senderPhoto : source.photo,
       chatId: chatId,
       message: message,
       icon: _messageIcon(message),
@@ -2896,8 +2911,8 @@ class _SearchHit {
   final ChatMessage? message;
   final String? telegramLink;
 
-  /// The result's own picture for a media/music hit; null keeps the peer
-  /// avatar (text, link, file, voice).
+  /// The result's own picture, only in the Media (thumbnail) and Music (cover)
+  /// tabs; every other tab keeps the sender/peer avatar.
   final TdFileRef? media;
   final AppIconData icon;
   final Color tint;
@@ -2965,18 +2980,14 @@ class _SearchHit {
     return pieces.join(' · ');
   }
 
-  /// The picture a message hit leads with: a music track's cover, or a
-  /// photo/video/GIF's own thumbnail. Everything else identifies its sender.
-  static TdFileRef? _messageMediaThumb(ChatMessage message) {
-    final music = message.music;
-    if (music != null) return music.cover;
-    if (message.image == null) return null;
-    return switch (message.contentType) {
-      'messagePhoto' ||
-      'messageVideo' ||
-      'messageAnimation' ||
-      'messageSticker' ||
-      'messageAnimatedEmoji' => message.image,
+  /// The picture a message hit leads with, decided by the selected search tab,
+  /// not by the message's content type: the Media tab shows the thumbnail, the
+  /// Music tab the cover, and every other tab (Messages included) shows the
+  /// sender avatar even when the message carries a picture.
+  static TdFileRef? _messageMediaThumb(ChatMessage message, SearchTab tab) {
+    return switch (tab) {
+      SearchTab.media => message.image,
+      SearchTab.music => message.music?.cover,
       _ => null,
     };
   }

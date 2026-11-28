@@ -32,8 +32,8 @@ void main() {
   tearDownAll(() => updates.close());
 
   for (final grouped in [true, false]) {
-    testWidgets('a captioned tall screenshot letterboxes without a filter '
-        'layer (grouped captions: $grouped)', (tester) async {
+    testWidgets('a captioned tall screenshot crops into its frame without a '
+        'filter layer (grouped captions: $grouped)', (tester) async {
       SharedPreferences.setMockInitialValues({'groupImageMessages': grouped});
       final theme = ThemeController(await SharedPreferences.getInstance());
       addTearDown(theme.dispose);
@@ -77,13 +77,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       final bubble = find.byType(MessageBubble);
-      // The letterbox really is in play: the photo is narrower than its frame.
+      // One image, drawn cover: the frame is the shape and the photo crops
+      // into it. The old letterbox added a blurred fill copy of the thumbnail.
       final images = tester
           .widgetList<TDImage>(
             find.descendant(of: bubble, matching: find.byType(TDImage)),
           )
           .toList();
-      expect(images.map((image) => image.photo?.id), containsAll([9, 10]));
+      expect(images.map((image) => image.photo?.id), [9]);
+      expect(
+        images.single.fit,
+        BoxFit.cover,
+        reason: 'a thumbnail fills its shape by cropping, never by stretching',
+      );
       // An image-filter layer inside the bubble's clip drew the photo and its
       // caption shifted out of the bubble on iOS, leaving it blank.
       expect(
@@ -96,11 +102,12 @@ void main() {
       final photo = tester.getRect(
         find.byWidgetPredicate((w) => w is TDImage && w.photo?.id == 9),
       );
+      // The crop fills the frame in both layouts: no bars, no shrink.
+      expect(photo.size.width, moreOrLessEquals(frame.width));
+      expect(photo.size.height, moreOrLessEquals(frame.height));
       if (grouped) {
-        // Like Telegram, the caption widens the bubble past the narrow photo,
-        // which stays centred over the side fill.
+        // Like Telegram, the caption widens the bubble past the narrow photo.
         expect(frame.width, greaterThan(200));
-        expect(photo.center.dx, moreOrLessEquals(frame.center.dx));
       } else {
         // Media shown apart from its caption keeps the minimum preview box.
         expect(frame.width, lessThanOrEqualTo(100));

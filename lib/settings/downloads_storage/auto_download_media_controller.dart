@@ -12,6 +12,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../tdlib/json_helpers.dart';
 import '../../tdlib/td_client.dart';
+import '../../tdlib/td_models.dart';
+
+/// Where auto-download is allowed to run. The reference client gates its
+/// downloads with the same four buckets (`DownloadController.Preset.mask`:
+/// contacts, private chats, groups, channels); TDLib itself has no notion of
+/// chat type, so the gate lives on this side, exactly as it does there.
+enum AutoDownloadChatType {
+  contacts('autoDownloadChatContacts'),
+  privateChats('autoDownloadChatPrivate'),
+  groups('autoDownloadChatGroups'),
+  channels('autoDownloadChatChannels');
+
+  const AutoDownloadChatType(this.labelKey);
+
+  final String labelKey;
+}
 
 @immutable
 class AutoDownloadProfile {
@@ -149,6 +165,7 @@ class AutoDownloadMediaController extends ChangeNotifier {
   static const _mobileKey = 'autoDownload.highResImages.mobile';
   static const _wifiKey = 'autoDownload.highResImages.wifi';
   static const _profilesKey = 'autoDownload.profiles.v2';
+  static const _chatTypesKey = 'autoDownload.chatTypes';
   static const _highResPhotoLimit = 20 * 1024 * 1024;
 
   final TdClient _client = TdClient.shared;
@@ -161,6 +178,48 @@ class AutoDownloadMediaController extends ChangeNotifier {
   AutoDownloadProfile _roaming = const AutoDownloadProfile.low();
   bool _applying = false;
   bool _applyQueued = false;
+  Set<AutoDownloadChatType> _chatTypes = {
+    for (final type in AutoDownloadChatType.values) type,
+  };
+
+  /// The chat types auto-download may fetch in. Everything on by default,
+  /// matching the reference client's out-of-the-box preset mask.
+  Set<AutoDownloadChatType> get chatTypes => Set.unmodifiable(_chatTypes);
+
+  bool allowsChatType(AutoDownloadChatType type) => _chatTypes.contains(type);
+
+  /// Whether a download may start on its own for a chat of [type] on the
+  /// current network: the preset must be enabled and the type ticked.
+  bool allowsAutoDownload(AutoDownloadChatType type, {bool? wifi}) =>
+      _profileFor(wifi).enabled && allowsChatType(type);
+
+  /// The bucket a chat kind falls into. Bots count as private chats — the
+  /// reference client has no separate bucket for them either.
+  static AutoDownloadChatType chatTypeOf(ChatKind kind) => switch (kind) {
+    ChatKind.privateChat ||
+    ChatKind.secret ||
+    ChatKind.bot => AutoDownloadChatType.privateChats,
+    ChatKind.group => AutoDownloadChatType.groups,
+    ChatKind.channel => AutoDownloadChatType.channels,
+    ChatKind.unknown => AutoDownloadChatType.privateChats,
+  };
+
+  /// Same gate for a chat whose kind is not known on this path (the history
+  /// mirror records messages before the chat is opened). An unknown kind may
+  /// fetch only while the master switch and some bucket are both on, so
+  /// turning auto-download off still stops it everywhere.
+  bool allowsAutoDownloadForKind(ChatKind? kind, {bool? wifi}) {
+    final profile = _profileFor(wifi);
+    if (!profile.enabled) return false;
+    if (kind == null) return _chatTypes.isNotEmpty;
+    return allowsChatType(chatTypeOf(kind));
+  }
+
+  AutoDownloadProfile _profileFor(bool? wifi) => switch (wifi) {
+    true => _wifi,
+    false => _mobile,
+    null => _roaming,
+  };
 
   bool get mobileHighResImages => _mobileHighResImages;
   bool get wifiHighResImages => _wifiHighResImages;
@@ -173,7 +232,12 @@ class AutoDownloadMediaController extends ChangeNotifier {
     _prefs = prefs;
     _mobileHighResImages = prefs.getBool(_mobileKey) ?? false;
     _wifiHighResImages = prefs.getBool(_wifiKey) ?? false;
-    _loadProfiles(prefs.getString(_profilesKey));
+    _loadProfiles(
+      prefs.getString(_profilesKey),
+      hasLegacyFlags:
+          prefs.containsKey(_mobileKey) || prefs.containsKey(_wifiKey),
+    );
+    _chatTypes = _loadChatTypes(prefs.getString(_chatTypesKey));
     _tdSub ??= _client.updatesOf('updateAuthorizationState').listen((update) {
       final state = update.obj('authorization_state');
       if (state?.type == 'authorizationStateReady') {
@@ -183,7 +247,44 @@ class AutoDownloadMediaController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _loadProfiles(String? encoded) {
+  Set<AutoDownloadChatType> _loadChatTypes(String? encoded) {
+    // Only a missing key means "no choice yet". An empty string is the saved
+    // mask with every type unticked, and must stay empty.
+    if (encoded == null) {
+      return {for (final type in AutoDownloadChatType.values) type};
+    }
+    if (encoded.trim().isEmpty) return <AutoDownloadChatType>{};
+    final names = encoded.split(',').map((name) => name.trim()).toSet();
+    return {
+      for (final type in AutoDownloadChatType.values)
+        if (names.contains(type.name)) type,
+    };
+  }
+
+  /// Turns a chat type on or off. A network call is not involved: the mask is
+  /// the client's own gate, and the presets above stay as TDLib has them.
+  Future<void> setChatType(AutoDownloadChatType type, bool allowed) async {
+    final next = {..._chatTypes};
+    if (allowed) {
+      next.add(type);
+    } else {
+      next.remove(type);
+    }
+    if (next.length == _chatTypes.length && next.containsAll(_chatTypes)) {
+      return;
+    }
+    _chatTypes = next;
+    await _prefs?.setString(
+      _chatTypesKey,
+      AutoDownloadChatType.values
+          .where(next.contains)
+          .map((value) => value.name)
+          .join(','),
+    );
+    notifyListeners();
+  }
+
+  void _loadProfiles(String? encoded, {required bool hasLegacyFlags}) {
     if (encoded != null && encoded.isNotEmpty) {
       try {
         final value = jsonDecode(encoded);
@@ -203,7 +304,8 @@ class AutoDownloadMediaController extends ChangeNotifier {
           );
         }
       } catch (_) {}
-    } else {
+    } else if (hasLegacyFlags) {
+      // Pre-preset installs only stored the two high-resolution image flags.
       _mobile = _mobile.copyWith(
         enabled: _mobileHighResImages,
         maxPhotoBytes: _mobileHighResImages ? _highResPhotoLimit : 0,
@@ -213,6 +315,8 @@ class AutoDownloadMediaController extends ChangeNotifier {
         maxPhotoBytes: _wifiHighResImages ? _highResPhotoLimit : 0,
       );
     }
+    // Otherwise the presets keep their own defaults: medium on mobile, high on
+    // Wi-Fi, off while roaming — the reference client's out-of-the-box set.
     _syncLegacyFlags();
   }
 

@@ -901,7 +901,12 @@ class _ReactionUsersSheetState extends State<_ReactionUsersSheet> {
           children: [
             SettingsRow(
               key: const ValueKey('reaction-user-report-action'),
-              leading: const AppIcon(HeroAppIcons.triangleExclamation),
+              // Glyph and label are ONE destructive colour: an uncoloured icon
+              // inherits textPrimary and read as two different rows.
+              leading: AppIcon(
+                HeroAppIcons.triangleExclamation,
+                color: AppTheme.tagRed,
+              ),
               title: AppStrings.t(AppStringKeys.chatReactionReportAction),
               titleColor: AppTheme.tagRed,
               showChevron: false,

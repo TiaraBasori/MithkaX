@@ -414,6 +414,12 @@ extension _ChatInputBarAttachments on _ChatInputBarState {
   Future<void> _previewAndSendAttachments(
     List<OutgoingAttachment> attachments,
   ) async {
+    // A draft already in the composer becomes the caption under the picked
+    // media, the way the reference client hands the text to the preview instead
+    // of asking the reader to write it a second time. The field empties while
+    // the preview is open and gets the draft back if it is dismissed.
+    final draft = _controller.text.trim().isEmpty ? '' : _controller.text;
+    if (draft.isNotEmpty) _controller.clear();
     final MediaSendPreviewResult? preview;
     if (widget.mediaSendPreviewLauncher case final launcher?) {
       preview = await launcher(attachments);
@@ -425,13 +431,23 @@ extension _ChatInputBarAttachments on _ChatInputBarState {
           fullscreenDialog: true,
           builder: (_) => MediaSendPreviewView(
             attachments: resolved,
+            initialCaption: draft,
             allowWhenOnline: widget.vm.canSendWhenOnline,
             effects: widget.vm.availableMessageEffects,
           ),
         ),
       );
     }
-    if (!mounted || preview == null || preview.attachments.isEmpty) return;
+    if (!mounted) return;
+    if (preview == null || preview.attachments.isEmpty) {
+      if (draft.isNotEmpty && _controller.text.isEmpty) {
+        _controller.value = TextEditingValue(
+          text: draft,
+          selection: TextSelection.collapsed(offset: draft.length),
+        );
+      }
+      return;
+    }
     final finalAttachments = await resolveAttachmentListDimensions(
       preview.attachments,
     );

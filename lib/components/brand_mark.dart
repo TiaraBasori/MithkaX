@@ -1,34 +1,24 @@
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+/// The app mark: one flat glyph, filled at paint time with the launcher
+/// icon's own body colours.
+///
+/// The mark is ALWAYS the night launcher icon's glyph — the bright-azure to
+/// deep-azure ramp — in light and dark appearance alike (「始终用深色图标的
+/// 主体部分做 logo」). It deliberately does not follow the theme colour: the
+/// derived pale tints read as a light-blue logo rather than the app's mark.
+/// The stops are sampled from `assets/app_icons/mithkax_default_night.png`.
+const List<Color> _markBody = [
+  Color(0xFF48B7FD),
+  Color(0xFF20A0F7),
+  Color(0xFF0C88EE),
+  Color(0xFF0775E9),
+  Color(0xFF0267EE),
+];
 
-/// The app mark: one flat glyph, filled at paint time with a gradient built
-/// from the theme's brand colour.
-///
-/// Nothing is baked into an asset, so the mark follows 外观 → 主题颜色 and the
-/// light/dark appearance together:
-///
-///  * Light surfaces get the brand's own ladder — lighter, base, deep — the
-///    same shading [AppTheme.applyBrand] derives for the outgoing bubble.
-///  * Dark surfaces get that ladder lifted toward white, because a saturated
-///    fill on a near-black page reads as a hole. The launcher icon's day body
-///    does the same thing.
-List<Color> brandMarkColors(Brightness brightness) {
-  final base = AppTheme.brand;
-  if (brightness == Brightness.dark) {
-    return [
-      Color.lerp(base, const Color(0xFFFFFFFF), 0.88)!,
-      Color.lerp(base, const Color(0xFFFFFFFF), 0.62)!,
-    ];
-  }
-  final hsl = HSLColor.fromColor(base);
-  return [
-    hsl.withLightness((hsl.lightness + 0.13).clamp(0.0, 1.0)).toColor(),
-    base,
-    hsl.withLightness((hsl.lightness - 0.09).clamp(0.0, 1.0)).toColor(),
-  ];
-}
+/// The gradient every in-app [BrandMark] paints, in both appearances.
+List<Color> brandMarkColors() => _markBody;
 
 /// The share of a [BrandMark]'s box the glyph's ink fills, so a mark sitting
 /// in a row keeps the weight the shipped rasters had.
@@ -84,12 +74,12 @@ final Path brandMarkGlyph = Path()
   ..cubicTo(0.5, 14.111, 0.5, 13.283, 0.5, 12.455)
   ..close();
 
-/// Paints [brandMarkGlyph] filled from the theme's brand colour.
+/// Paints [brandMarkGlyph] filled with the launcher icon's body gradient.
 ///
-/// The fill is derived from `AppTheme.brand` while building. A `const`
-/// instance would be canonicalised, and the element would be skipped whenever
-/// an ancestor rebuilt, so a theme-colour change would leave the old fill on
-/// screen — both constructors stay non-const on purpose.
+/// The fill is resolved while building. A `const` instance would be
+/// canonicalised, and the element would be skipped whenever an ancestor
+/// rebuilt, so a theme/appearance change would leave the old fill on screen —
+/// both constructors stay non-const on purpose.
 // ignore_for_file: prefer_const_constructors_in_immutables
 class BrandMark extends StatelessWidget {
   /// A square [size] box whose ink fills [_inkShare] of it — the spacing the
@@ -118,7 +108,7 @@ class BrandMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final height = ink ?? box! * _inkShare;
-    final fill = colors ?? brandMarkColors(Theme.of(context).brightness);
+    final fill = colors ?? brandMarkColors();
     return SizedBox(
       width: box ?? height * _aspect,
       height: box ?? height,

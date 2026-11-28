@@ -369,6 +369,7 @@ extension _ChatViewScrollSession on _ChatViewState {
   }
 
   void _updateUnreadProgressFromViewport() {
+    _visibleEntryStartsThisPass.clear();
     final viewportContext = _transcriptViewportKey.currentContext;
     final viewportRenderObject = viewportContext?.findRenderObject();
     if (viewportRenderObject is! RenderBox || !viewportRenderObject.attached) {
@@ -396,9 +397,9 @@ extension _ChatViewScrollSession on _ChatViewState {
       final itemRect = itemOrigin & itemRenderObject.size;
       if (!itemRect.overlaps(viewportRect)) continue;
 
-      final entryMessages =
-          _trackedTranscriptEntries[entry.key]?.messages ??
-          const <ChatMessage>[];
+      final tracked = _trackedTranscriptEntries[entry.key];
+      if (tracked != null) _visibleEntryStartsThisPass.add(tracked.startIndex);
+      final entryMessages = tracked?.messages ?? const <ChatMessage>[];
       for (final message in entryMessages) {
         if (message.isService || message.id <= 0) continue;
         onScreenMessageIds.add(message.id);
@@ -441,6 +442,10 @@ extension _ChatViewScrollSession on _ChatViewState {
       changed = true;
     }
 
+    _visibleEntryStarts
+      ..clear()
+      ..addAll(_visibleEntryStartsThisPass);
+
     if (!setEquals(onScreenMessageIds, _viewportMessageIds)) {
       _viewportMessageIds
         ..clear()
@@ -448,6 +453,9 @@ extension _ChatViewScrollSession on _ChatViewState {
       // Scrolling changed what is on screen: messages that just came into
       // view should not wait behind the background walk.
       _scheduleAutomaticTranslations();
+      // The same moment is the right one to warm the rows just outside the
+      // viewport: by the time they scroll in, their photos are on disk.
+      _prefetchAroundViewport();
     }
 
     if (newlyVisible.isNotEmpty) {
@@ -458,6 +466,61 @@ extension _ChatViewScrollSession on _ChatViewState {
     }
 
     if (changed && mounted) _updateState(() {});
+  }
+
+  /// How many entries beyond each edge of the viewport stay warm.
+  static const _prefetchEntryWindow = 12;
+
+  /// Downloads the media of the rows just outside the viewport.
+  ///
+  /// The reference client's FileLoader starts a message's file when the row is
+  /// laid out ahead of the visible area; mithka's media widgets only ask once
+  /// they paint, so without this window every photo waited for the scroll to
+  /// land on it. The window is symmetric (scrolling back is as common as
+  /// scrolling forward) and bounded to a dozen entries on each side.
+  void _prefetchAroundViewport() {
+    if (_visibleEntryStarts.isEmpty) return;
+    final minVisible = _visibleEntryStarts.reduce(math.min);
+    final maxVisible = _visibleEntryStarts.reduce(math.max);
+    if (_prefetchedRange != null &&
+        _prefetchedRange!.$1 <= minVisible &&
+        _prefetchedRange!.$2 >= maxVisible) {
+      // Still inside the window already warmed: nothing new to fetch.
+      return;
+    }
+    _prefetchedRange = (
+      minVisible - _prefetchEntryWindow,
+      maxVisible + _prefetchEntryWindow,
+    );
+    final wanted = <(int, ChatMessage)>[];
+    for (final entry in _trackedTranscriptEntries.values) {
+      if (entry.startIndex < minVisible - _prefetchEntryWindow) continue;
+      if (entry.startIndex > maxVisible + _prefetchEntryWindow) continue;
+      if (_visibleEntryStarts.contains(entry.startIndex)) continue;
+      for (final message in entry.messages) {
+        if (message.isService || message.id <= 0) continue;
+        if (message.blockedByUser) continue;
+        wanted.add((entry.startIndex, message));
+      }
+    }
+    if (wanted.isEmpty) return;
+    // Nearest the viewport first: that is the row the user reaches first,
+    // and the service spends its per-row budget in call order.
+    int distance(int index) {
+      if (index < minVisible) return minVisible - index;
+      if (index > maxVisible) return index - maxVisible;
+      return 0;
+    }
+
+    wanted.sort((a, b) => distance(a.$1).compareTo(distance(b.$1)));
+    for (final (_, message) in wanted) {
+      unawaited(
+        MediaPrefetch.shared.prefetchMessage(
+          message,
+          chatKind: _reportedChatKind,
+        ),
+      );
+    }
   }
 
   bool _isNearBottom([double threshold = 160]) {

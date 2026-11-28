@@ -450,6 +450,12 @@ abstract final class AppMetric {
 
   /// The app mark on the startup screen.
   static const double splashMarkSize = 192;
+
+  /// White hairline ring hugging the startup mark. The mark and the brand
+  /// gradient are both azure, so without a ring the logo sinks into the page.
+  static const double splashMarkRingSize = 176;
+  static const double splashMarkRingWidth = 2.5;
+
   static const double splashSpinnerSize = 24;
 
   /// A chosen launcher icon on the startup screen: about the size Android's

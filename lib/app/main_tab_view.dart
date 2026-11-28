@@ -21,6 +21,7 @@ import '../channels/topic_channels_view.dart';
 import '../channels/topic_list_host.dart';
 import '../chat/admin/chat_info_view.dart';
 import '../chat/admin/chat_members_view.dart';
+import '../chat/appearance/chat_wallpaper.dart';
 import '../chat/chat_picker_view.dart';
 import '../chat/chat_view.dart';
 import '../chat/composer/media_send_preview_view.dart';
@@ -1116,7 +1117,16 @@ abstract class _MainRootViewState<T extends StatefulWidget> extends State<T>
         id: 'default',
         label: AppStrings.t(AppStringKeys.globalThemeDefault),
         selected: activeCloudTheme == null,
-        onTap: () => theme.clearCloudTheme(themeBrightness),
+        onTap: () => unawaited(() async {
+          theme.clearCloudTheme(themeBrightness);
+          // The official theme brings no wallpaper of its own: put the one in
+          // force before the theme back, exactly like the settings theme page.
+          try {
+            await ChatWallpaperController.shared.restoreThemeWallpaper(
+              dark: themeBrightness == Brightness.dark,
+            );
+          } catch (_) {}
+        }()),
       ),
       for (final cloudTheme in theme.installedCloudThemes)
         DesktopMenuChoice(

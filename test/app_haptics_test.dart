@@ -175,12 +175,22 @@ void main() {
       'android/app/src/main/kotlin/x/empty/mithka/HapticsPlugin.kt',
     ).readAsStringSync();
     // The reference client fires exactly two constants for its interface, and
-    // both ignore flags keep them alive with the system switch off. A raw
-    // waveform of a few ms is dropped by some HALs and once left the whole app
-    // silent, so it must stay a fallback only.
+    // its intensity is whatever the platform assigns those constants. A raw
+    // waveform at DEFAULT_AMPLITUDE is louder than any platform tick, so it is
+    // a FALLBACK only, used when the window refuses the platform haptic.
     expect(source, contains('performHapticFeedback(constant, FLAGS)'));
-    expect(source, contains('FLAG_IGNORE_VIEW_SETTING'));
-    expect(source, contains('FLAG_IGNORE_GLOBAL_SETTING'));
+    expect(
+      source,
+      contains('HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING'),
+    );
+    // exteraless passes BOTH ignore flags for its interface ticks
+    // (MediaController / AndroidUtil.performHapticFeedback). Dropping the
+    // global one silenced the app whenever the system touch-vibration switch
+    // was off; the in-app Vibration switch is the only gate here.
+    expect(
+      source,
+      contains('HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING'),
+    );
     expect(
       source,
       contains('"longPress", "error" -> HapticFeedbackConstants.LONG_PRESS'),
@@ -188,6 +198,7 @@ void main() {
     expect(source, contains('else -> HapticFeedbackConstants.KEYBOARD_TAP'));
     expect(source, isNot(contains('HapticFeedbackConstants.CONFIRM')));
     expect(source, isNot(contains('HapticFeedbackConstants.REJECT')));
+    expect(source, contains('if (!tick(constant)) return oneShot(kind)'));
     expect(source, contains('VibrationEffect.createOneShot'));
     expect(source, contains('const val CHANNEL = "mithka/haptics"'));
     final manifest = File(
