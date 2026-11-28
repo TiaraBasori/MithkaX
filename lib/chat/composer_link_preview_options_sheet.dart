@@ -3,10 +3,11 @@
 //
 //  The link-preview panel under the composer, shaped like the reply-options
 //  sheet: a titled card with the link itself on display, then full-width menu
-//  rows. The reply panel's rules apply here too — a row's label and icon flip
-//  with the state it will produce the moment it is tapped (no hidden Apply
-//  step), the position row is only offered while the preview is on, and the
-//  destructive row removes the preview from this message and closes.
+//  rows. The reply panel's rules apply here too — the on/off row's label and
+//  icon flip with the state it will produce the moment it is tapped (no hidden
+//  Apply step), and the two position rows name the side the card sits on NOW,
+//  with a check on the current one, so tapping one never reads as "move it
+//  there" by mistake.
 //
 
 import 'package:flutter/material.dart';
@@ -60,8 +61,9 @@ class _ComposerLinkPreviewOptionsSheetState
     widget.onEnabledChanged(_enabled);
   }
 
-  void _togglePosition() {
-    setState(() => _above = !_above);
+  void _setPosition(bool above) {
+    if (_above == above) return;
+    setState(() => _above = above);
     widget.onPositionChanged(_above);
   }
 
@@ -167,15 +169,22 @@ class _ComposerLinkPreviewOptionsSheetState
                     : AppStringKeys.composerLinkPreviewEnable.l10n(context),
                 onTap: _toggleEnabled,
               ),
-              if (_enabled)
+              if (_enabled) ...[
                 _LinkPreviewMenuRow(
-                  key: const ValueKey('composerLinkPreviewOptionPosition'),
-                  icon: _above ? HeroAppIcons.arrowDown : HeroAppIcons.arrowUp,
-                  label: _above
-                      ? AppStringKeys.composerLinkPreviewBelow.l10n(context)
-                      : AppStringKeys.composerLinkPreviewAbove.l10n(context),
-                  onTap: _togglePosition,
+                  key: const ValueKey('composerLinkPreviewOptionAbove'),
+                  icon: HeroAppIcons.arrowUp,
+                  label: AppStringKeys.composerLinkPreviewAbove.l10n(context),
+                  selected: _above,
+                  onTap: () => _setPosition(true),
                 ),
+                _LinkPreviewMenuRow(
+                  key: const ValueKey('composerLinkPreviewOptionBelow'),
+                  icon: HeroAppIcons.arrowDown,
+                  label: AppStringKeys.composerLinkPreviewBelow.l10n(context),
+                  selected: !_above,
+                  onTap: () => _setPosition(false),
+                ),
+              ],
               const SizedBox(height: 6),
               _LinkPreviewMenuRow(
                 key: const ValueKey('composerLinkPreviewOptionDone'),
@@ -185,17 +194,6 @@ class _ComposerLinkPreviewOptionsSheetState
                 ),
                 onTap: () => Navigator.of(context).pop(),
               ),
-              if (_enabled)
-                _LinkPreviewMenuRow(
-                  key: const ValueKey('composerLinkPreviewOptionRemove'),
-                  icon: HeroAppIcons.trash,
-                  label: AppStringKeys.composerLinkPreviewDisable.l10n(context),
-                  color: AppTheme.tagRed,
-                  onTap: () {
-                    widget.onEnabledChanged(false);
-                    Navigator.of(context).pop();
-                  },
-                ),
               const SizedBox(height: 8),
             ],
           ),
@@ -205,20 +203,24 @@ class _ComposerLinkPreviewOptionsSheetState
   }
 }
 
-/// One 48dp menu row: icon, label, full-width tap target.
+/// One 48dp menu row: icon, label, full-width tap target, and a trailing check
+/// when the row names the state currently in force.
 class _LinkPreviewMenuRow extends StatelessWidget {
   const _LinkPreviewMenuRow({
     super.key,
     required this.icon,
     required this.label,
     required this.onTap,
-    this.color,
+    this.selected = false,
   });
 
   final AppIconData icon;
   final String label;
   final VoidCallback onTap;
-  final Color? color;
+
+  /// Draws the trailing check. The position rows use it to say "this is where
+  /// the card is now" instead of labelling the move they would perform.
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -232,15 +234,19 @@ class _LinkPreviewMenuRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             children: [
-              AppIcon(icon, size: 19, color: color ?? colors.textSecondary),
+              AppIcon(icon, size: 19, color: colors.textSecondary),
               const SizedBox(width: 14),
               Text(
                 label,
                 style: AppTextStyle.bodyLarge(
-                  color ?? colors.textPrimary,
+                  colors.textPrimary,
                   weight: AppTextWeight.medium,
                 ),
               ),
+              if (selected) ...[
+                const Spacer(),
+                AppIcon(HeroAppIcons.check, size: 19, color: colors.linkBlue),
+              ],
             ],
           ),
         ),

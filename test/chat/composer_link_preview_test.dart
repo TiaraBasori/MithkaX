@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chat/chat_view_model.dart';
 import 'package:mithka/chat/composer/chat_input_bar.dart';
 import 'package:mithka/chat/links_search/link_preview_fixer.dart';
+import 'package:mithka/components/app_icons.dart';
 import 'package:mithka/l10n/app_localizations.dart';
 import 'package:mithka/theme/app_theme.dart';
 import 'package:mithka/theme/theme_controller.dart';
@@ -150,20 +151,42 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(
-      find.byKey(const ValueKey('composerLinkPreviewOptionPosition')),
+      find.byKey(const ValueKey('composerLinkPreviewOptionAbove')),
     );
     await tester.pumpAndSettle();
     expect(vm.composerLinkPreview!.showAboveText, isTrue);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('composerLinkPreviewOptionDone')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('composerLinkPreviewOptionDone')),
     );
     await tester.pumpAndSettle();
 
-    // Reopening names the side the card is on now: the row offers the move
-    // back down.
+    // Reopening shows the side the card is on now: the Above row checked, the
+    // Below row unchecked. Both statements are always visible, so the label
+    // never has to be read as a command.
     await tester.tap(find.byKey(const ValueKey('composerLinkPreviewBanner')));
     await tester.pumpAndSettle();
-    expect(find.text('Preview below the text'), findsOneWidget);
+    final aboveIcons = tester
+        .widgetList<AppIcon>(
+          find.descendant(
+            of: find.byKey(const ValueKey('composerLinkPreviewOptionAbove')),
+            matching: find.byType(AppIcon),
+          ),
+        )
+        .toList();
+    final belowIcons = tester
+        .widgetList<AppIcon>(
+          find.descendant(
+            of: find.byKey(const ValueKey('composerLinkPreviewOptionBelow')),
+            matching: find.byType(AppIcon),
+          ),
+        )
+        .toList();
+    expect(aboveIcons.last.icon, HeroAppIcons.check);
+    expect(belowIcons.last.icon, isNot(HeroAppIcons.check));
   });
 
   test('the send request carries the panel choice', () {
