@@ -770,6 +770,12 @@ class _KeyboardInsetProbe extends StatelessWidget {
 class _ChatViewState extends State<ChatView> {
   void _updateState(VoidCallback fn) => setState(fn);
 
+  /// How long a reply jump keeps the destination row washed, then how long
+  /// the wash takes to fade out: exteraless holds the unselect highlight for
+  /// 1000 ms and `ChatMessageCell.setHighlighted` fades it over 300 ms.
+  static const _linkedMessageHighlightHold = Duration(milliseconds: 1000);
+  static const _linkedMessageHighlightFade = Duration(milliseconds: 300);
+
   late final bool _openAtLatest;
   late final ({int accountSlot, int chatId, int? forumTopicId}) _sessionKey;
   late _ChatScrollSnapshot? _sessionScrollSnapshot;
@@ -4666,7 +4672,9 @@ class _ChatViewState extends State<ChatView> {
 
   /// A full-width tint makes an album or document run read as one destination;
 
-  /// reply navigation holds the stronger tint for 650 ms, then fades it out.
+  /// reply navigation holds the stronger tint for 1000 ms on every platform,
+
+  /// then fades it out over 300 ms.
 
   Widget _messageNavigationHighlight(_TranscriptEntry entry, Widget content) {
     final searchHighlighted =
@@ -4682,7 +4690,10 @@ class _ChatViewState extends State<ChatView> {
         ? 0.12
         : 0.0;
     return AnimatedContainer(
-      duration: AppMotion.duration(context, AppMotion.deliberate),
+      key: ValueKey('messageNavigationHighlight-${entry.last.id}'),
+      duration: AppMotion.isReduced(context)
+          ? Duration.zero
+          : _linkedMessageHighlightFade,
       curve: AppMotion.standard,
       color: AppTheme.brand.withValues(alpha: alpha),
       child: content,

@@ -445,9 +445,9 @@ extension _ChatViewChrome on _ChatViewState {
     _claimTranscriptViewport();
     final didReachTarget = await _scrollToMessageAndReport(messageId);
     if (!didReachTarget || !mounted) return;
-    if (isDesktopTargetPlatform(Theme.of(context).platform)) {
-      _flashLinkedMessageHighlight(messageId);
-    }
+    // exteraless confirms the destination on every platform. Keeping this
+    // desktop-only left a phone reply jump with no visible landing mark.
+    _flashLinkedMessageHighlight(messageId);
   }
 
   void _flashLinkedMessageHighlight(int messageId) {
@@ -458,13 +458,26 @@ extension _ChatViewChrome on _ChatViewState {
       _linkedMessageHighlightActive = true;
     });
     _linkedMessageHighlightFadeTimer = Timer(
-      const Duration(milliseconds: 650),
+      _ChatViewState._linkedMessageHighlightHold,
       () {
         if (!mounted || _linkedMessageHighlightId != messageId) return;
         _updateState(() => _linkedMessageHighlightActive = false);
-        _linkedMessageHighlightClearTimer = Timer(AppMotion.deliberate, () {
-          if (!mounted || _linkedMessageHighlightId != messageId) return;
-          _updateState(() => _linkedMessageHighlightId = null);
+        // The row starts fading on the frame this state change is built, not
+        // on the timer tick itself. Hold the id until that fade has actually
+        // run, then drop the wrapper so the next jump paints it fresh.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted ||
+              _linkedMessageHighlightActive ||
+              _linkedMessageHighlightId != messageId) {
+            return;
+          }
+          _linkedMessageHighlightClearTimer = Timer(
+            _ChatViewState._linkedMessageHighlightFade,
+            () {
+              if (!mounted || _linkedMessageHighlightId != messageId) return;
+              _updateState(() => _linkedMessageHighlightId = null);
+            },
+          );
         });
       },
     );
