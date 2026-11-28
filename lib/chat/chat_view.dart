@@ -3190,7 +3190,7 @@ class _ChatViewState extends State<ChatView> {
             // the reference client clears reactions on the long press itself, without
             // the read-all menu it shows for mentions.
             onLongPress: (_) {
-              unawaited(AppHaptics.longPress());
+              unawaited(AppHaptics.tap());
               unawaited(_markAllReactionsRead());
             },
           ),
@@ -4094,7 +4094,7 @@ class _ChatViewState extends State<ChatView> {
       // bar (`pinnedMessageView` long-click → `openPinnedMessagesList`); the
       // tap stays "scroll to the pinned message".
       onLongPress: () {
-        unawaited(AppHaptics.longPress());
+        unawaited(AppHaptics.tap());
         unawaited(_openPinnedMessages());
       },
       child: Container(

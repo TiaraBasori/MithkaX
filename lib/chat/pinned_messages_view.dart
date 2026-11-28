@@ -505,7 +505,7 @@ class _PinnedMessagesViewState extends State<PinnedMessagesView> {
       behavior: HitTestBehavior.opaque,
       onTap: () => _jumpTo(message),
       onLongPressStart: (details) {
-        unawaited(AppHaptics.longPress());
+        unawaited(AppHaptics.tap());
         unawaited(_showMessageMenu(message, details.globalPosition));
       },
       child: AbsorbPointer(

@@ -182,7 +182,7 @@ class _ArchivedChatsViewState extends State<ArchivedChatsView> {
   }
 
   void _beginSelection(ChatSummary chat) {
-    unawaited(AppHaptics.longPress());
+    unawaited(AppHaptics.tap());
     setState(() => _selectedChatIds.add(chat.id));
   }
 

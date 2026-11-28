@@ -211,6 +211,29 @@ void main() {
     expect(activity, contains('haptics = HapticsPlugin(this'));
   });
 
+  test('list and menu long-press ticks stay on the archive tap', () {
+    // The pull-down archive reveal fires KEYBOARD_TAP. Everything a row's
+    // long press or a menu does must feel the same, not the platform's heavy
+    // LONG_PRESS; hold-to-record and alerts keep [longPress].
+    const files = [
+      'lib/chats/chat_list_view.dart',
+      'lib/chats/chat_list_preview.dart',
+      'lib/chats/archived_chats_view.dart',
+      'lib/chat/chat_view.dart',
+      'lib/chat/pinned_messages_view.dart',
+      'lib/chat/composer/voice_draft_card.dart',
+    ];
+    for (final path in files) {
+      final source = File(path).readAsStringSync();
+      expect(
+        source,
+        isNot(contains('AppHaptics.longPress()')),
+        reason: '$path must use the archive tap for list/menu ticks',
+      );
+      expect(source, contains('AppHaptics.tap()'), reason: path);
+    }
+  });
+
   test('the appearance settings row drives the same switch', () {
     final source = File('lib/settings/appearance_view.dart').readAsStringSync();
     expect(source, contains("ValueKey('settings-haptics')"));

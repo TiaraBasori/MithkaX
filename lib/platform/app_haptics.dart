@@ -17,6 +17,11 @@
 //  touch-vibration switch must not be able to silence the app, and the user's
 //  own switch here is the in-app Vibration preference.
 //
+//  A long press on a list row (select, preview, drag lift) or a menu is a
+//  KEYBOARD_TAP, the same tick the pull-down archive reveal fires. It is NOT a
+//  platform LONG_PRESS: the heavy thump read as a misfire next to the archive.
+//  Genuine hold-to-record and in-app alert feedback keep [longPress].
+//
 //  The one preference in [AppHaptics] is the app-wide switch: with it off
 //  nothing is sent to either channel, so no surface can buzz on its own.
 //
