@@ -197,6 +197,39 @@ void main() {
     );
   });
 
+  testWidgets('the scatter uses the reference glyph size and dimming', (
+    tester,
+  ) async {
+    await pumpReply(tester, message: replyMessage());
+    // ReplyMessageLine.drawBackground sets drawable bounds to ±dp(10)*scale,
+    // i.e. a 20dp glyph at scale 1, and dims it by 0.30 * its own alpha
+    // multiplier (the fifth entry carries 0.3).
+    final first = find.byKey(
+      const ValueKey('messageReplySenderEmojiStatusGlyph0'),
+    );
+    expect(tester.getSize(first), const Size.square(20));
+    expect(
+      tester
+          .widget<Opacity>(
+            find.descendant(of: first, matching: find.byType(Opacity)),
+          )
+          .opacity,
+      closeTo(0.30, 0.001),
+    );
+    final fifth = find.byKey(
+      const ValueKey('messageReplySenderEmojiStatusGlyph4'),
+    );
+    expect(tester.getSize(fifth).width, closeTo(20 * 1.03, 0.001));
+    expect(
+      tester
+          .widget<Opacity>(
+            find.descendant(of: fifth, matching: find.byType(Opacity)),
+          )
+          .opacity,
+      closeTo(0.30 * 0.3, 0.001),
+    );
+  });
+
   testWidgets('the emoji scatter never changes the panel geometry', (
     tester,
   ) async {
