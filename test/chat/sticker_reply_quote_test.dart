@@ -138,7 +138,11 @@ void main() {
       const ValueKey('messageReplySenderEmojiStatus'),
     );
     expect(watermark, findsOneWidget);
-    expect(tester.getSize(watermark), quoteRect.size);
+    // The scatter fills the panel's interior: the 3dp rule is the border of
+    // the Container, so the Stack it draws in is three points narrower.
+    final watermarkSize = tester.getSize(watermark);
+    expect(watermarkSize.height, quoteRect.height);
+    expect(watermarkSize.width, quoteRect.width - 3);
     expect(
       find.descendant(of: watermark, matching: find.byType(CustomEmojiView)),
       findsNWidgets(7),
