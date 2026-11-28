@@ -458,20 +458,6 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Media never carries the time ON the picture: a caption
-                // gives the album a bubble, which stamps the time in its
-                // corner, and a caption-less grid puts the time in its own
-                // line under the photos.
-                if (captionMessage == null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: IgnorePointer(
-                        child: _albumMetaRow(context, interactionOwner),
-                      ),
-                    ),
-                  ),
                 if (captionMessage != null)
                   Builder(
                     builder: (captionContext) => GestureDetector(
@@ -579,10 +565,6 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                                 );
                               },
                             ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: _albumMetaRow(context, interactionOwner),
-                            ),
                           ],
                         ),
                       ),
@@ -614,7 +596,10 @@ class ImageMediaAlbumBubble extends StatelessWidget {
         showChannelPostStats &&
         !interactionOwner.isService &&
         !interactionOwner.isContentRestricted;
+    // Every send time reads OUTSIDE the card: on the band, under the photos,
+    // never on the picture and never in the caption's corner.
     final bandChips = <Widget>[
+      _albumMetaRow(context, interactionOwner),
       if (stats && interactionOwner.viewCount > 0)
         MessageChannelStatChip(
           key: ValueKey('messageViews-${interactionOwner.id}'),

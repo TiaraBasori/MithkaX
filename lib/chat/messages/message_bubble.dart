@@ -110,11 +110,6 @@ const double messageTextBubbleRadius = 6;
 /// 15dp is one 12sp line plus the corner inset.
 const double messageBubbleMetaStrip = 15;
 
-/// The meta line's insets inside the bubble's bottom-right corner
-/// (`backgroundWidth − 9dp` in the reference client, minus its own padding).
-const double _bubbleMetaRight = 6;
-const double _bubbleMetaBottom = 2;
-
 /// Line cap for a link preview's description.
 ///
 /// exteraless lays the description out with `maxLines = 6` (3 in its compact
@@ -1192,11 +1187,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     bool containsAttachedComments = false,
     bool reserveMeta = true,
   }) {
-    // The in-bubble send time lives in this strip; without it the last text
-    // line would run straight under the time.
-    final innerPadding = reserveMeta
-        ? padding.add(const EdgeInsets.only(bottom: messageBubbleMetaStrip))
-        : padding;
+    final innerPadding = padding;
     if (!_showsMessageBubbleSurface) {
       return Container(
         key: key,
@@ -1213,9 +1204,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         key: key,
         constraints: constraints,
         padding: _usesDecorativeBubbleBackground
-            ? _bubbleBackgroundStyle.contentPadding.add(
-                const EdgeInsets.only(bottom: messageBubbleMetaStrip),
-              )
+            ? _bubbleBackgroundStyle.contentPadding
             : innerPadding,
         child: child,
       );
@@ -1543,69 +1532,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     return Opacity(opacity: 0.55, child: child);
   }
 
-  /// The meta line inside the bubble: time first, then — for an own message
-  /// that is not edited — the delivery tick, exactly the reference client's
-  /// order. A media-only bubble paints it over the picture, so it carries the
-  /// reference client's shadow instead of the bubble's ink.
-  Widget _bubbleMetaRow(bool outgoing) {
-    final overMedia = _metaOverMedia();
-    final color = overMedia
-        ? Colors.white.withValues(alpha: 0.96)
-        : _messageTimeColor(outgoing);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          _bubbleMetaLabel(),
-          key: const ValueKey('messageTappedTimestamp'),
-          maxLines: 1,
-          textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: AppTextSize.chatTime,
-            height: 1.1,
-            color: color,
-            shadows: overMedia
-                ? const [
-                    Shadow(
-                      color: Color(0x66000000),
-                      blurRadius: 3,
-                      offset: Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
-        ),
-        if (outgoing && !message.isEdited) ...[
-          const SizedBox(width: 3),
-          _deliveryTick(
-            color: overMedia
-                ? color
-                : _messageColors != null
-                ? _messageTimeColor(outgoing)
-                : outgoing
-                ? _outgoingTextColor.withValues(alpha: 0.72)
-                : _colors.textTertiary,
-          ),
-        ],
-      ],
-    );
-  }
-
-  /// A bubble without caption paints its media edge to edge, so the meta line
-  /// sits ON the picture and needs the light ink + shadow the reference client
-  /// uses (`shouldDrawTimeOnMedia`).
-  bool _metaOverMedia() =>
-      message.animatedSticker != null ||
-      message.videoSticker != null ||
-      message.isDice ||
-      (message.stickerFileId != null && message.image != null) ||
-      ((message.video != null || message.image != null) &&
-          (_caption()?.trim().isEmpty ?? true));
-
   /// Only an incoming group message reads any of this — a 1:1 chat used to pay
   /// for the name-colour resolution and the role switch on every message.
-  /// The sender line of an incoming group message. The send time is no longer
-  /// here — every bubble carries it inside its own bottom-right corner.
+  /// The sender line of an incoming group message. The send time is not part
+  /// of it: it rides the band under the message.
   Widget _senderHeader() {
     final theme = _theme;
     final showMemberTags = theme.showMemberTags;
@@ -2137,59 +2067,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// `meta: false` is for cards that already render their own footer (gift,
   /// Gram transfer): their footer owns the message's meta line.
   Widget _withBubbleMeta(Widget child, bool outgoing, {bool meta = true}) {
-    if (!meta) return child;
-    // Only text carries its time in the bubble's corner. A bubble-less message
-    // (album, round video) and a media/sticker message without a caption would
-    // paint the stamp ON the picture — the band below (`_withFloatingBand`)
-    // draws those instead.
-    if (_stampsTimeOutside) return child;
-    // A short bubble still has to hold its time on one line, so the meta's own
-    // width is a floor for the bubble: the reference client widens
-    // `backgroundWidth` to fit `timeWidth` the same way.
-    final minWidth = _bubbleMetaWidth(outgoing) + _bubbleMetaRight + 4;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // The Stack hands its non-positioned child loose constraints, so the
-        // floor has to sit HERE to take effect: a short bubble grows just
-        // enough to hold `12:34 ✓✓` on one line.
-        ConstrainedBox(
-          constraints: BoxConstraints(minWidth: minWidth),
-          child: child,
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: _bubbleMetaBottom,
-          child: IgnorePointer(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: const EdgeInsets.only(right: _bubbleMetaRight),
-                child: _bubbleMetaRow(outgoing),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Width of the meta line, measured with the same style it paints with.
-  double _bubbleMetaWidth(bool outgoing) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: _bubbleMetaLabel(),
-        style: const TextStyle(fontSize: AppTextSize.chatTime, height: 1.1),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-      textScaler: TextScaler.noScaling,
-    )..layout();
-    final timeWidth = painter.width;
-    painter.dispose();
-    final tickWidth = outgoing && !message.isEdited ? 3 + 10.0 : 0.0;
-    return timeWidth + tickWidth;
+    // Every send time reads OUTSIDE the message, in the band under it: the
+    // floating label the bubble used to carry put the stamp on the artwork of
+    // a photo or a sticker, and a corner stamp costs a strip of every bubble.
+    return child;
   }
 
   String _bubbleMetaLabel() =>
@@ -2198,32 +2079,6 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           _showTappedTimestamp
       ? DateText.messageDetailLabel(message.date)
       : DateText.bubbleLabel(message.date);
-
-  /// Whether the send time lives in the band under the message rather than in
-  /// a bubble corner.
-  ///
-  /// True without a bubble surface, and true for a media or sticker message
-  /// with no caption: that card is filled by the artwork, so a corner stamp
-  /// would sit on the picture itself.
-  bool get _stampsTimeOutside {
-    if (!_showsMessageBubbleSurface || _drawsOnCanvas) return true;
-    // A sticker or a round video never keeps its time on the card, caption or
-    // not: the band under it is where the reference client shows it, and a
-    // corner stamp sits on the artwork.
-    if (message.contentType == 'messageSticker' ||
-        message.contentType == 'messageVideoNote') {
-      return true;
-    }
-    if (message.text.trim().isNotEmpty) return false;
-    return switch (message.contentType) {
-      'messagePhoto' ||
-      'messageVideo' ||
-      'messageAnimation' ||
-      'messageSticker' ||
-      'messageVideoNote' => true,
-      _ => false,
-    };
-  }
 
   /// The band under the bubble's outside edge: one chip language for the
   /// whole band, and its right edge is the bubble's own right edge.
@@ -2280,7 +2135,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         : null;
     // Bubble-less content (photo, sticker, round video) keeps its send time in
     // this band: the reference puts it under the media, never on top of it.
-    final timeChip = meta && _stampsTimeOutside && !message.isService
+    final timeChip = meta && !message.isService
         ? Row(
             key: ValueKey('messageBandTime-${message.id}'),
             mainAxisSize: MainAxisSize.min,

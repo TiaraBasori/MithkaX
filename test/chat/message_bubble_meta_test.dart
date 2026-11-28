@@ -1,12 +1,10 @@
 //
 //  message_bubble_meta_test.dart
 //
-//  Every message carries its send time INSIDE its own bubble, in the
-//  bottom-right corner the reference client draws it in
-//  (`ChatMessageCell.drawTimeInternal`: right edge at `backgroundWidth − 9dp`,
-//  top at `layoutHeight − 6.5dp − timeLayout.height`). The old floating label
-//  below the bubble and the band's leading timestamp sat outside the surface;
-//  this suite pins the new geometry so neither can come back.
+//  Every message carries its send time OUTSIDE, on the band under the bubble,
+//  leading the view/forward/reply chips and right-aligned to the bubble's own
+//  edge. A corner stamp costs a strip of every bubble and lands ON the artwork
+//  of a photo, sticker or album, so this suite pins the outside geometry.
 //
 
 import 'dart:async';
@@ -95,11 +93,9 @@ void main() {
     viewCount: viewCount,
   );
 
-  testWidgets('the send time sits inside the bubble, bottom-right', (
-    tester,
-  ) async {
+  testWidgets('the send time rides the band under the bubble', (tester) async {
     await pumpBubble(tester, message(viewCount: 42));
-    final time = find.byKey(const ValueKey('messageTappedTimestamp'));
+    final time = find.byKey(const ValueKey('messageBandTime-9'));
     final bubble = find.byKey(const ValueKey('messageTextBubble-9'));
     expect(time, findsOneWidget);
     expect(bubble, findsOneWidget);
@@ -107,51 +103,47 @@ void main() {
     final timeRect = tester.getRect(time);
     final bubbleRect = tester.getRect(bubble);
     expect(
-      bubbleRect.contains(timeRect.topLeft) &&
-          bubbleRect.contains(timeRect.bottomRight),
-      isTrue,
-      reason: 'time $timeRect must live inside the bubble $bubbleRect',
+      timeRect.top,
+      greaterThanOrEqualTo(bubbleRect.bottom - 1),
+      reason: 'time $timeRect must sit below the bubble $bubbleRect',
     );
-    // The corner insets are the reference client's: a handful of dp, never a
-    // row's worth of distance.
-    expect(bubbleRect.right - timeRect.right, lessThan(24));
-    expect(bubbleRect.bottom - timeRect.bottom, lessThan(8));
+    // The time leads the chip cluster; the cluster is what hugs the bubble's
+    // own right edge.
+    expect((bubbleRect.right - timeRect.right).abs(), greaterThan(0));
+    // The views chip shares the row, to the right of the time.
+    final views = tester.getRect(find.byKey(const ValueKey('messageViews-9')));
+    expect((views.center.dy - timeRect.center.dy).abs(), lessThan(6));
+    expect(views.left, greaterThan(timeRect.right));
   });
 
-  testWidgets('a bubble without outside chips still owns its time', (
+  testWidgets('a bubble without outside chips still shows its time', (
     tester,
   ) async {
     await pumpBubble(tester, message());
     expect(find.byKey(const ValueKey('messageViews-9')), findsNothing);
-    final time = find.byKey(const ValueKey('messageTappedTimestamp'));
+    final time = find.byKey(const ValueKey('messageBandTime-9'));
     final bubble = tester.getRect(
       find.byKey(const ValueKey('messageTextBubble-9')),
     );
     expect(time, findsOneWidget);
-    final timeRect = tester.getRect(time);
-    expect(
-      bubble.contains(timeRect.topLeft) &&
-          bubble.contains(timeRect.bottomRight),
-      isTrue,
-      reason: 'no band exists at all: the time is still inside the bubble',
-    );
+    expect(tester.getRect(time).top, greaterThanOrEqualTo(bubble.bottom - 1));
   });
 
-  testWidgets('an incoming message puts its time in the same corner', (
+  testWidgets('an incoming message puts its time in the same place', (
     tester,
   ) async {
     await pumpBubble(tester, message(outgoing: false), outgoing: false);
-    final timeRect = tester.getRect(
-      find.byKey(const ValueKey('messageTappedTimestamp')),
+    final time = tester.getRect(
+      find.byKey(const ValueKey('messageBandTime-9')),
     );
     final bubble = tester.getRect(
       find.byKey(const ValueKey('messageTextBubble-9')),
     );
-    expect(bubble.contains(timeRect.topLeft), isTrue);
-    expect(bubble.contains(timeRect.bottomRight), isTrue);
+    expect(time.top, greaterThanOrEqualTo(bubble.bottom - 1));
+    expect((bubble.left - time.left).abs(), lessThan(4));
   });
 
-  testWidgets('an album caption carries the time inside the card', (
+  testWidgets('an album keeps its time under the card, caption or not', (
     tester,
   ) async {
     final preferences = await SharedPreferences.getInstance();
@@ -212,11 +204,10 @@ void main() {
       find.byKey(const ValueKey('messageImageAlbumCard-31')),
     );
     expect(
-      card.contains(timeRect.topLeft) && card.contains(timeRect.bottomRight),
-      isTrue,
-      reason: 'album time $timeRect must live inside the card $card',
+      timeRect.top,
+      greaterThanOrEqualTo(card.bottom - 1),
+      reason: 'album time $timeRect must sit under the card $card',
     );
-    expect(card.bottom - timeRect.bottom, lessThan(10));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 2));
