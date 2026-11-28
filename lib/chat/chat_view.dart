@@ -826,6 +826,19 @@ class _ChatViewState extends State<ChatView> {
 
   bool _unreadProgressUpdateScheduled = false;
 
+  /// Floating date pill: the reference client pins a date plate at the top of
+  /// the transcript while the list is scrolling and fades it out 500 ms after
+  /// the scroll stops. The date follows the topmost visible message.
+  int? _floatingDateUnix;
+  bool _floatingDateVisible = false;
+  bool _floatingDateScrolling = false;
+  Timer? _floatingDateHideTimer;
+
+  /// Whether the row's own date separator sits directly above its message, so
+  /// the floating plate can leave the real separator on screen instead of
+  /// painting a second copy over it.
+  final Map<int, bool> _entryHasDateSeparator = {};
+
   bool _viewTickerEnabled = true;
 
   bool _modelDirtyWhileInactive = false;
@@ -1852,6 +1865,7 @@ class _ChatViewState extends State<ChatView> {
     ActiveConversation.shared.unregister(this);
     _wallpaperController.removeListener(_onWallpaperChanged);
     _bannerTimer?.cancel();
+    _floatingDateHideTimer?.cancel();
     _readSyncTimer?.cancel();
     _handoffUpdateTimer?.cancel();
     _linkedMessageHighlightFadeTimer?.cancel();
@@ -2780,6 +2794,29 @@ class _ChatViewState extends State<ChatView> {
                 : const SizedBox.shrink(),
           ),
         ),
+        // Reference client's floating date: the date of the topmost visible
+        // message hangs at the top of the transcript while it scrolls and
+        // fades out 500 ms after the scroll stops. It never takes a tap.
+        if (transcriptReady)
+          Positioned(
+            top: showPinnedTodo ? 64 : 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              ignoring: !_floatingDateVisible,
+              child: AnimatedOpacity(
+                opacity: _floatingDateVisible ? 1 : 0,
+                duration: const Duration(milliseconds: 150),
+                curve: AppMotion.standard,
+                child: _floatingDateUnix == null
+                    ? const SizedBox.shrink()
+                    : TimeSeparator(
+                        key: const ValueKey('chat-floating-date'),
+                        unix: _floatingDateUnix!,
+                      ),
+              ),
+            ),
+          ),
         if (showPinnedTodo)
           Positioned(
             top: 12,
@@ -4492,6 +4529,14 @@ class _ChatViewState extends State<ChatView> {
   ) {
     final message = entry.first;
     final messageIndex = entry.startIndex;
+    final needsDateSeparator = _needsSeparator(
+      messageIndex,
+      messages: messages,
+    );
+    // The floating date plate leaves a real separator on screen instead of
+    // painting a second copy over it; the boundary below is keyed by the
+    // entry's LAST message, so the flag is stored under the same id.
+    _entryHasDateSeparator[entry.last.id] = needsDateSeparator;
     final isTarget = entry.messages.any((m) => m.id == _scrollTargetId);
     final isPinned = entry.messages.any((m) => m.id == _vm.pinnedMessage?.id);
     final targetMessageId = isTarget
@@ -4568,7 +4613,7 @@ class _ChatViewState extends State<ChatView> {
               key: _unreadKey,
               child: ContentSizeScope(child: _unreadDivider()),
             ),
-          if (_needsSeparator(messageIndex, messages: messages))
+          if (needsDateSeparator)
             ContentSizeScope(child: TimeSeparator(unix: message.date)),
           if (_needsTopicSeparator(messageIndex, messages: messages))
             ContentSizeScope(

@@ -110,10 +110,12 @@ extension _ChatViewScrollSession on _ChatViewState {
     }
     if (notification is ScrollStartNotification) {
       _olderHistoryPull.reset();
+      _beginFloatingDate();
     } else if (notification is ScrollUpdateNotification) {
       if (_olderHistoryPull.updateBouncingPosition(notification.metrics)) {
         _triggerOlderHistoryPull();
       }
+      _updateFloatingDate();
     } else if (notification is OverscrollNotification) {
       if (isNearOldest(notification.metrics, threshold: 1) &&
           _olderHistoryPull.addClampedOverscroll(notification.overscroll)) {
@@ -125,8 +127,73 @@ extension _ChatViewScrollSession on _ChatViewState {
       _scheduleTranscriptBottomGapCorrection();
       _saveSessionScrollSnapshot();
       _scheduleHandoffRefresh();
+      _endFloatingDate();
     }
     return false;
+  }
+
+  /// Shows the floating date plate as the transcript starts moving. The
+  /// reference client's `showFloatingDateView(true)` only fades the plate in;
+  /// the date itself is refreshed on every scroll tick.
+  void _beginFloatingDate() {
+    _floatingDateHideTimer?.cancel();
+    _floatingDateHideTimer = null;
+    _floatingDateScrolling = true;
+    _updateFloatingDate();
+  }
+
+  /// Fades the plate out 500 ms after the scroll stops, the reference's
+  /// `hideFloatingDateView(true)` with its 500 ms start delay. A fresh scroll
+  /// in that window cancels the fade.
+  void _endFloatingDate() {
+    _floatingDateScrolling = false;
+    _floatingDateHideTimer?.cancel();
+    _floatingDateHideTimer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted || _floatingDateScrolling) return;
+      if (!_floatingDateVisible) return;
+      _updateState(() => _floatingDateVisible = false);
+    });
+  }
+
+  /// Resolves the date of the topmost message in the viewport and paints the
+  /// plate, unless that row's own date separator is already on screen.
+  void _updateFloatingDate() {
+    if (!_initialTranscriptReady || !mounted) return;
+    if (!_floatingDateScrolling) return;
+    final viewport = _transcriptViewportKey.currentContext?.findRenderObject();
+    if (viewport is! RenderBox || !viewport.attached) return;
+    final viewportHeight = viewport.size.height;
+    int? topMessageId;
+    double? topOffset;
+    for (final entry in _mountedTranscriptEntries.entries) {
+      final box = entry.value;
+      if (!box.attached) continue;
+      final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+      final bottom = top + box.size.height;
+      if (bottom <= 0 || top >= viewportHeight) continue;
+      if (topOffset == null || top < topOffset) {
+        topOffset = top;
+        topMessageId = entry.key;
+      }
+    }
+    if (topMessageId == null) return;
+    final message = _vm.messageForId(topMessageId);
+    if (message == null) return;
+    // The separator lives directly above the row's message boundary, so a
+    // message still sitting in the top ~40 px means its own date plate is
+    // visible and the floating copy would be a duplicate.
+    final messageTop = topOffset ?? 0;
+    final separatorOnScreen =
+        (_entryHasDateSeparator[topMessageId] ?? false) &&
+        messageTop > -2 &&
+        messageTop < 40;
+    final unix = message.date;
+    final visible = !separatorOnScreen;
+    if (_floatingDateUnix == unix && _floatingDateVisible == visible) return;
+    _updateState(() {
+      _floatingDateUnix = unix;
+      _floatingDateVisible = visible;
+    });
   }
 
   void _triggerOlderHistoryPull() {

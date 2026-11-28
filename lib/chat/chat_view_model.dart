@@ -4575,6 +4575,14 @@ class ChatViewModel extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
+  /// The live (or loaded) message with [id], for surfaces that only keep the
+  /// id — the floating date plate above all. Null when the message left the
+  /// transcript (deleted / trimmed by a new page).
+  ChatMessage? messageForId(int messageId) {
+    _ensureMessageIndexes();
+    return _messagesById[messageId] ?? _allMessagesById[messageId];
+  }
+
   List<ChatMessage> _messageRefs(int messageId) {
     _ensureMessageIndexes();
     final refs = <ChatMessage>[];
