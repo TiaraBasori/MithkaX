@@ -1,11 +1,13 @@
 //
 //  message_history_store.dart
 //
-//  Kept-message local history: every incoming message is mirrored
-//  into a small on-device store so messages the counterpart deletes or edits
-//  stay readable afterwards. Nothing here talks to Telegram — the mirror is
-//  written from TDLib updates the account already received, and the kept
-//  copies never leave this device.
+//  Kept-message local history: every message — either direction — is
+//  mirrored into a small on-device store so messages the counterpart deletes
+//  or edits stay readable afterwards. The account's OWN messages are kept
+//  too: it deletes those as well, and in a private chat or a protected
+//  channel that deletion is the only copy left. Nothing here talks to
+//  Telegram — the mirror is written from TDLib updates the account already
+//  received, and the kept copies never leave this device.
 //
 //  Every record is owned by the account that received it: TDLib stamps each
 //  update with '@client_id', the store resolves that to the account's user id
@@ -148,6 +150,11 @@ class MessageHistoryStore extends ChangeNotifier {
 
   static const observedUpdateTypes = [
     'updateNewMessage',
+    // Locally sent messages never arrive as updateNewMessage: TDLib hands
+    // them over as updateMessageSendSucceeded with the FINAL message (the
+    // temp one carried old_message_id and must not be kept). The account
+    // deletes its own messages too, so those copies are recorded as well.
+    'updateMessageSendSucceeded',
     'updateMessageEdited',
     'updateMessageContent',
     'updateDeleteMessages',
@@ -158,7 +165,8 @@ class MessageHistoryStore extends ChangeNotifier {
     // supergroup is a channel (-100… covers both), and the per-class record /
     // snapshot switches must know: treating every supergroup as a channel
     // meant a "groups" switch never applied to the groups users actually
-    // have.
+    // have. Secret chats share the negative bands too, and only the type
+    // tells them apart from supergroups.
     'updateNewChat',
     // A kept message's media file often finishes downloading only after the
     // message was recorded (the first paint downloads the size it shows).
@@ -720,11 +728,13 @@ class MessageHistoryStore extends ChangeNotifier {
   }
 
   /// The chat id an update targets, when the update payload carries one
-  /// (all four observed update types do). Null for an update whose payload
-  /// is missing or malformed — there is then no chat scope to check.
+  /// (every observed update type that targets a chat does). Null for an
+  /// update whose payload is missing or malformed — there is then no chat
+  /// scope to check.
   static int? _updateChatId(Map<String, dynamic> update) {
     switch (update.type) {
       case 'updateNewMessage':
+      case 'updateMessageSendSucceeded':
         return update.obj('message')?.int64('chat_id');
       case 'updateMessageEdited':
       case 'updateMessageContent':
@@ -778,7 +788,11 @@ class MessageHistoryStore extends ChangeNotifier {
   Future<void> _recordUpdate(int accountUserId, Map<String, dynamic> update) {
     switch (update.type) {
       case 'updateNewMessage':
-        _recordIncomingMessage(accountUserId, update.obj('message'));
+      case 'updateMessageSendSucceeded':
+        // A locally sent message arrives as updateMessageSendSucceeded with
+        // its FINAL message: old_message_id is a temp id that was never a
+        // message and must not be kept. Both updates carry the same shape.
+        _recordMessage(accountUserId, update.obj('message'));
       case 'updateMessageEdited':
         _rememberEditDate(accountUserId, update);
       case 'updateMessageContent':
@@ -795,17 +809,16 @@ class MessageHistoryStore extends ChangeNotifier {
     return Future<void>.value();
   }
 
-  /// Mirrors one incoming message. Also runs for messages that come back
-  /// (cache eviction refetch, album resend): those refresh the copy but keep
-  /// the recorded history, and a message deleted earlier becomes active
-  /// again because it exists again.
+  /// Mirrors one message — EITHER direction. Outgoing messages are kept too:
+  /// the account deletes its own messages as well, and nothing else would
+  /// preserve one deleted in a private chat or a protected channel. Also runs
+  /// for messages that come back (cache eviction refetch, album resend):
+  /// those refresh the copy but keep the recorded history, and a message
+  /// deleted earlier becomes active again because it exists again.
   void recordIncomingMessage(Map<String, dynamic>? message) =>
-      _recordIncomingMessage(_activeAccountUserId, message);
+      _recordMessage(_activeAccountUserId, message);
 
-  void _recordIncomingMessage(
-    int? accountUserId,
-    Map<String, dynamic>? message,
-  ) {
+  void _recordMessage(int? accountUserId, Map<String, dynamic>? message) {
     if (!allowTelegramTosViolations) return;
     if (accountUserId == null || message == null) return;
     final settings = MessageHistorySettings.shared;
@@ -814,13 +827,12 @@ class MessageHistoryStore extends ChangeNotifier {
     // name on the update wrappers, not on message).
     final messageId = message.integer('id');
     if (chatId == null || messageId == null) return;
-    // The mirror keeps what the counterpart could take away: only incoming
-    // messages. The account's own outgoing ones stay Telegram's business.
-    // Saved Messages (chat id == own user id) is incoming from itself and is
-    // still kept — the self dialog is incoming from this account's other devices.
-    final isOutgoing = message.boolean('is_outgoing') ?? false;
-    final isSelfChat = chatId == accountUserId;
-    if (isOutgoing && !isSelfChat) return;
+    // Direction is deliberately not a filter: both halves of a conversation
+    // can be deleted, and this account's own deletion is the one it cannot
+    // undo. Saving restrictions are not one either — a chat's
+    // `has_protected_content` and a message's `can_be_saved: false` govern
+    // forwarding and export, never what this local mirror keeps. There is no
+    // protected-content opt-out.
     if (_excludedChatsByAccount[accountUserId]?.contains(chatId) ?? false) {
       return;
     }
@@ -1318,6 +1330,9 @@ class MessageHistoryStore extends ChangeNotifier {
       return false;
     }
     if (!recordsChatType(accountUserId, chatId, message)) return false;
+    // A secret chat is a private conversation, but its id sits in the
+    // supergroup band, so the observed chat type must decide its dim.
+    if (_isSecretChat(accountUserId, chatId)) return settings.snapshotPrivate;
     // TDLib chat ids: users are positive; basic groups −1e13.., supergroups
     // and channels −1e14.. The chat type is not carried on the message, so
     // the id class decides. Self chat snapshots with "private".
@@ -1351,6 +1366,16 @@ class MessageHistoryStore extends ChangeNotifier {
   /// starts recording channel content before the type is known.
   final Map<String, bool> _channelChats = {};
 
+  /// (account, chat) conversations TDLib reported as SECRET chats. Their ids
+  /// sit in the same negative band as supergroups, so the id class would gate
+  /// them by the group/channel switches; the type observed from
+  /// updateNewChat/updateChat is what makes them private conversations.
+  final Set<String> _secretChats = {};
+
+  /// Whether TDLib has reported [chatId] of [accountUserId] as a secret chat.
+  bool _isSecretChat(int accountUserId, int chatId) =>
+      _secretChats.contains('$accountUserId:$chatId');
+
   /// Whether the mirror may record [chatId] for [accountUserId] under the
   /// per-type switches. Bot gating applies to DIALOGS only (a private chat
   /// with a bot); the raw message carries the sender's is_bot when the
@@ -1361,6 +1386,9 @@ class MessageHistoryStore extends ChangeNotifier {
     Map<String, dynamic>? message,
   ) {
     final settings = MessageHistorySettings.shared;
+    // A secret chat is a private conversation, never a supergroup: its id
+    // falls in the supergroup band, so the observed chat type decides here.
+    if (_isSecretChat(accountUserId, chatId)) return settings.recordPrivate;
     // The bot question exists only for DIALOGS: a private chat with a bot.
     // A bot posting inside a group or channel is still group/channel
     // content — letting the sender's is_bot flip the chat's gate would drop
@@ -1412,8 +1440,9 @@ class MessageHistoryStore extends ChangeNotifier {
 
   /// Seeds the chat-type caches from an observed chat object. A user-type
   /// chat resolves the bot question definitively (`is_bot` on the type);
-  /// other chat types just mark the id as known so the id-class fallback
-  /// applies without further sniffing.
+  /// a secret chat is marked as such so the private switches apply; other
+  /// chat types just mark the id as known so the id-class fallback applies
+  /// without further sniffing.
   void _rememberChatType(int accountUserId, Map<String, dynamic> chat) {
     final chatId = chat.int64('id');
     if (chatId == null) return;
@@ -1424,6 +1453,14 @@ class MessageHistoryStore extends ChangeNotifier {
       _botChats[key] = isBot;
       if (type.type == 'chatTypeSupergroup') {
         _channelChats[key] = type.boolean('is_channel') ?? true;
+      }
+      if (type.type == 'chatTypeSecret') {
+        _secretChats.add(key);
+      } else {
+        // A chat that is no longer secret (the secret chat was deleted and
+        // the id reused, or the type simply changed) must not keep the
+        // private classification forever.
+        _secretChats.remove(key);
       }
     }
   }
@@ -1768,6 +1805,7 @@ class MessageHistoryStore extends ChangeNotifier {
     _entryMediaFileIds.clear();
     _channelChats.clear();
     _botChats.clear();
+    _secretChats.clear();
     _generation++;
     _clearedAllAt = ++_scopeEpoch;
     _media().deleteAll();
@@ -1847,6 +1885,7 @@ class MessageHistoryStore extends ChangeNotifier {
     _media().deleteAccount(accountUserId);
     _channelChats.removeWhere((key, _) => key.startsWith('$accountUserId:'));
     _botChats.removeWhere((key, _) => key.startsWith('$accountUserId:'));
+    _secretChats.removeWhere((key) => key.startsWith('$accountUserId:'));
     if (_excludedChatsByAccount.remove(accountUserId) != null) changed = true;
     unawaited(_prefs?.remove('$_prefsKeyPrefix$accountUserId'));
     _removedAccountAt[accountUserId] = ++_scopeEpoch;

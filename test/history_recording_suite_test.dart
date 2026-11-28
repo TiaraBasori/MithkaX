@@ -323,6 +323,205 @@ void main() {
     });
 
     test(
+      'a secret chat records under the private switches, not the group ones',
+      () async {
+        await start();
+        final settings = MessageHistorySettings.shared;
+        settings.setRecordPrivate(true);
+        settings.setRecordGroups(false);
+        settings.setRecordChannels(false);
+        settings.setSnapshotPrivate(true);
+        settings.setSnapshotGroups(false);
+        settings.setSnapshotChannels(false);
+        addTearDown(() {
+          settings.setSnapshotPrivate(false);
+          settings.setSnapshotGroups(false);
+          settings.setSnapshotChannels(false);
+        });
+        // Secret chat ids sit in the supergroup band; only the chat TYPE
+        // says what this conversation is.
+        const secretChat = -2000000000123;
+        final media = MessageMediaSnapshotter.forTesting()
+          ..dir = Directory('${dir.path}/secret-media');
+        store.mediaSnapshotter = media;
+        addTearDown(() => store.mediaSnapshotter = null);
+        final source = File('${dir.path}/tdlib-cache-secret.jpg')
+          ..writeAsBytesSync(List.filled(4, 3));
+        await emit({
+          '@type': 'updateNewChat',
+          '@client_id': _clientA,
+          'chat': {
+            '@type': 'chat',
+            'id': '$secretChat',
+            'type': {
+              '@type': 'chatTypeSecret',
+              'secret_chat_id': 123,
+              'user_id': '42',
+            },
+          },
+        });
+        await emit({
+          '@type': 'updateNewMessage',
+          '@client_id': _clientA,
+          'message': {
+            ..._message(secretChat, 1, text: 'secret'),
+            'content': {
+              '@type': 'messagePhoto',
+              'caption': {'@type': 'formattedText', 'text': 'secret'},
+              'photo': {
+                '@type': 'photo',
+                'sizes': [
+                  {
+                    '@type': 'photoSize',
+                    'width': 800,
+                    'height': 600,
+                    'photo': {
+                      '@type': 'file',
+                      'id': 21,
+                      'local': {
+                        '@type': 'localFile',
+                        'path': source.path,
+                        'is_downloading_completed': true,
+                        'is_active_downloading': false,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        });
+        final entry = store.entryFor(_accountA, secretChat, 1);
+        expect(entry, isNotNull, reason: 'a secret chat is a private chat');
+        expect(entry!.text, 'secret');
+        // The snapshot dim follows the same classification: snapshotPrivate
+        // is on, the group/channel dims are off.
+        for (var i = 0; i < 100; i++) {
+          if ((store.entryFor(_accountA, secretChat, 1)?.mediaPath ?? '')
+              .isNotEmpty) {
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        expect(
+          store.entryFor(_accountA, secretChat, 1)?.mediaPath,
+          isNotEmpty,
+          reason: 'a secret chat snapshots with the private dim',
+        );
+
+        // The reverse: private off but both group switches on. A secret chat
+        // must stay dark instead of falling back to the supergroup gate.
+        settings.setRecordPrivate(false);
+        settings.setSnapshotPrivate(false);
+        settings.setRecordGroups(true);
+        settings.setRecordChannels(true);
+        await emit({
+          '@type': 'updateNewMessage',
+          '@client_id': _clientA,
+          'message': _message(secretChat, 2, text: 'still secret'),
+        });
+        expect(store.entryFor(_accountA, secretChat, 2), isNull);
+      },
+    );
+
+    test(
+      'an outgoing message is kept, and history only once it is deleted',
+      () async {
+        await start();
+        MessageHistorySettings.shared.setRecordPrivate(true);
+        const chat = 811;
+        // Local sends arrive as updateMessageSendSucceeded with the FINAL
+        // message; old_message_id is the temp id, which is no message at all.
+        await emit({
+          '@type': 'updateMessageSendSucceeded',
+          '@client_id': _clientA,
+          'old_message_id': 7,
+          'message': {
+            ..._message(chat, 900, text: 'mine', senderId: _accountA),
+            'is_outgoing': true,
+          },
+        });
+        expect(store.entryFor(_accountA, chat, 900)?.text, 'mine');
+        expect(store.entryFor(_accountA, chat, 7), isNull);
+        expect(
+          store.historyEntries,
+          isEmpty,
+          reason: 'a live message is a base copy, not history',
+        );
+
+        await emit({
+          '@type': 'updateDeleteMessages',
+          '@client_id': _clientA,
+          'chat_id': '$chat',
+          'message_ids': [900],
+          'is_permanent': true,
+          'is_refill': false,
+        });
+        expect(store.historyEntries.map((e) => e.messageId), [900]);
+        expect(store.historyEntries.single.state, MessageHistoryState.deleted);
+        expect(store.historyEntries.single.senderId, _accountA);
+      },
+    );
+
+    test('protected content still records, with no saving opt-out', () async {
+      await start();
+      const channel = -1007776665550;
+      await emit({
+        '@type': 'updateNewChat',
+        '@client_id': _clientA,
+        'chat': {
+          '@type': 'chat',
+          'id': '$channel',
+          'has_protected_content': true,
+          'type': {
+            '@type': 'chatTypeSupergroup',
+            'supergroup_id': 7776665550,
+            'is_channel': true,
+          },
+        },
+      });
+      await emit({
+        '@type': 'updateNewMessage',
+        '@client_id': _clientA,
+        'message': {
+          ..._message(channel, 1, text: 'protected'),
+          'can_be_saved': false,
+          'has_protected_content': true,
+        },
+      });
+      expect(store.entryFor(_accountA, channel, 1)?.text, 'protected');
+
+      // The account's own post in the same protected channel, delivered as
+      // the final message of a local send.
+      await emit({
+        '@type': 'updateMessageSendSucceeded',
+        '@client_id': _clientA,
+        'old_message_id': 8,
+        'message': {
+          ..._message(channel, 2, text: 'my post', senderId: _accountA),
+          'is_outgoing': true,
+          'can_be_saved': false,
+        },
+      });
+      expect(store.entryFor(_accountA, channel, 2)?.text, 'my post');
+
+      // Deleting it used to leave nothing: the own post was never mirrored.
+      await emit({
+        '@type': 'updateDeleteMessages',
+        '@client_id': _clientA,
+        'chat_id': '$channel',
+        'message_ids': [2],
+        'is_permanent': true,
+        'is_refill': false,
+      });
+      expect(
+        store.historyEntries.map((e) => e.messageId),
+        [2],
+        reason: 'an own deleted post in a protected channel is history',
+      );
+    });
+
+    test(
       'export/import round-trips entries and replaces the account mirror',
       () async {
         await start();
