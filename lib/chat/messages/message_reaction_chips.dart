@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mithka/l10n/app_localizations.dart';
-import '../../components/app_press_ripple.dart';
 import '../../components/photo_avatar.dart';
 import '../../tdlib/td_models.dart';
 import '../../theme/app_theme.dart';
 import '../stickers/custom_emoji.dart';
 import 'reaction_reactor_avatars.dart';
+import 'reaction_toggle.dart';
 
 /// The reaction buckets under a message bubble or media album.
 ///
@@ -26,6 +26,12 @@ import 'reaction_reactor_avatars.dart';
 ///
 /// Sorting follows the reference too: a private chat leads with the bucket the
 /// reader chose, a group/channel with the biggest bucket.
+///
+/// A tap anywhere on the pill — emoji, count or padding — toggles the bucket;
+/// the reactor list is reachable only by a long press, and only where Telegram
+/// lets this account enumerate the reactors ([canSeeReactorList], TDLib's
+/// `can_get_added_reactions`). A channel's reactions are anonymous, so a long
+/// press there stays an ordinary tap.
 class MessageReactionChips extends StatefulWidget {
   const MessageReactionChips({
     super.key,
@@ -33,6 +39,7 @@ class MessageReactionChips extends StatefulWidget {
     required this.outgoing,
     this.onToggle,
     this.onShowUsers,
+    this.canSeeReactorList = true,
     this.meId,
     this.meName,
     this.mePhoto,
@@ -45,6 +52,10 @@ class MessageReactionChips extends StatefulWidget {
   final ValueChanged<MessageReaction>? onToggle;
   final void Function(ChatMessage message, MessageReaction reaction)?
   onShowUsers;
+
+  /// Whether the reactor list exists to open. False in a channel, where
+  /// reactions are anonymous and TDLib answers no reactors at all.
+  final bool canSeeReactorList;
 
   /// The two participants of a private chat, for the reference client's
   /// two-avatar chips. Absent on cards that never show one.
@@ -147,11 +158,18 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
         : AppTheme.brand.withValues(alpha: 0.156);
     final foreground = r.chosen ? Colors.white : AppTheme.brand;
     final avatars = _avatarSlot(r, total);
+    final onShow = widget.onShowUsers;
     return GestureDetector(
-      key: ValueKey('reactionChip-${widget.message.id}-${_reactionKey(r)}'),
+      key: ValueKey(
+        'reactionChip-${widget.message.id}-${reactionBucketKey(r)}',
+      ),
       behavior: HitTestBehavior.opaque,
+      // The WHOLE pill toggles: the emoji, the count and the padding alike.
+      // The reactor list is the long press, and only where it exists.
       onTap: () => widget.onToggle?.call(r),
-      onLongPress: () => widget.onShowUsers?.call(widget.message, r),
+      onLongPress: widget.canSeeReactorList && onShow != null
+          ? () => onShow(widget.message, r)
+          : null,
       child: Container(
         height: 26,
         padding: EdgeInsets.only(
@@ -173,7 +191,7 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
               const SizedBox(width: 4),
               avatars,
             ] else if (r.count > 1)
-              _countTarget(r, foreground),
+              _count(r, foreground),
           ],
         ),
       ),
@@ -202,7 +220,9 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
     return _AvatarsRow(
       // The reaction is part of the key: two buckets in one private chat both
       // draw a stack, and duplicate sibling keys break element reuse.
-      key: ValueKey('reactionAvatars-${widget.message.id}-${_reactionKey(r)}'),
+      key: ValueKey(
+        'reactionAvatars-${widget.message.id}-${reactionBucketKey(r)}',
+      ),
       people: people,
     );
   }
@@ -227,50 +247,50 @@ class _MessageReactionChipsState extends State<MessageReactionChips> {
     if (r.count > 3 || total > 3 || r.reactors.isEmpty) return const [];
     return [
       for (final reactor in r.reactors.take(3))
-        if (_reactors[reactor.senderId] case final person?
+        if (_reactorPerson(reactor.senderId) case final person?
             when !person.isDeleted && person.title.isNotEmpty)
           _AvatarPerson(title: person.title, photo: person.photo),
     ];
   }
 
-  Widget _countTarget(MessageReaction r, Color color) {
-    final count = Padding(
+  /// The reader's own face comes from the pane (it already knows the name and
+  /// photo), so the avatar the optimistic toggle just prepended paints at once
+  /// instead of waiting for a `getUser` round trip. Every other reactor is
+  /// resolved lazily through [_reactors].
+  ReactionReactorAvatar? _reactorPerson(int senderId) {
+    if (widget.meId != null && senderId == widget.meId) {
+      final name = widget.meName ?? '';
+      if (name.isNotEmpty || widget.mePhoto != null) {
+        return ReactionReactorAvatar(title: name, photo: widget.mePhoto);
+      }
+    }
+    return _reactors[senderId];
+  }
+
+  /// The count. A plain number now: the whole pill toggles the bucket, so a
+  /// tappable number would steal taps meant for the reaction.
+  Widget _count(MessageReaction r, Color color) {
+    return Padding(
       padding: const EdgeInsets.only(left: 4),
-      child: Text(
-        '${r.count}',
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: color,
+      child: Semantics(
+        key: ValueKey(
+          'reactionCount-${widget.message.id}-${reactionBucketKey(r)}',
         ),
-      ),
-    );
-    final onShow = widget.onShowUsers;
-    // Without a list callback the count stays plain text, so the whole chip
-    // keeps toggling the reaction exactly as before.
-    if (onShow == null) return count;
-    return Semantics(
-      key: ValueKey('reactionCount-${widget.message.id}-${_reactionKey(r)}'),
-      button: true,
-      label: AppStrings.t(AppStringKeys.chatReactionUsersCount, {
-        'value1': r.count,
-      }),
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => onShow(widget.message, r),
-        child: AppPressRipple(
-          borderRadius: BorderRadius.circular(AppRadius.control),
-          child: count,
+        label: AppStrings.t(AppStringKeys.chatReactionUsersCount, {
+          'value1': r.count,
+        }),
+        excludeSemantics: true,
+        child: Text(
+          '${r.count}',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
         ),
       ),
     );
   }
-
-  static String _reactionKey(MessageReaction reaction) =>
-      reaction.customEmojiId != 0
-      ? 'custom:${reaction.customEmojiId}'
-      : 'emoji:${reaction.emoji ?? ''}';
 }
 
 /// One 20dp face of the avatar stack.

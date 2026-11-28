@@ -100,6 +100,11 @@ extension _ChatViewTranslationSummary on _ChatViewState {
     MessageReaction reaction,
   ) async {
     if (!mounted || message.reactions.isEmpty) return;
+    // A channel's reactions are anonymous: TDLib reports
+    // `can_get_added_reactions: false` and getMessageAddedReactions answers
+    // nothing, so there is no list to show. The chip already hides the long
+    // press; this is the defence for every other entry point.
+    if (!message.reactionsCanSeeList || _vm.isChannel) return;
     // `can_report_reactions` is a messageProperties field, not a field of the
     // message. Start the hydrated permission alongside the sheet so the report
     // action appears only after TDLib granted it, and fails closed otherwise.

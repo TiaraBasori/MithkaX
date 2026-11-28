@@ -360,6 +360,7 @@ abstract final class TDParse {
         commentThreadMetadataKnown: interactionInfo != null,
       )
       ..reactions = reactionsFrom(message)
+      ..reactionsCanSeeList = reactionsCanSeeListFrom(message)
       ..forwardOrigin = isContentRestricted ? null : fwdName
       ..forwardAuthorSignature = isContentRestricted ? null : fwdAuthorSignature
       ..forwardFromUserId = isContentRestricted ? null : fwdUserId
@@ -585,17 +586,38 @@ abstract final class TDParse {
 
   /// Parses message.interaction_info.reactions into reaction buckets.
   ///
-  /// TDLib also reports `recent_reactions` (`messagePeerReaction`): the last
-  /// senders per bucket. The reference client draws their avatars instead of a
-  /// small count, so each bucket keeps the ids that match its own reaction.
+  /// TDLib 1.8.69 reports the last senders per bucket as
+  /// `reactionCount.recent_sender_ids` (at most three `MessageSender`s). The
+  /// reference client draws their avatars instead of a small count, so each
+  /// bucket keeps the ids that belong to its own reaction. Older captures —
+  /// and fixtures written against them — still carry the
+  /// `messageReactions.recent_reactions` (`messagePeerReaction`) list, which
+  /// stays as a per-bucket fallback.
   static List<MessageReaction> reactionsFrom(Map<String, dynamic> message) {
     final reactions = message.obj('interaction_info')?.obj('reactions');
     final list = reactions?.objects('reactions');
     if (list == null) return const [];
-    final recent = reactions?.objects('recent_reactions') ?? const [];
-    List<MessageReactor> reactorsFor(String? emoji, int customEmojiId) {
+    final legacyRecent = reactions?.objects('recent_reactions') ?? const [];
+
+    List<MessageReactor> directReactors(Map<String, dynamic> bucket) {
+      final senders = bucket.objects('recent_sender_ids');
+      if (senders == null || senders.isEmpty) return const [];
       final out = <MessageReactor>[];
-      for (final entry in recent) {
+      for (final sender in senders) {
+        final senderId = switch (sender.type) {
+          'messageSenderUser' => sender.int64('user_id') ?? 0,
+          'messageSenderChat' => sender.int64('chat_id') ?? 0,
+          _ => 0,
+        };
+        if (senderId == 0) continue;
+        out.add(MessageReactor(senderId: senderId));
+      }
+      return out;
+    }
+
+    List<MessageReactor> legacyReactorsFor(String? emoji, int customEmojiId) {
+      final out = <MessageReactor>[];
+      for (final entry in legacyRecent) {
         final type = entry.obj('reaction') ?? entry.obj('type');
         final matches = customEmojiId != 0
             ? type?.type == 'reactionTypeCustomEmoji' &&
@@ -624,15 +646,29 @@ abstract final class TDParse {
       final customEmojiId = type?.type == 'reactionTypeCustomEmoji'
           ? (type?.int64('custom_emoji_id') ?? 0)
           : 0;
+      final direct = directReactors(r);
       return MessageReaction(
         emoji: emoji,
         customEmojiId: customEmojiId,
         count: r.integer('total_count') ?? 0,
         chosen: r.boolean('is_chosen') ?? false,
-        reactors: reactorsFor(emoji, customEmojiId),
+        reactors: direct.isNotEmpty
+            ? direct
+            : legacyReactorsFor(emoji, customEmojiId),
       );
     }).toList();
   }
+
+  /// TDLib `messageReactions.can_get_added_reactions`: whether this account may
+  /// enumerate the reactors of [message]. A channel reports false because its
+  /// reactions are anonymous; a message without the flag (Bot API, an older
+  /// capture) keeps the list.
+  static bool reactionsCanSeeListFrom(Map<String, dynamic> message) =>
+      message
+          .obj('interaction_info')
+          ?.obj('reactions')
+          ?.boolean('can_get_added_reactions') ??
+      true;
 
   static List<List<MessageButton>> messageButtonRows(
     Map<String, dynamic>? replyMarkup,

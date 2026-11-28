@@ -2165,7 +2165,7 @@ class _ChatViewState extends State<ChatView> {
       messageColors: _effectiveMessageColors(),
       hasCustomChatTheme: _hasCustomChatTheme,
       onToggleReaction: (r) => unawaited(_toggleMessageReaction(message, r)),
-      onShowReactionUsers: _showReactionUsers,
+      onShowReactionUsers: _vm.isChannel ? null : _showReactionUsers,
       onRedial: _startCall,
       onOpenContact: _openSharedContact,
       onVotePoll: (message, optionIndex) =>
@@ -4910,7 +4910,7 @@ class _ChatViewState extends State<ChatView> {
         onLongPress: _showActionMenuForMessage,
         onToggleReaction: (message, reaction) =>
             unawaited(_toggleMessageReaction(message, reaction)),
-        onShowReactionUsers: _showReactionUsers,
+        onShowReactionUsers: _vm.isChannel ? null : _showReactionUsers,
         onDesktopQuoteChanged: _handleDesktopQuoteChanged,
         mobileTextSelectionAreaKey: mobileSelectionKey,
         onMobileTextSelectionChanged: _handleMobileTextSelectionChanged,

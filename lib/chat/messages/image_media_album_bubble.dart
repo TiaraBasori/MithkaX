@@ -244,6 +244,7 @@ class ImageMediaAlbumBubble extends StatelessWidget {
                         : (reaction) =>
                               onToggleReaction!(reactionOwner, reaction),
                     onShowUsers: onShowReactionUsers,
+                    canSeeReactorList: reactionOwner.reactionsCanSeeList,
                     meId: meId,
                     meName: meName.l10n(context),
                     mePhoto: mePhoto,

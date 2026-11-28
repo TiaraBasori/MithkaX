@@ -551,6 +551,20 @@ class MessageReaction {
           'custom_emoji_id': customEmojiId.toString(),
         }
       : {'@type': 'reactionTypeEmoji', 'emoji': emoji};
+
+  MessageReaction copyWith({
+    String? emoji,
+    int? customEmojiId,
+    int? count,
+    bool? chosen,
+    List<MessageReactor>? reactors,
+  }) => MessageReaction(
+    emoji: emoji ?? this.emoji,
+    customEmojiId: customEmojiId ?? this.customEmojiId,
+    count: count ?? this.count,
+    chosen: chosen ?? this.chosen,
+    reactors: reactors ?? this.reactors,
+  );
 }
 
 /// One sender inside a reaction bucket (`messagePeerReaction`).
@@ -1061,6 +1075,14 @@ class ChatMessage {
   /// "hide blocked user messages" feature is on.
   bool blockedByUser;
   List<MessageReaction> reactions = const [];
+
+  /// TDLib `messageReactions.can_get_added_reactions`: whether this account may
+  /// enumerate who reacted. Channels report `false` — reactions there are
+  /// anonymous, `getMessageAddedReactions` answers nothing, and the reactor
+  /// list must stay behind a hidden long press. Defaults to true so a message
+  /// that never carried the flag (Bot API rows, test fakes) keeps the list.
+  bool reactionsCanSeeList = true;
+
   String? forwardOrigin; // name of the original author when forwarded
   String? forwardAuthorSignature; // signed author within the origin channel
   int? forwardFromUserId; // origin user, resolved lazily to forwardOrigin

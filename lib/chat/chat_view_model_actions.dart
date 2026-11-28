@@ -475,27 +475,38 @@ extension ChatViewModelActions on ChatViewModel {
   }
 
   Future<void> toggleReaction(ChatMessage m, MessageReaction r) async {
-    if (r.chosen) {
-      // TDLib guarantees that a chosen reaction remains removable even when
-      // the user can no longer add reactions to the message.
-      await _client.queryTo({
-        '@type': 'removeMessageReaction',
-        'chat_id': chatId,
-        'message_id': m.id,
-        'reaction_type': r.type,
-      }, _accountClientId);
-    } else {
-      final reaction = r.customEmojiId != 0
-          ? QuickReactionChoice.custom(r.customEmojiId)
-          : QuickReactionChoice.emoji(r.emoji ?? '');
-      if (_usesBotApiBackend) {
-        // A Bot API message can expose a reaction bucket even though the API
-        // can't enumerate all reactions allowed for that individual message.
-        // Let the server accept or reject that exact existing bucket.
-        await _sendReactionChoice(m.id, reaction);
+    // Same optimistic preview as the class body (this extension mirrors it for
+    // readers of the actions file): paint the reader's toggle, then send.
+    final previous = m.reactions;
+    _applyReactionPreview(m, previous, r);
+    try {
+      if (r.chosen) {
+        // TDLib guarantees that a chosen reaction remains removable even when
+        // the user can no longer add reactions to the message.
+        await _client.queryTo({
+          '@type': 'removeMessageReaction',
+          'chat_id': chatId,
+          'message_id': m.id,
+          'reaction_type': r.type,
+        }, _accountClientId);
       } else {
-        await _addReactionChoice(m.id, reaction);
+        final reaction = r.customEmojiId != 0
+            ? QuickReactionChoice.custom(r.customEmojiId)
+            : QuickReactionChoice.emoji(r.emoji ?? '');
+        if (_usesBotApiBackend) {
+          // A Bot API message can expose a reaction bucket even though the API
+          // can't enumerate all reactions allowed for that individual message.
+          // Let the server accept or reject that exact existing bucket.
+          await _sendReactionChoice(m.id, reaction);
+        } else {
+          await _addReactionChoice(m.id, reaction);
+        }
       }
+    } catch (_) {
+      m.reactions = previous;
+      _bumpMaterializedMessageRevisions([m.id]);
+      _scheduleCoalescedNotify();
+      rethrow;
     }
   }
 

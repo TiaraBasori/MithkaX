@@ -610,6 +610,9 @@ extension ChatViewModelUpdates on ChatViewModel {
           for (final message in targets) {
             message.commentThreadMetadataKnown = true;
             message.reactions = reactions;
+            message.reactionsCanSeeList = TDParse.reactionsCanSeeListFrom({
+              'interaction_info': interactionInfo,
+            });
             message.viewCount = interactionInfo?.integer('view_count') ?? 0;
             message.forwardCount =
                 interactionInfo?.integer('forward_count') ?? 0;

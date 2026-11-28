@@ -1442,6 +1442,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                   outgoing: outgoing,
                   onToggle: widget.bubble.onToggleReaction,
                   onShowUsers: widget.bubble.onShowReactionUsers,
+                  canSeeReactorList: message.reactionsCanSeeList,
                   meId: widget.bubble.meId,
                   meName: widget.bubble.meName.l10n(context),
                   mePhoto: widget.bubble.mePhoto,

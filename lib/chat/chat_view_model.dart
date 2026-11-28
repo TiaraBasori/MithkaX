@@ -56,6 +56,7 @@ import 'messages/message_reaction_availability.dart';
 import 'messages/message_text_quote.dart';
 import 'messages/pangu_spacing.dart';
 import 'messages/quick_reaction_choice.dart';
+import 'messages/reaction_toggle.dart';
 import 'protected_forward.dart';
 import 'secret_chat_service.dart';
 import 'sponsored_messages_cache.dart';
@@ -3522,28 +3523,61 @@ class ChatViewModel extends ChangeNotifier {
   }
 
   Future<void> toggleReaction(ChatMessage m, MessageReaction r) async {
-    if (r.chosen) {
-      // TDLib guarantees that a chosen reaction remains removable even when
-      // the user can no longer add reactions to the message.
-      await _client.queryTo({
-        '@type': 'removeMessageReaction',
-        'chat_id': chatId,
-        'message_id': m.id,
-        'reaction_type': r.type,
-      }, _accountClientId);
-    } else {
-      final reaction = r.customEmojiId != 0
-          ? QuickReactionChoice.custom(r.customEmojiId)
-          : QuickReactionChoice.emoji(r.emoji ?? '');
-      if (_usesBotApiBackend) {
-        // A Bot API message can expose a reaction bucket even though the API
-        // can't enumerate all reactions allowed for that individual message.
-        // Let the server accept or reject that exact existing bucket.
-        await _sendReactionChoice(m.id, reaction);
+    // The reference client answers the tap before the server does
+    // (MessageObject.selectReaction): the bucket moves, the reader joins its
+    // recent reactors so their own face paints at once. TDLib's interaction
+    // update confirms — or, on a failure, this restore undoes — the preview.
+    final previous = m.reactions;
+    _applyReactionPreview(m, previous, r);
+    try {
+      if (r.chosen) {
+        // TDLib guarantees that a chosen reaction remains removable even when
+        // the user can no longer add reactions to the message.
+        await _client.queryTo({
+          '@type': 'removeMessageReaction',
+          'chat_id': chatId,
+          'message_id': m.id,
+          'reaction_type': r.type,
+        }, _accountClientId);
       } else {
-        await _addReactionChoice(m.id, reaction);
+        final reaction = r.customEmojiId != 0
+            ? QuickReactionChoice.custom(r.customEmojiId)
+            : QuickReactionChoice.emoji(r.emoji ?? '');
+        if (_usesBotApiBackend) {
+          // A Bot API message can expose a reaction bucket even though the API
+          // can't enumerate all reactions allowed for that individual message.
+          // Let the server accept or reject that exact existing bucket.
+          await _sendReactionChoice(m.id, reaction);
+        } else {
+          await _addReactionChoice(m.id, reaction);
+        }
       }
+    } catch (_) {
+      m.reactions = previous;
+      _bumpMaterializedMessageRevisions([m.id]);
+      _scheduleCoalescedNotify();
+      rethrow;
     }
+  }
+
+  /// Paints the reader's own toggle immediately: the tapped bucket's count and
+  /// chosen flag move, the reader joins its reactors and the chip's avatar
+  /// stack shows them. Pure arithmetic lives in `previewReactionToggle`.
+  void _applyReactionPreview(
+    ChatMessage m,
+    List<MessageReaction> previous,
+    MessageReaction r,
+  ) {
+    // A channel's reactions are anonymous: the reference inserts the reader
+    // only where the reactor list exists (`can_see_list`) or in a private
+    // chat. Painting the reader's face under an anonymous channel bucket breaks
+    // that; the count and the chosen fill still move immediately.
+    final previewMeId = !isChannel && (m.reactionsCanSeeList || chatId > 0)
+        ? (meId ?? 0)
+        : 0;
+    m.reactions = previewReactionToggle(previous, r, previewMeId);
+    _bumpMaterializedMessageRevisions([m.id]);
+    _scheduleCoalescedNotify();
   }
 
   Future<List<MessageReactionUser>> reactionUsers(
