@@ -5970,6 +5970,10 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           child: LoopingVideoView(
             file: message.video!,
             fallback: message.image,
+            // The looping view defaults to `contain`; a GIF that does not
+            // match its 60% frame would then shrink inside bars instead of
+            // filling the bubble the way a photo does.
+            fit: BoxFit.cover,
             showDownloadProgress: true,
           ),
         ),
