@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chats/chat_list_view_model.dart';
 import 'package:mithka/communities/community_models.dart';
+import 'package:mithka/tdlib/td_models.dart';
 
 void main() {
   test('hiding "All" offers only real folders and moves the selection', () {
@@ -289,6 +290,89 @@ void main() {
       expect(model.chats.single.unreadCount, 1);
     },
   );
+
+  test(
+    'an updateUser carries the peer name and profile colours to the row',
+    () {
+      final model = ChatListViewModel();
+      addTearDown(model.dispose);
+
+      final chat = ChatSummary(
+        id: 42,
+        title: 'Alice',
+        lastMessage: 'hi',
+        lastMessageId: 10,
+        date: 10,
+        unreadCount: 0,
+        order: 100,
+        isMuted: false,
+        kind: ChatKind.privateChat,
+        peerUserId: 7,
+        peerIsPremium: true,
+        peerAccentColorId: 0,
+      );
+      model.seedChatForTesting(chat);
+      expect(
+        chat.peerProfileAccentColorId,
+        -1,
+        reason: 'no profile colour yet',
+      );
+
+      // The peer set only 主页颜色: the row still has to learn it, so the new
+      // field belongs in the equality guard that decides whether to repaint.
+      model.applyUpdateForTesting({
+        '@type': 'updateUser',
+        'user': {
+          '@type': 'user',
+          'id': 7,
+          'first_name': 'Alice',
+          'type': {'@type': 'userTypeRegular'},
+          'is_premium': true,
+          'accent_color_id': 0,
+          'profile_accent_color_id': 2,
+        },
+      });
+
+      expect(chat.peerAccentColorId, 0);
+      expect(chat.peerProfileAccentColorId, 2);
+    },
+  );
+
+  test('a cleared profile colour resets the row to the name colour', () {
+    final model = ChatListViewModel();
+    addTearDown(model.dispose);
+
+    final chat = ChatSummary(
+      id: 42,
+      title: 'Alice',
+      lastMessage: 'hi',
+      lastMessageId: 10,
+      date: 10,
+      unreadCount: 0,
+      order: 100,
+      isMuted: false,
+      kind: ChatKind.privateChat,
+      peerUserId: 7,
+      peerAccentColorId: 3,
+      peerProfileAccentColorId: 5,
+    );
+    model.seedChatForTesting(chat);
+
+    model.applyUpdateForTesting({
+      '@type': 'updateUser',
+      'user': {
+        '@type': 'user',
+        'id': 7,
+        'first_name': 'Alice',
+        'type': {'@type': 'userTypeRegular'},
+        'accent_color_id': 3,
+        'profile_accent_color_id': -1,
+      },
+    });
+
+    expect(chat.peerAccentColorId, 3);
+    expect(chat.peerProfileAccentColorId, -1);
+  });
 }
 
 Map<String, dynamic> _groupChat({

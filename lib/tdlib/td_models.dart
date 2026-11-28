@@ -609,6 +609,7 @@ class ChatSummary {
     this.peerPhoneNumber,
     this.peerIsPremium = false,
     this.peerAccentColorId = -1,
+    this.peerProfileAccentColorId = -1,
     this.peerEmojiStatusId = 0,
     this.peerPresence = AvatarPresence.none,
     this.isForum = false,
@@ -654,7 +655,12 @@ class ChatSummary {
   bool peerIsContact;
   String? peerPhoneNumber;
   bool peerIsPremium;
-  int peerAccentColorId;
+  int peerAccentColorId; // the peer's name color id, -1 when unset
+
+  /// The peer's profile color (主页颜色) id, -1 when unset. Independent of
+  /// [peerAccentColorId]: the profile page draws its cover from this one, so
+  /// the chat-list name follows it whenever the peer chose one.
+  int peerProfileAccentColorId;
   int peerEmojiStatusId;
 
   /// Private-chat peer's avatar-dot presence. Groups and channels never have

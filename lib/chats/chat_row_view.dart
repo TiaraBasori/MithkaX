@@ -16,6 +16,7 @@ import '../components/photo_avatar.dart';
 import '../components/ui_components.dart';
 import '../l10n/app_localizations.dart';
 import '../platform/adaptive_platform.dart';
+import '../settings/appearance/accent_color_picker_view.dart';
 import '../tdlib/td_models.dart';
 import '../theme/app_theme.dart';
 import '../theme/content_size.dart';
@@ -23,16 +24,6 @@ import '../theme/date_text.dart';
 import '../theme/theme_controller.dart';
 import 'chat_folder_tag_controller.dart';
 import 'chat_row_metrics.dart';
-
-const List<Color> _telegramAccentColors = [
-  Color(0xFFCC5049),
-  Color(0xFFD67722),
-  Color(0xFF955CDB),
-  Color(0xFF40A920),
-  Color(0xFF309EBA),
-  Color(0xFF368AD1),
-  Color(0xFFC7508B),
-];
 
 class ChatRowView extends StatelessWidget {
   const ChatRowView({
@@ -111,13 +102,19 @@ class ChatRowView extends StatelessWidget {
     final titleFontSize = AppTextSize.chatListTitle();
     final previewFontSize = AppTextSize.chatListPreview();
     final timestampFontSize = AppTextSize.chatListTimestamp();
+    // The profile page paints its cover from the peer's profile colour, so a
+    // peer who only set that one keeps the same hue in the list. Fall back to
+    // the name colour when no profile colour is set.
+    final accentColorId = chat.peerProfileAccentColorId >= 0
+        ? chat.peerProfileAccentColorId
+        : chat.peerAccentColorId;
     final nameColor =
         !showSavedMessagesIdentity &&
             theme.chatListNameColorAudience.shows(
               isPremium: chat.peerIsPremium,
             ) &&
-            chat.peerAccentColorId >= 0
-        ? _accentColor(chat.peerAccentColorId)
+            accentColorId >= 0
+        ? _accentColor(accentColorId)
         : c.textPrimary;
     final showStatus =
         !showSavedMessagesIdentity &&
@@ -274,8 +271,11 @@ class ChatRowView extends StatelessWidget {
   }
 
   Color _accentColor(int id) {
-    if (id >= 0 && id < _telegramAccentColors.length) {
-      return _telegramAccentColors[id];
+    // Premium palettes deliver ids past the built-in seven; those hues need
+    // updateAccentColors, which this list does not carry, so they keep the
+    // brand colour rather than throwing on the index.
+    if (id >= 0 && id < kAccentColors.length) {
+      return kAccentColors[id];
     }
     return AppTheme.brand;
   }

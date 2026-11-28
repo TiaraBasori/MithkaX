@@ -3315,6 +3315,7 @@ class ChatListViewModel extends ChangeNotifier {
     final isContact = user.boolean('is_contact') ?? false;
     final phoneNumber = user.str('phone_number');
     final accent = user.integer('accent_color_id') ?? -1;
+    final profileAccent = user.integer('profile_accent_color_id') ?? -1;
     final status = TDParse.emojiStatusCustomEmojiId(user.obj('emoji_status'));
     final presence = TDParse.userAvatarPresence(user);
     for (final chatId in _chatsByPeerUser[userId] ?? const <int>[]) {
@@ -3329,6 +3330,7 @@ class ChatListViewModel extends ChangeNotifier {
           chat.peerIsContact == isContact &&
           chat.peerPhoneNumber == phoneNumber &&
           chat.peerAccentColorId == accent &&
+          chat.peerProfileAccentColorId == profileAccent &&
           chat.peerEmojiStatusId == status &&
           chat.peerPresence == presence &&
           chat.kind == nextKind &&
@@ -3339,6 +3341,7 @@ class ChatListViewModel extends ChangeNotifier {
       chat.peerIsContact = isContact;
       chat.peerPhoneNumber = phoneNumber;
       chat.peerAccentColorId = accent;
+      chat.peerProfileAccentColorId = profileAccent;
       chat.peerEmojiStatusId = status;
       chat.peerPresence = presence;
       chat.kind = nextKind;
