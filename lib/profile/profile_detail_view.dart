@@ -1189,8 +1189,13 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
       color: context.colors.card,
       child: Column(
         children: [
-          _musicRow(),
-          const InsetDivider(leadingInset: 56),
+          // The reference client hides the saved-music block entirely when
+          // the account has no track; an empty "Music — not set" row with no
+          // action is not a control.
+          if (_music != null) ...[
+            _musicRow(),
+            const InsetDivider(leadingInset: 56),
+          ],
           _profileRow(
             HeroAppIcons.magnifyingGlass.data,
             AppStrings.t(AppStringKeys.chatInfoSearchHistory),
