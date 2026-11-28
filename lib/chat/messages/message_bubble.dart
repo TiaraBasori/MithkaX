@@ -5585,8 +5585,17 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final hasViaBotHeader = message.hasViaBotAttribution;
     final hasAttributionHeader = hasForwardHeader || hasViaBotHeader;
     final hasReplyQuote = message.replyPreviewText != null;
+    // A caption-less media message answers another message the way a sticker
+    // does: the reply marker floats above the picture instead of the picture
+    // sitting in a filled card that holds a quote block. A caption or an
+    // attribution header still needs that card, so only a bare media reply
+    // drops the bubble.
+    final floatsReplyMarker =
+        hasReplyQuote && !hasAttributionHeader && caption == null;
     if (!_groupsMediaCaption(caption)) {
-      final attributedMedia = hasAttributionHeader || hasReplyQuote
+      final attributedMedia = floatsReplyMarker
+          ? _withReplyAboveContent(media, outgoing, mediaWidth)
+          : hasAttributionHeader || hasReplyQuote
           ? _bubbleBackground(
               key: ValueKey(
                 hasAttributionHeader
