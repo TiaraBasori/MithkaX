@@ -569,6 +569,30 @@ class ChatWallpaperBoostAccess {
 typedef TdWallpaperQuery =
     Future<Map<String, dynamic>> Function(Map<String, dynamic> request);
 
+/// The default background a theme with its own wallpaper replaced, plus the
+/// wallpaper that theme applied. Restoring only makes sense while [applied] is
+/// still what the account shows: a background the reader picked afterwards
+/// wins over the old one.
+class _ThemeWallpaperBackup {
+  const _ThemeWallpaperBackup({required this.previous, required this.applied});
+
+  final ChatWallpaper? previous;
+  final ChatWallpaper? applied;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'previous': previous?.toJson(),
+    'applied': applied?.toJson(),
+  };
+
+  static _ThemeWallpaperBackup? fromJson(Object? value) {
+    if (value is! Map) return null;
+    return _ThemeWallpaperBackup(
+      previous: ChatWallpaper.fromJson(value['previous']),
+      applied: ChatWallpaper.fromJson(value['applied']),
+    );
+  }
+}
+
 class ChatWallpaperController extends ChangeNotifier {
   ChatWallpaperController({
     Future<SharedPreferences> Function()? preferences,
@@ -626,6 +650,8 @@ class ChatWallpaperController extends ChangeNotifier {
   Future<void> _patternPreparationTail = Future<void>.value();
   final Map<String, List<ChatWallpaper>> _installedBackgrounds = {};
   final Map<String, ChatWallpaper?> _defaultBackgrounds = {};
+  final Map<String, _ThemeWallpaperBackup?> _themeWallpaperBackups = {};
+  final Set<String> _loadedThemeWallpaperBackups = {};
   final Map<int, List<ChatWallpaper>> _savedBackgrounds = {};
   final Set<int> _loadedSavedBackgrounds = {};
   final Map<String, String?> _globalChatThemeSelections = {};
@@ -674,6 +700,13 @@ class ChatWallpaperController extends ChangeNotifier {
       'mithka.globalChatTheme.v1.${_globalId(dark)}';
   String _savedBackgroundsPreferenceKey() =>
       'mithka.savedChatWallpapers.v1.${_activeSlot()}';
+
+  /// The wallpaper in force before a theme's own background was applied, per
+  /// brightness. Kept apart from the default-background slot so returning to a
+  /// theme without a bundled wallpaper can put the reader's own background
+  /// back instead of leaving the previous theme's image on the chat.
+  String _themeWallpaperBackupKey(bool dark) =>
+      'mithka.chatWallpaper.themeBackup.v1.${_globalId(dark)}';
 
   static String _stockGlobalThemeId(GlobalChatThemeStock stock) =>
       'stock:${stock.name}';
@@ -1361,6 +1394,7 @@ class ChatWallpaperController extends ChangeNotifier {
     ChatWallpaper? wallpaper, {
     required bool dark,
     TdWallpaperQuery? query,
+    bool clearThemeBackup = true,
   }) async {
     final queryAccount = query ?? _query;
     if (query == null && !_hasActiveClient()) {
@@ -1391,7 +1425,104 @@ class ChatWallpaperController extends ChangeNotifier {
       );
     }
     _installedBackgrounds.remove(_globalId(dark));
+    // A background the reader picked here supersedes any theme's bundled one,
+    // so a later switch to an official theme must not pull the old one back.
+    if (clearThemeBackup) {
+      await _writeThemeWallpaperBackup(dark, null);
+    }
     notifyListeners();
+  }
+
+  /// Applies a cloud theme's bundled wallpaper, remembering what it replaced.
+  ///
+  /// Only the FIRST theme wallpaper in a run records the previous background:
+  /// switching theme A → theme B must still return to the reader's own
+  /// wallpaper, not to A's image.
+  Future<void> applyThemeWallpaper(
+    ChatWallpaper wallpaper, {
+    required bool dark,
+  }) async {
+    await loadDefaultWallpaper(dark: dark);
+    final backup = await _loadThemeWallpaperBackup(dark);
+    final previous = backup?.previous ?? defaultWallpaper(dark: dark);
+    await applyDefaultWallpaper(wallpaper, dark: dark, clearThemeBackup: false);
+    await _writeThemeWallpaperBackup(
+      dark,
+      _ThemeWallpaperBackup(
+        previous: previous,
+        applied: defaultWallpaper(dark: dark) ?? wallpaper,
+      ),
+    );
+  }
+
+  /// Puts the pre-theme background back when a theme brings no wallpaper of
+  /// its own (the official themes): the reported "switching back to the
+  /// official theme left the previous theme's wallpaper in place".
+  ///
+  /// Returns whether a background was restored. A wallpaper the reader picked
+  /// after the theme applied its own is left alone; the stale record is dropped
+  /// either way.
+  Future<bool> restoreThemeWallpaper({required bool dark}) async {
+    final backup = await _loadThemeWallpaperBackup(dark);
+    if (backup == null) return false;
+    final applied = backup.applied;
+    if (applied == null) {
+      await _writeThemeWallpaperBackup(dark, null);
+      return false;
+    }
+    await loadDefaultWallpaper(dark: dark);
+    final current = defaultWallpaper(dark: dark);
+    if (current != null &&
+        _wallpaperMemoryKey(current) != _wallpaperMemoryKey(applied)) {
+      // The reader picked this one after the theme; it wins.
+      await _writeThemeWallpaperBackup(dark, null);
+      return false;
+    }
+    // Keep the record until the write lands, so a failed restore can be
+    // retried on the next theme switch instead of losing the old background.
+    await applyDefaultWallpaper(
+      backup.previous,
+      dark: dark,
+      clearThemeBackup: false,
+    );
+    await _writeThemeWallpaperBackup(dark, null);
+    return true;
+  }
+
+  Future<_ThemeWallpaperBackup?> _loadThemeWallpaperBackup(bool dark) async {
+    final key = _globalId(dark);
+    if (!_loadedThemeWallpaperBackups.add(key)) {
+      return _themeWallpaperBackups[key];
+    }
+    try {
+      final raw = (await _preferences()).getString(
+        _themeWallpaperBackupKey(dark),
+      );
+      _themeWallpaperBackups[key] = raw == null
+          ? null
+          : _ThemeWallpaperBackup.fromJson(jsonDecode(raw));
+    } catch (_) {
+      _themeWallpaperBackups[key] = null;
+    }
+    return _themeWallpaperBackups[key];
+  }
+
+  Future<void> _writeThemeWallpaperBackup(
+    bool dark,
+    _ThemeWallpaperBackup? backup,
+  ) async {
+    final key = _globalId(dark);
+    _loadedThemeWallpaperBackups.add(key);
+    _themeWallpaperBackups[key] = backup;
+    final prefs = await _preferences();
+    if (backup == null) {
+      await prefs.remove(_themeWallpaperBackupKey(dark));
+    } else {
+      await prefs.setString(
+        _themeWallpaperBackupKey(dark),
+        jsonEncode(backup.toJson()),
+      );
+    }
   }
 
   Future<ChatWallpaperSearchPage> searchBackgroundImages(

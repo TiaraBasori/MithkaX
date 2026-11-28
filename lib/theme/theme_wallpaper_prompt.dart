@@ -14,8 +14,20 @@ Future<void> promptForThemeWallpaper(
   required TelegramCloudTheme? previousTheme,
   AppColors? colors,
 }) async {
+  final dark = brightness == Brightness.dark;
+  final controller = ChatWallpaperController.shared;
   final nextWallpaper = theme.wallpaper;
-  if (nextWallpaper == null) return;
+  if (nextWallpaper == null) {
+    // The official themes bundle no background. Putting the pre-theme one back
+    // is what makes "switch back to the official theme" also switch the
+    // wallpaper back; a reader-picked background made after the theme wins.
+    try {
+      await controller.restoreThemeWallpaper(dark: dark);
+    } catch (_) {
+      // A theme remains usable when the background cannot be written now.
+    }
+    return;
+  }
 
   final useWallpaper = await showAppConfirmDialog(
     context,
@@ -26,18 +38,28 @@ Future<void> promptForThemeWallpaper(
   );
   if (!context.mounted) return;
 
-  final controller = ChatWallpaperController.shared;
-  final dark = brightness == Brightness.dark;
   await controller.loadDefaultWallpaper(dark: dark, refresh: true);
   final existingDefault = controller.defaultWallpaper(dark: dark);
-  final wallpaper = useWallpaper
-      ? nextWallpaper
-      : existingDefault ??
-            previousTheme?.wallpaper ??
-            controller.globalThemeWallpaperFor(dark: dark);
-  if (wallpaper == null || (!useWallpaper && existingDefault != null)) return;
+  if (useWallpaper) {
+    try {
+      await controller.applyThemeWallpaper(nextWallpaper, dark: dark);
+    } catch (_) {
+      // A theme remains usable when its remote wallpaper is temporarily
+      // unavailable. The existing background is left untouched in that case.
+    }
+    return;
+  }
+  final wallpaper =
+      existingDefault ??
+      previousTheme?.wallpaper ??
+      controller.globalThemeWallpaperFor(dark: dark);
+  if (wallpaper == null || existingDefault != null) return;
   try {
-    await controller.applyDefaultWallpaper(wallpaper, dark: dark);
+    await controller.applyDefaultWallpaper(
+      wallpaper,
+      dark: dark,
+      clearThemeBackup: false,
+    );
   } catch (_) {
     // A theme remains usable when its remote wallpaper is temporarily
     // unavailable. The existing background is left untouched in that case.
