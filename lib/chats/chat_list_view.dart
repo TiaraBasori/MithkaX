@@ -1121,7 +1121,6 @@ ChatListSwipeDecision chatListSwipeDecision({
   required List<Offset> pointerDeltas,
   double distanceThreshold = 64,
   double individualDistanceThreshold = 24,
-  double diagonalBias = chatListFolderStartBias,
 }) {
   final action = switch ((mode, peakPointerCount)) {
     (ChatListSwipeMode.chatActions, 2) => ChatListSwipeAction.switchFolders,
@@ -1147,7 +1146,8 @@ ChatListSwipeDecision chatListSwipeDecision({
   final centroidDelta =
       pointerDeltas.reduce((a, b) => a + b) / pointerDeltas.length.toDouble();
   if (centroidDelta.dx.abs() < distanceThreshold ||
-      centroidDelta.dx.abs() < centroidDelta.dy.abs() * diagonalBias) {
+      centroidDelta.dx.abs() <
+          centroidDelta.dy.abs() * chatListFolderDiagonalBias) {
     return ChatListSwipeDecision.none;
   }
   return ChatListSwipeDecision(action, centroidDelta.dx);
@@ -1163,25 +1163,14 @@ bool chatListRowSwipeActionsEnabled({
 /// and it is the same distance at which a vertical drag would claim the scroll.
 const double chatListFolderDragActivation = kTouchSlop;
 
-/// How much vertical drift a folder swipe tolerates ONCE IT IS ALREADY MOVING.
-/// The horizontal travel only has to reach three quarters of the vertical one,
-/// so a thumb that starts sideways and then drifts does not hand the contact
-/// back to the list.
+/// How much vertical drift a folder swipe tolerates: the horizontal travel only
+/// has to reach three quarters of the vertical one, so a diagonal (45°, or a
+/// thumb drifting up to ~53°) still switches folders instead of scrolling.
 ///
-/// This is NOT the arming gate: before the pager moves, a contact has to be
-/// clearly horizontal ([chatListFolderStartBias]). Using the loose value to
-/// arm the drag was the "folder swipe keeps hijacking my diagonal scrolling"
-/// report: a 45-degree thumb drift switched folders before the reader had
-/// asked for one.
+/// exteraless compares `|dx| > dy` at the touch slop, which a diagonal release
+/// passes only by chance; a phone thumb almost always drifts, and the pager is
+/// the gesture users mean when they swipe sideways at all.
 const double chatListFolderDiagonalBias = 0.75;
-
-/// How horizontal a contact has to be before the folder pager claims it.
-///
-/// The pager may only start when the horizontal travel beats the vertical one
-/// by this factor (a 45-degree diagonal does not), and the release
-/// classification uses the same gate. Once the pager is moving, the looser
-/// [chatListFolderDiagonalBias] applies to its continued travel.
-const double chatListFolderStartBias = 1.25;
 
 /// exteraless's flick gate for the folder pager.
 ///
@@ -1210,13 +1199,13 @@ bool chatListFolderFlick({
   if (travel.dx.abs() < minimumTravel) return false;
   // The contact itself must be a folder swipe: a mostly-vertical drag that
   // happens to end with a sideways velocity spike still belongs to the list.
-  // The same strict gate as arming, so a flick cannot start the pager from a
-  // diagonal scroll the drag path would have left alone.
-  if (travel.dy.abs() > travel.dx.abs()) return false;
+  if (travel.dy.abs() > travel.dx.abs() / chatListFolderDiagonalBias) {
+    return false;
+  }
   final vx = velocity.dx;
   return travel.dx.sign == vx.sign &&
       vx.abs() >= velocityThreshold &&
-      vx.abs() > velocity.dy.abs();
+      vx.abs() >= velocity.dy.abs() * chatListFolderDiagonalBias;
 }
 
 /// Where the list sits for a given finger travel. Inside the folder list the
@@ -1353,6 +1342,13 @@ class ChatListSwipeSession {
   /// has already fired by then, so the pager has to claim the contact while
   /// the finger is still down. The release then commits through
   /// [chatListFolderDragShouldCommit], exactly like a travelled drag.
+  ///
+  /// Only the single-finger folder-swipe mode can arm this way. When the list
+  /// is set to row actions, that same fast one-finger flick IS the row's action
+  /// drawer; [chatListSwipeDecision] already knows a one-finger chatActions
+  /// contact is not a folder swipe, but this fast path used to bypass that map
+  /// and fought the drawer — the reported stutter. Folder switching in
+  /// chatActions mode still works through the two-finger path.
   bool liveFlick(
     ChatListSwipeMode currentMode, {
     required double velocityThreshold,
@@ -1361,7 +1357,8 @@ class ChatListSwipeSession {
         _blocked ||
         _hadPointerEnd ||
         _scrolling ||
-        _peakPointerCount != 1) {
+        _peakPointerCount != 1 ||
+        currentMode != ChatListSwipeMode.switchFolders) {
       return false;
     }
     final travel = liveCentroidDelta;
@@ -1376,15 +1373,7 @@ class ChatListSwipeSession {
 
   /// Classifies the gesture while the fingers are still down, using a short
   /// activation distance so the list starts moving with them.
-  ///
-  /// [diagonalBias] is strict by default — this is the gate that ARMS the
-  /// pager, and a diagonal scroll must not arm it. A drag that is already
-  /// moving passes the looser drift value so it does not fall back to the list
-  /// halfway through.
-  ChatListSwipeDecision liveDecision(
-    ChatListSwipeMode currentMode, {
-    double diagonalBias = chatListFolderStartBias,
-  }) {
+  ChatListSwipeDecision liveDecision(ChatListSwipeMode currentMode) {
     if (_mode != currentMode || _scrolling || liveCentroidDelta == null) {
       return ChatListSwipeDecision.none;
     }
@@ -1399,7 +1388,6 @@ class ChatListSwipeSession {
       pointerDeltas: deltas,
       distanceThreshold: chatListFolderDragActivation,
       individualDistanceThreshold: chatListFolderDragActivation * 0.5,
-      diagonalBias: diagonalBias,
     );
   }
 
@@ -1459,10 +1447,10 @@ class ChatListSwipeSession {
       return;
     }
     _axisResolved = true;
-    // Vertical owns the gesture unless the horizontal travel clearly beats it.
-    // This is the STRICT arming bias: a diagonal thumb drift scrolls the list,
-    // exactly as it did before the folder-swipe optimisation.
-    _scrolling = travel.dy.abs() > travel.dx.abs() / chatListFolderStartBias;
+    // Vertical only owns the gesture once it dominates the horizontal travel
+    // by the same bias the release gate uses, so a diagonal stays a folder
+    // swipe from the first move to the last.
+    _scrolling = travel.dy.abs() > travel.dx.abs() / chatListFolderDiagonalBias;
   }
 
   ChatListSwipeDecision? pointerEnd({
@@ -3107,9 +3095,7 @@ class _ChatListViewState extends State<ChatListView>
     final travel = _chatListSwipeSession.liveCentroidDelta;
     if (_folderDragActive) {
       if (travel == null ||
-          _chatListSwipeSession
-                  .liveDecision(mode, diagonalBias: chatListFolderDiagonalBias)
-                  .action !=
+          _chatListSwipeSession.liveDecision(mode).action !=
               ChatListSwipeAction.switchFolders) {
         // A late third finger turned this into an account switch.
         _cancelFolderDrag();
@@ -4542,7 +4528,7 @@ class _ChatListViewState extends State<ChatListView>
         _dragProxyOriginTop = localTop;
         _dragProxyHeight = size.height;
       });
-      unawaited(AppHaptics.longPress());
+      unawaited(AppHaptics.tap());
     };
   }
 
@@ -4888,7 +4874,10 @@ class _ChatListViewState extends State<ChatListView>
   /// Long-press on a row's body: enter edit mode with that chat selected.
   void _beginSelectionMode(ChatSummary chat) {
     if (_openSwipeChat != null) setState(() => _openSwipeChat = null);
-    unawaited(AppHaptics.longPress());
+    // A list long-press is a KEYBOARD_TAP, the same tick the pull-down archive
+    // reveal fires. LONG_PRESS thumped noticeably harder than the archive and
+    // read as a misfire; list actions stay on the light tick.
+    unawaited(AppHaptics.tap());
     setState(() {
       _selectionMode = true;
       _pendingSelectionModeChatId = chat.id;

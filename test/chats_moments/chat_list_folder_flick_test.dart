@@ -70,34 +70,23 @@ void main() {
     );
   });
 
-  test('a diagonal flick stays with the list', () {
+  test('a diagonal flick still switches folders', () {
     expect(
       chatListFolderFlick(
         travel: const Offset(-12, 8),
         velocity: const Offset(-520, 560),
         velocityThreshold: 340,
       ),
-      isFalse,
-      reason:
-          'the pager must only arm from a clearly horizontal contact; a '
-          'diagonal thumb drift is a scroll',
+      isTrue,
+      reason: 'a thumb swiping sideways always drifts vertically',
     );
   });
 
-  test('a diagonal release stays with the list', () {
+  test('a diagonal release still switches folders', () {
     final decision = chatListSwipeDecision(
       mode: ChatListSwipeMode.switchFolders,
       peakPointerCount: 1,
       pointerDeltas: const [Offset(-90, 80)],
-    );
-    expect(decision.action, ChatListSwipeAction.none);
-  });
-
-  test('a clearly horizontal release still switches folders', () {
-    final decision = chatListSwipeDecision(
-      mode: ChatListSwipeMode.switchFolders,
-      peakPointerCount: 1,
-      pointerDeltas: const [Offset(-90, 40)],
     );
     expect(decision.action, ChatListSwipeAction.switchFolders);
   });
@@ -163,88 +152,58 @@ void main() {
     );
   });
 
-  testWidgets('arming is strict, the moving drag keeps its drift tolerance', (
-    tester,
-  ) async {
+  testWidgets('a row-action flick never arms the folder pager', (tester) async {
     final session = ChatListSwipeSession();
     session.pointerDown(
       pointer: 1,
       position: const Offset(200, 400),
       kind: ui.PointerDeviceKind.touch,
-      mode: ChatListSwipeMode.switchFolders,
+      mode: ChatListSwipeMode.chatActions,
       timeStamp: Duration.zero,
     );
-    // A clearly horizontal start past the activation distance: this is the only
-    // way the pager is allowed to arm.
     session.pointerMove(
       pointer: 1,
-      position: const Offset(170, 410),
+      position: const Offset(196, 400),
+      timeStamp: const Duration(milliseconds: 8),
+    );
+    session.pointerMove(
+      pointer: 1,
+      position: const Offset(190, 401),
       timeStamp: const Duration(milliseconds: 16),
     );
+    // The same fast 10px flick that arms a folder swipe in switchFolders mode
+    // is the row's action drawer here. Claiming it made the drawer fight the
+    // pager (the reported stutter), so the flick gate must stay closed.
     expect(
-      session.liveDecision(ChatListSwipeMode.switchFolders).action,
-      ChatListSwipeAction.switchFolders,
-    );
-    // The finger drifts downward afterwards. The pager is already moving, so
-    // the loose drift bias keeps the drag; the strict arming gate would have
-    // called this a scroll.
-    session.pointerMove(
-      pointer: 1,
-      position: const Offset(170, 440),
-      timeStamp: const Duration(milliseconds: 32),
-    );
-    expect(
-      session.liveDecision(ChatListSwipeMode.switchFolders).action,
-      ChatListSwipeAction.none,
-    );
-    expect(
-      session
-          .liveDecision(
-            ChatListSwipeMode.switchFolders,
-            diagonalBias: chatListFolderDiagonalBias,
-          )
-          .action,
-      ChatListSwipeAction.switchFolders,
-    );
-    session.pointerEnd(
-      pointer: 1,
-      position: const Offset(170, 440),
-      currentMode: ChatListSwipeMode.switchFolders,
-      timeStamp: const Duration(milliseconds: 48),
-    );
-  });
-
-  testWidgets('a diagonal start never arms the pager', (tester) async {
-    final session = ChatListSwipeSession();
-    session.pointerDown(
-      pointer: 1,
-      position: const Offset(200, 400),
-      kind: ui.PointerDeviceKind.touch,
-      mode: ChatListSwipeMode.switchFolders,
-      timeStamp: Duration.zero,
-    );
-    // 30 px right, 30 px down: a 45-degree thumb drift, i.e. a scroll.
-    session.pointerMove(
-      pointer: 1,
-      position: const Offset(170, 430),
-      timeStamp: const Duration(milliseconds: 16),
-    );
-    expect(
-      session.liveDecision(ChatListSwipeMode.switchFolders).action,
-      ChatListSwipeAction.none,
-    );
-    expect(
-      session.liveFlick(
-        ChatListSwipeMode.switchFolders,
-        velocityThreshold: 340,
-      ),
+      session.liveFlick(ChatListSwipeMode.chatActions, velocityThreshold: 340),
       isFalse,
     );
     session.pointerEnd(
       pointer: 1,
-      position: const Offset(170, 430),
-      currentMode: ChatListSwipeMode.switchFolders,
-      timeStamp: const Duration(milliseconds: 32),
+      position: const Offset(190, 401),
+      currentMode: ChatListSwipeMode.chatActions,
+      timeStamp: const Duration(milliseconds: 24),
+    );
+  });
+
+  test('chat actions keeps folder switching on the two-finger path', () {
+    expect(
+      chatListSwipeDecision(
+        mode: ChatListSwipeMode.chatActions,
+        peakPointerCount: 1,
+        pointerDeltas: const [Offset(-90, 0)],
+      ).action,
+      ChatListSwipeAction.none,
+      reason: 'one finger opens the row action drawer',
+    );
+    expect(
+      chatListSwipeDecision(
+        mode: ChatListSwipeMode.chatActions,
+        peakPointerCount: 2,
+        pointerDeltas: const [Offset(-70, 0), Offset(-70, 0)],
+      ).action,
+      ChatListSwipeAction.switchFolders,
+      reason: 'two fingers still switch folders in this mode',
     );
   });
 
