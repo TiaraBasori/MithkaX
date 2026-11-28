@@ -48,6 +48,11 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
     const {},
   );
   int _defaultSoundId = 0;
+
+  /// A live push landed while the initial snapshot was in flight; the push is
+  /// newer, so the snapshot must not overwrite it.
+  final Set<String> _pushedScopes = {};
+  bool _reactionPushedByUpdate = false;
   StreamSubscription<Map<String, dynamic>>? _updates;
   bool _loading = true;
   bool _loadInProgress = false;
@@ -95,23 +100,73 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
     };
   }
 
+  /// First paint only needs the three scope payloads: they are what the rows
+  /// show, and they are independent server round trips, so they run together.
+  /// The exception counts, the default sound and the reaction settings only
+  /// decorate those rows and each paints when it lands — waiting for all of
+  /// them in one serial chain was what made the screen sit on a spinner.
   Future<void> _load() async {
     if (_loadInProgress || !_client.hasActiveClient) return;
     _loadInProgress = true;
-    final loadedSettings = <String, Map<String, dynamic>>{};
-    final loadedExceptions = <String, int>{};
-    for (final scope in const [_private, _group, _channel]) {
-      try {
-        final result = await _client.query({
-          '@type': 'getScopeNotificationSettings',
-          'scope': {'@type': scope},
-        });
-        loadedSettings[scope] = Map<String, dynamic>.from(result);
-      } catch (_) {}
-      loadedExceptions[scope] = await _countExceptions(scope);
+    try {
+      final loaded = await Future.wait([
+        for (final scope in const [_private, _group, _channel])
+          _scopeSettings(scope),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        for (final entry in loaded) {
+          if (entry == null || _pushedScopes.contains(entry.key)) continue;
+          _settings[entry.key] = entry.value;
+        }
+        _loading = false;
+      });
+      unawaited(_loadDecorations());
+    } finally {
+      _loadInProgress = false;
     }
+  }
 
-    var defaultSoundId = loadedSettings.values
+  Future<MapEntry<String, Map<String, dynamic>>?> _scopeSettings(
+    String scope,
+  ) async {
+    try {
+      final result = await _client.query({
+        '@type': 'getScopeNotificationSettings',
+        'scope': {'@type': scope},
+      });
+      return MapEntry(scope, Map<String, dynamic>.from(result));
+    } catch (_) {
+      // A missing scope keeps the row on its default label.
+      return null;
+    }
+  }
+
+  Future<void> _loadDecorations() async {
+    unawaited(_loadDefaultSoundId());
+    unawaited(_loadReactionSettings());
+    // One scan at a time: TDLib answers each client's requests in order, so a
+    // burst of four exception scans would queue ahead of whatever the user
+    // taps next. They decorate rows that already painted.
+    for (final scope in const [
+      _private,
+      _group,
+      _channel,
+      storiesNotificationScope,
+    ]) {
+      await _loadExceptionCount(scope);
+      if (!mounted) return;
+    }
+  }
+
+  Future<void> _loadExceptionCount(String scope) async {
+    final count = await _countExceptions(scope);
+    if (!mounted) return;
+    setState(() => _exceptionCounts[scope] = count);
+  }
+
+  Future<void> _loadDefaultSoundId() async {
+    var defaultSoundId = _settings.values
         .map((settings) => settings.int64('sound_id') ?? 0)
         .firstWhere((id) => id > 0, orElse: () => 0);
     if (defaultSoundId == 0) {
@@ -127,7 +182,11 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
             0;
       } catch (_) {}
     }
+    if (!mounted) return;
+    setState(() => _defaultSoundId = defaultSoundId);
+  }
 
+  Future<void> _loadReactionSettings() async {
     Map<String, dynamic>? reactionSettings;
     try {
       final currentState = await _client.query({'@type': 'getCurrentState'});
@@ -139,22 +198,13 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
         }
       }
     } catch (_) {}
-
-    loadedExceptions[storiesNotificationScope] = await _countExceptions(
-      storiesNotificationScope,
-    );
-
-    _loadInProgress = false;
-    if (!mounted) return;
-    setState(() {
-      _settings.addAll(loadedSettings);
-      _exceptionCounts.addAll(loadedExceptions);
-      if (reactionSettings != null) {
-        _reactionSettings = Map<String, dynamic>.from(reactionSettings);
-      }
-      _defaultSoundId = defaultSoundId;
-      _loading = false;
-    });
+    // A live update that arrived while the snapshot was in flight is newer.
+    if (!mounted || _reactionPushedByUpdate) return;
+    if (reactionSettings != null) {
+      setState(
+        () => _reactionSettings = Map<String, dynamic>.from(reactionSettings!),
+      );
+    }
   }
 
   void _handleUpdate(Map<String, dynamic> update) {
@@ -168,12 +218,14 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
       final scope = update.obj('scope')?.type;
       final settings = update.obj('notification_settings');
       if (scope == null || settings == null) return;
+      _pushedScopes.add(scope);
       setState(() => _settings[scope] = Map<String, dynamic>.from(settings));
       return;
     }
     if (update.type == 'updateReactionNotificationSettings') {
       final settings = update.obj('notification_settings');
       if (settings != null) {
+        _reactionPushedByUpdate = true;
         setState(() => _reactionSettings = Map<String, dynamic>.from(settings));
       }
     }
