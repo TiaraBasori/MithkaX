@@ -12,9 +12,10 @@
 //
 //  Intensity is the platform constant's, never a raw waveform: exteraless only
 //  ever calls `performHapticFeedback`, so any extra full-amplitude buzz reads
-//  as "stronger than the reference". The system touch-vibration switch stays
-//  authoritative (only the view's own flag is ignored), exactly like
-//  `AndroidUtilities.vibrate` in the reference client.
+//  as "stronger than the reference". Both ignore flags are passed, exactly
+//  like the interface ticks in `MediaController` / `AndroidUtil`: the system
+//  touch-vibration switch must not be able to silence the app, and the user's
+//  own switch here is the in-app Vibration preference.
 //
 //  The one preference in [AppHaptics] is the app-wide switch: with it off
 //  nothing is sent to either channel, so no surface can buzz on its own.

@@ -184,9 +184,14 @@ void main() {
       source,
       contains('HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING'),
     );
-    // The system-wide touch-vibration switch stays authoritative, like
-    // exteraless's own vibrate helper; ignoring it made the ticks stronger.
-    expect(source, isNot(contains('FLAG_IGNORE_GLOBAL_SETTING')));
+    // exteraless passes BOTH ignore flags for its interface ticks
+    // (MediaController / AndroidUtil.performHapticFeedback). Dropping the
+    // global one silenced the app whenever the system touch-vibration switch
+    // was off; the in-app Vibration switch is the only gate here.
+    expect(
+      source,
+      contains('HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING'),
+    );
     expect(
       source,
       contains('"longPress", "error" -> HapticFeedbackConstants.LONG_PRESS'),

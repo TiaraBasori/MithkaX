@@ -18,11 +18,13 @@ import io.flutter.plugin.common.MethodChannel
  * that produces a felt tick on every device (a raw `Vibrator` waveform of a
  * few milliseconds is dropped outright by some HALs). The intensity is
  * therefore exactly the reference client's: it also only ever fires these
- * constants. `FLAG_IGNORE_VIEW_SETTING` keeps the tick alive when a view has
- * haptics disabled; the system-wide touch-vibration switch and its intensity
- * are deliberately NOT bypassed, because exteraless honours them
- * (`AndroidUtilities.vibrate`) and ignoring them was what made the fork's
- * ticks feel stronger than the reference.
+ * constants. BOTH ignore flags are passed, as the reference client does for
+ * its interface ticks (`MediaController`, `AndroidUtil.performHapticFeedback`,
+ * `PasscodeActivity`): `FLAG_IGNORE_VIEW_SETTING` keeps the tick alive when a
+ * view has haptics disabled, and `FLAG_IGNORE_GLOBAL_SETTING` keeps it alive
+ * when the system touch-vibration switch is off. Passing only the view flag
+ * silenced the whole app on devices with that switch off — the fork's own
+ * in-app vibration switch is what the user controls here.
  *
  * A refused request answers false and Dart falls back to Flutter's own channel
  * (the same constants, no flags) — a tick can never disappear silently, and no
@@ -79,11 +81,16 @@ class HapticsPlugin(
         const val CHANNEL = "mithka/haptics"
 
         /**
-         * Ignore only the *view's* own switch. The global touch-vibration
-         * setting stays authoritative, so the user's system intensity applies
-         * exactly as it does in the reference client.
+         * Ignore the view's own switch AND the system touch-vibration one.
+         *
+         * This is what the reference client passes for its interface ticks
+         * (`MediaController`, `AndroidUtil.performHapticFeedback`); without the
+         * global flag every tick went silent on a phone whose system
+         * touch-vibration switch is off. The in-app Vibration switch stays the
+         * authority on whether this app may buzz.
          */
-        private const val FLAGS = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
+        private const val FLAGS = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING or
+            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
 
         /** Gap between the two pulses of an error buzz. */
         private const val ERROR_GAP_MS = 150L
