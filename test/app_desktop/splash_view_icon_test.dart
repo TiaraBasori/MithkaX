@@ -124,6 +124,17 @@ void main() {
     await pumpSplash(tester, icon: 'default');
     expect(find.byType(BrandMark), findsOneWidget);
     expect(find.byKey(const ValueKey('splash-icon-default')), findsNothing);
+    // The blue mark on the blue brand gradient needs a white ring between
+    // them, drawn as one hairline circle hugging the ink.
+    final ring = tester.widget<Container>(
+      find.byKey(const ValueKey('splashMarkRing')),
+    );
+    final decoration = ring.decoration! as BoxDecoration;
+    expect(decoration.shape, BoxShape.circle);
+    final border = decoration.border! as Border;
+    expect(border.top.color, Colors.white);
+    expect(border.top.width, AppMetric.splashMarkRingWidth);
+    expect(border.top.style, BorderStyle.solid);
   });
 
   testWidgets('the fork\'s shipped mark keeps the brand screen too', (
