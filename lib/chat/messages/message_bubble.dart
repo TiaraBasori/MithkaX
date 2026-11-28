@@ -908,6 +908,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   late bool _showsMessageBubbleSurface;
 
+  /// Whether this message paints its content straight on the chat page, with
+  /// no bubble under it: a sticker, a round video, or media with no caption.
+  ///
+  /// Those surfaces sit on the wallpaper or the page colour, so they must take
+  /// the PAGE's ink. The theme's bubble ink is white for outgoing messages, and
+  /// a white reply marker or send time on a light page is invisible.
+  late bool _drawsOnCanvas;
+
   late TelegramCloudTheme? _activeCloudTheme;
 
   late TelegramMessageColors? _messageColors;
@@ -927,12 +935,28 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     _activeCloudTheme = _theme.themingEnabled
         ? _theme.cloudThemeFor(_brightness)
         : null;
+    _drawsOnCanvas = _computeDrawsOnCanvas();
     _messageColors =
         !_showsMessageBubbleSurface ||
+            _drawsOnCanvas ||
             !_theme.themingEnabled ||
             _usesDecorativeBubbleBackground
         ? null
         : widget.bubble.messageColors ?? _activeCloudTheme?.messageColors;
+  }
+
+  bool _computeDrawsOnCanvas() {
+    if (message.isService) return true;
+    if (message.text.trim().isNotEmpty) return false;
+    return switch (message.contentType) {
+      'messageSticker' ||
+      'messageVideoNote' ||
+      'messageAnimation' ||
+      'messagePhoto' ||
+      'messageVideo' ||
+      'messageDice' => true,
+      _ => false,
+    };
   }
 
   bool get _usesDecorativeBubbleBackground =>
@@ -956,7 +980,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
       Color.alphaBlend(_colors.linkBlue.withValues(alpha: 0.22), base);
 
   Color get _outgoingTextColor {
-    if (!_showsMessageBubbleSurface) return _colors.textPrimary;
+    if (!_showsMessageBubbleSurface || _drawsOnCanvas) {
+      return _colors.textPrimary;
+    }
     if (!_theme.themingEnabled) {
       return AppTheme.bubbleOutgoingText;
     }
@@ -989,7 +1015,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   }
 
   Color get _incomingTextColor {
-    if (!_showsMessageBubbleSurface) return _colors.textPrimary;
+    if (!_showsMessageBubbleSurface || _drawsOnCanvas) {
+      return _colors.textPrimary;
+    }
     return _bubbleBackgroundStyle.foregroundColor ??
         widget.bubble.incomingBubbleTextColor ??
         _activeCloudTheme?.incomingTextColor ??

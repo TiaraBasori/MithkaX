@@ -1208,6 +1208,15 @@ _DecodedImageSize? _boundedImageCacheSize(int? width, int? height) {
       boundedWidth = math.max(1, (boundedWidth * scale).round());
       boundedHeight = math.max(1, (boundedHeight * scale).round());
     }
+    // Asking the codec for BOTH sides resizes the bitmap to exactly that box,
+    // and the codec does not keep the source aspect: a portrait photo decoded
+    // for a wide album tile or a wide preview frame comes back squashed, and
+    // `BoxFit.cover` then has nothing left to crop. Bound the longer side
+    // only, so the decode keeps the picture's proportions and the fit crops.
+    return _DecodedImageSize(
+      width: math.max(boundedWidth, boundedHeight),
+      height: null,
+    );
   }
   return _DecodedImageSize(width: boundedWidth, height: boundedHeight);
 }
