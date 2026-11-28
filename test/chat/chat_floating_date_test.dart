@@ -69,9 +69,7 @@ void main() {
                 ? <String, dynamic>{'@type': 'messages', 'messages': []}
                 : {
                     '@type': 'messages',
-                    'messages': [
-                      for (var id = 40; id >= 1; id--) _message(id),
-                    ],
+                    'messages': [for (var id = 40; id >= 1; id--) _message(id)],
                   },
           'getConnectionState' => {'@type': 'connectionStateReady'},
           _ => {'@type': 'ok'},
@@ -157,7 +155,11 @@ void main() {
     await gesture.moveBy(const Offset(0, 260));
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(floating, findsOneWidget, reason: 'the plate appears while scrolling');
+    expect(
+      floating,
+      findsOneWidget,
+      reason: 'the plate appears while scrolling',
+    );
     final shown = tester.widget<AnimatedOpacity>(
       find.ancestor(of: floating, matching: find.byType(AnimatedOpacity)),
     );

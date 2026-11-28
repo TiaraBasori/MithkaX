@@ -169,94 +169,99 @@ void main() {
     await updates.close();
   });
 
-  testWidgets('the strip travels with the drag and lands every off-screen tab', (
-    tester,
-  ) async {
-    await _pumpChatList(tester, updates);
-    final stripRect = tester.getRect(
-      find.byKey(const ValueKey('chat-folder-tabs')),
-    );
-    final scrollable = _tabStripScrollable(tester);
-    expect(scrollable.position.pixels, 0);
-
-    // The seventh folder starts entirely outside the 390dp strip.
-    final lastTab = tester.getRect(find.text('Folder 7'));
-    expect(
-      lastTab.left,
-      greaterThan(stripRect.right),
-      reason: 'the fixture must put the target tab off-screen',
-    );
-
-    for (var step = 1; step <= 7; step++) {
-      final before = scrollable.position.pixels;
-      final targetBefore = tester.getRect(find.text('Folder $step'));
-      final needsScroll = targetBefore.right > stripRect.right + 0.5;
-      final stripBottom = tester
-          .getBottomLeft(find.byKey(const ValueKey('chat-folder-tabs')))
-          .dy;
-      final gesture = await tester.startGesture(Offset(340, stripBottom + 80));
-      await tester.pump(const Duration(milliseconds: 40));
-      for (var i = 0; i < 8; i++) {
-        await gesture.moveBy(const Offset(-26, 0));
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-      // While the finger is still down the strip has already moved toward the
-      // incoming folder — the reference's selectTabWithId(progress). A target
-      // that is already wholly visible needs no travel.
-      if (needsScroll) {
-        expect(
-          scrollable.position.pixels,
-          greaterThan(before),
-          reason: 'the strip follows the folder drag, step $step',
-        );
-      } else {
-        expect(
-          scrollable.position.pixels,
-          closeTo(before, 0.5),
-          reason: 'an already visible target must not jerk the strip, step $step',
-        );
-      }
-      await gesture.up();
-      await tester.pumpAndSettle();
-
-      final tab = tester.getRect(find.text('Folder $step'));
-      expect(
-        tab.left,
-        greaterThanOrEqualTo(stripRect.left - 0.5),
-        reason: 'landed tab $step is inside the strip',
+  testWidgets(
+    'the strip travels with the drag and lands every off-screen tab',
+    (tester) async {
+      await _pumpChatList(tester, updates);
+      final stripRect = tester.getRect(
+        find.byKey(const ValueKey('chat-folder-tabs')),
       );
+      final scrollable = _tabStripScrollable(tester);
+      expect(scrollable.position.pixels, 0);
+
+      // The seventh folder starts entirely outside the 390dp strip.
+      final lastTab = tester.getRect(find.text('Folder 7'));
       expect(
-        tab.right,
-        lessThanOrEqualTo(stripRect.right + 0.5),
-        reason: 'landed tab $step is fully visible',
+        lastTab.left,
+        greaterThan(stripRect.right),
+        reason: 'the fixture must put the target tab off-screen',
       );
-    }
 
-    expect(
-      scrollable.position.pixels,
-      greaterThan(0),
-      reason: 'reaching the last folder had to scroll the strip',
-    );
-    await _dispose(tester);
-  });
+      for (var step = 1; step <= 7; step++) {
+        final before = scrollable.position.pixels;
+        final targetBefore = tester.getRect(find.text('Folder $step'));
+        final needsScroll = targetBefore.right > stripRect.right + 0.5;
+        final stripBottom = tester
+            .getBottomLeft(find.byKey(const ValueKey('chat-folder-tabs')))
+            .dy;
+        final gesture = await tester.startGesture(
+          Offset(340, stripBottom + 80),
+        );
+        await tester.pump(const Duration(milliseconds: 40));
+        for (var i = 0; i < 8; i++) {
+          await gesture.moveBy(const Offset(-26, 0));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        // While the finger is still down the strip has already moved toward the
+        // incoming folder — the reference's selectTabWithId(progress). A target
+        // that is already wholly visible needs no travel.
+        if (needsScroll) {
+          expect(
+            scrollable.position.pixels,
+            greaterThan(before),
+            reason: 'the strip follows the folder drag, step $step',
+          );
+        } else {
+          expect(
+            scrollable.position.pixels,
+            closeTo(before, 0.5),
+            reason:
+                'an already visible target must not jerk the strip, step $step',
+          );
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
 
-  testWidgets('selecting an off-screen folder from the pager scrolls the strip', (
-    tester,
-  ) async {
-    await _pumpChatList(tester, updates);
-    final scrollable = _tabStripScrollable(tester);
-    final stripRect = tester.getRect(
-      find.byKey(const ValueKey('chat-folder-tabs')),
-    );
-    expect(scrollable.position.pixels, 0);
+        final tab = tester.getRect(find.text('Folder $step'));
+        expect(
+          tab.left,
+          greaterThanOrEqualTo(stripRect.left - 0.5),
+          reason: 'landed tab $step is inside the strip',
+        );
+        expect(
+          tab.right,
+          lessThanOrEqualTo(stripRect.right + 0.5),
+          reason: 'landed tab $step is fully visible',
+        );
+      }
 
-    // Seven commits land on the last folder; the strip has to have followed.
-    for (var step = 1; step <= 7; step++) {
-      await _swipeToNextFolder(tester);
-    }
-    final last = tester.getRect(find.text('Folder 7'));
-    expect(last.right, lessThanOrEqualTo(stripRect.right + 0.5));
-    expect(last.left, greaterThanOrEqualTo(stripRect.left - 0.5));
-    await _dispose(tester);
-  });
+      expect(
+        scrollable.position.pixels,
+        greaterThan(0),
+        reason: 'reaching the last folder had to scroll the strip',
+      );
+      await _dispose(tester);
+    },
+  );
+
+  testWidgets(
+    'selecting an off-screen folder from the pager scrolls the strip',
+    (tester) async {
+      await _pumpChatList(tester, updates);
+      final scrollable = _tabStripScrollable(tester);
+      final stripRect = tester.getRect(
+        find.byKey(const ValueKey('chat-folder-tabs')),
+      );
+      expect(scrollable.position.pixels, 0);
+
+      // Seven commits land on the last folder; the strip has to have followed.
+      for (var step = 1; step <= 7; step++) {
+        await _swipeToNextFolder(tester);
+      }
+      final last = tester.getRect(find.text('Folder 7'));
+      expect(last.right, lessThanOrEqualTo(stripRect.right + 0.5));
+      expect(last.left, greaterThanOrEqualTo(stripRect.left - 0.5));
+      await _dispose(tester);
+    },
+  );
 }
