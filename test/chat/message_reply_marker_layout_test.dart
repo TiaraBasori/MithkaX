@@ -87,41 +87,42 @@ void main() {
   );
 
   for (final scale in [1.0, 1.6]) {
-    testWidgets(
-      'a long quote keeps its preview whole at text scale $scale',
-      (tester) async {
-        await pumpBubble(tester, quotedReply(), textScale: scale);
-        final marker = find.byKey(const ValueKey('messageReplyQuote'));
-        expect(marker, findsOneWidget);
-        final panel = tester.getRect(marker);
-        // The panel grows with its text: a multi-line quote is taller than a
-        // one-line preview, and nothing under it squeezes the panel shut.
-        expect(panel.height, greaterThan(scale > 1 ? 60 : 40));
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(minutes: 11));
-      },
-    );
+    testWidgets('a long quote keeps its preview whole at text scale $scale', (
+      tester,
+    ) async {
+      await pumpBubble(tester, quotedReply(), textScale: scale);
+      final marker = find.byKey(const ValueKey('messageReplyQuote'));
+      expect(marker, findsOneWidget);
+      final panel = tester.getRect(marker);
+      // The panel grows with its text: a multi-line quote is taller than a
+      // one-line preview, and nothing under it squeezes the panel shut.
+      expect(panel.height, greaterThan(scale > 1 ? 60 : 40));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 11));
+    });
   }
 
   testWidgets('a sticker reply marker and its time use the page ink', (
     tester,
   ) async {
-    final message = ChatMessage(
-      id: 3,
-      isOutgoing: true,
-      text: '',
-      date: 1,
-      contentType: 'messageSticker',
-      stickerFileId: 7,
-      image: TdFileRef(id: 5),
-      imageWidth: 512,
-      imageHeight: 512,
-      replyToMessageId: 4,
-      replyToDate: 1,
-    )
-      ..replyToSender = 'Someone'
-      ..replyToPreview = 'quoted line that is long enough to wrap elsewhere';
+    final message =
+        ChatMessage(
+            id: 3,
+            isOutgoing: true,
+            text: '',
+            date: 1,
+            contentType: 'messageSticker',
+            stickerFileId: 7,
+            image: TdFileRef(id: 5),
+            imageWidth: 512,
+            imageHeight: 512,
+            replyToMessageId: 4,
+            replyToDate: 1,
+          )
+          ..replyToSender = 'Someone'
+          ..replyToPreview =
+              'quoted line that is long enough to wrap elsewhere';
     await pumpBubble(tester, message);
 
     final band = find.byKey(const ValueKey('messageBandTime-3'));
