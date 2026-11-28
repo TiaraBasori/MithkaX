@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -5,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../../components/app_interactive_surface.dart';
 import '../../l10n/app_localizations.dart';
 import '../../tdlib/td_client.dart';
+import '../../tdlib/td_image_loader.dart';
 import '../../tdlib/td_models.dart';
 
 /// Opening one item must not reveal other spoilers by gallery swipe or autoplay.
@@ -25,7 +27,15 @@ class MediaSpoiler extends StatefulWidget {
     this.width,
     this.height,
     this.borderRadius = BorderRadius.zero,
+    this.onCoverBuilt,
   });
+
+  /// Called once, the first time the hidden cover is on screen.
+  ///
+  /// The gate never mounts the media itself, so nothing used to ask TDLib for
+  /// the file: the reader tapped to reveal and then waited for the download.
+  /// The cover starts it early, at a lower priority than visible media.
+  final VoidCallback? onCoverBuilt;
 
   final Object identity;
   final bool enabled;
@@ -46,6 +56,19 @@ class _MediaSpoilerState extends State<MediaSpoiler>
     duration: const Duration(seconds: 6),
   );
   bool _revealed = false;
+  bool _announcedCover = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _announceCover();
+  }
+
+  void _announceCover() {
+    if (_announcedCover || !widget.enabled) return;
+    _announcedCover = true;
+    widget.onCoverBuilt?.call();
+  }
 
   void _syncAnimation() {
     final animate =
@@ -158,8 +181,27 @@ class MessageMediaSpoiler extends StatelessWidget {
           width: width,
           height: height,
           borderRadius: borderRadius,
+          onCoverBuilt: () => _preloadHiddenMedia(accountSlot),
           child: child,
         );
+
+  /// Starts the file download while the spoiler still hides the media.
+  ///
+  /// `pathFor` drives TDLib's `downloadFile`, so a revealed preview paints
+  /// from disk instead of starting a download at the moment of the tap.
+  void _preloadHiddenMedia(int? slot) {
+    final ref = message.video ?? message.image;
+    if (ref == null) return;
+    unawaited(
+      TdFileCenter.shared
+          .pathFor(
+            ref,
+            accountSlot: slot ?? TdClient.shared.activeSlot,
+            priority: 6,
+          )
+          .catchError((Object _) => null),
+    );
+  }
 }
 
 class _SpoilerDust extends CustomPainter {

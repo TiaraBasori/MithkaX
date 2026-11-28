@@ -2206,7 +2206,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// with no caption: that card is filled by the artwork, so a corner stamp
   /// would sit on the picture itself.
   bool get _stampsTimeOutside {
-    if (!_showsMessageBubbleSurface) return true;
+    if (!_showsMessageBubbleSurface || _drawsOnCanvas) return true;
+    // A sticker or a round video never keeps its time on the card, caption or
+    // not: the band under it is where the reference client shows it, and a
+    // corner stamp sits on the artwork.
+    if (message.contentType == 'messageSticker' ||
+        message.contentType == 'messageVideoNote') {
+      return true;
+    }
     if (message.text.trim().isNotEmpty) return false;
     return switch (message.contentType) {
       'messagePhoto' ||
@@ -5833,6 +5840,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final size = _stickerSize();
     return _stickerTap(
       SizedBox(
+        key: ValueKey('messageStaticStickerPaint-${message.id}'),
         width: size.width,
         height: size.height,
         child: TDImage(

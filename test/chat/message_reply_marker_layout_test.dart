@@ -134,6 +134,16 @@ void main() {
     // bubble ink is white, which vanished on a light wallpaper.
     expect(time.style?.color?.computeLuminance(), lessThan(0.5));
 
+    // The time lives UNDER the sticker, never on it.
+    final sticker = tester.getRect(
+      find.byKey(const ValueKey('messageStaticStickerPaint-3')),
+    );
+    expect(
+      tester.getRect(band).top,
+      greaterThanOrEqualTo(sticker.bottom),
+      reason: 'the band row hangs below the sticker, not over it',
+    );
+
     final preview = tester
         .widgetList<Text>(
           find.descendant(
