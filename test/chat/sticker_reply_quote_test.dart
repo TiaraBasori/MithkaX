@@ -15,6 +15,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chat/messages/message_bubble.dart';
+import 'package:mithka/chat/stickers/custom_emoji.dart';
 import 'package:mithka/components/photo_avatar.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/tdlib/td_models.dart';
@@ -80,6 +81,7 @@ void main() {
             image: TdFileRef(id: 500, localPath: stickerPath),
             replyToMessageId: withReply ? 12 : null,
             replyToDate: withReply ? 9 : null,
+            replyToSenderBackgroundEmojiId: withReply ? 700 : 0,
           )
           ..replyToSender = withReply ? 'Ada' : null
           ..replyToPreview = withReply ? 'the message being answered' : null;
@@ -129,6 +131,18 @@ void main() {
     // readable floor while never growing past the bubble lane. It is a thin
     // rule + author/preview, not the filled reply card.
     expect(quoteRect.width, greaterThanOrEqualTo(148));
+    // The sticker marker carries the same reply-header emoji scatter as the
+    // filled quote panel: seven glyphs for a plain reply, clipped to the
+    // panel and never changing its size.
+    final watermark = find.byKey(
+      const ValueKey('messageReplySenderEmojiStatus'),
+    );
+    expect(watermark, findsOneWidget);
+    expect(tester.getSize(watermark), quoteRect.size);
+    expect(
+      find.descendant(of: watermark, matching: find.byType(CustomEmojiView)),
+      findsNWidgets(7),
+    );
     expect(
       find.byKey(const ValueKey('messageReplyStickerAuthor')),
       findsOneWidget,

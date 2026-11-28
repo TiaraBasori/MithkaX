@@ -805,6 +805,7 @@ class ChatMessage {
     this.senderIsPremium = false,
     this.senderIsDeleted = false,
     this.senderAccentColorId = -1,
+    this.senderBackgroundEmojiId = 0,
     this.senderEmojiStatusId = 0,
     this.senderPresence = AvatarPresence.none,
     this.mediaAlbumId = 0,
@@ -845,6 +846,7 @@ class ChatMessage {
     this.replyToImageWidth,
     this.replyToImageHeight,
     this.replyToSenderAccentColorId = -1,
+    this.replyToSenderBackgroundEmojiId = 0,
     this.replyToSenderEmojiStatusId = 0,
     this.replyToSenderIsPremium = false,
     this.serviceUserIds = const [],
@@ -936,6 +938,12 @@ class ChatMessage {
   bool senderIsPremium;
   bool senderIsDeleted;
   int senderAccentColorId;
+
+  /// `user.background_custom_emoji_id`: the custom emoji drawn on the peer
+  /// colour's reply header and link-preview background. It is NOT the
+  /// account's emoji status; 0 when the colour carries no emoji or the sender
+  /// is a chat (chats have no user record to read it from).
+  int senderBackgroundEmojiId;
   int senderEmojiStatusId;
 
   /// The sender's avatar-dot presence at resolve time; refreshed in place by
@@ -1009,6 +1017,7 @@ class ChatMessage {
   /// ORIGINAL sender's colour and custom emoji instead of the current
   /// message's. -1 / 0 mean the quote has no resolved peer styling.
   int replyToSenderAccentColorId;
+  int replyToSenderBackgroundEmojiId;
   int replyToSenderEmojiStatusId;
   bool replyToSenderIsPremium;
 

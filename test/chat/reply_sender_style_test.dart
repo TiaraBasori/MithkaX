@@ -1,9 +1,11 @@
 //
 //  reply_sender_style_test.dart
 //
-//  exteraless paints a reply line in the QUOTED author's peer colour and
-//  watermarks their custom emoji status in it. The appearance switch can turn
-//  that off and leave a plain theme-coloured marker.
+//  exteraless paints a reply line in the QUOTED author's peer colour — in both
+//  directions — and scatters their reply-header emoji across the panel. That
+//  emoji is the name colour's background custom emoji, NOT the account's
+//  emoji status. The appearance switch can turn the styling off and leave a
+//  plain theme-coloured marker.
 //
 
 import 'dart:async';
@@ -11,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mithka/chat/messages/message_bubble.dart';
+import 'package:mithka/chat/stickers/custom_emoji.dart';
 import 'package:mithka/tdlib/td_client.dart';
 import 'package:mithka/tdlib/td_models.dart';
 import 'package:mithka/theme/app_theme.dart';
@@ -84,11 +87,24 @@ void main() {
           replyToMessageId: 1,
           replyToDate: 8,
           replyToSenderAccentColorId: 2,
-          replyToSenderEmojiStatusId: 600,
+          replyToSenderBackgroundEmojiId: 600,
+          // Decoy: the quoted author's emoji STATUS must never paint the
+          // marker; only the name colour's background emoji does.
+          replyToSenderEmojiStatusId: 611,
           replyToSenderIsPremium: true,
         )
         ..replyToSender = 'Ada'
         ..replyToPreview = 'the quoted line';
+
+  /// The colour the marker should use for [message]: the quoted author's name
+  /// colour at the given accent id. `theme: null` matches the default test
+  /// theme, which has no cloud theme bound.
+  Color accentColorFor(ChatMessage message) => messageNameColorForSender(
+    theme: null,
+    accentColorId: message.replyToSenderAccentColorId,
+    showNameColors: true,
+    nameColorsDisabledFallback: Colors.black,
+  );
 
   BoxDecoration quoteDecoration(WidgetTester tester) =>
       tester
@@ -98,32 +114,48 @@ void main() {
               .decoration!
           as BoxDecoration;
 
-  testWidgets('the marker takes the quoted author colour and emoji', (
+  Color quoteRule(WidgetTester tester) =>
+      (quoteDecoration(tester).border! as Border).left.color;
+
+  Finder quoteDescendant(Finder matching) => find.descendant(
+    of: find.byKey(const ValueKey('messageReplyQuote')),
+    matching: matching,
+  );
+
+  /// The RichText that renders the quoted author's name.
+  RichText authorText(WidgetTester tester, String name) => tester
+      .widgetList<RichText>(quoteDescendant(find.byType(RichText)))
+      .firstWhere((text) => text.text.toPlainText().contains(name));
+
+  testWidgets('the marker takes the quoted author colour and header emoji', (
     tester,
   ) async {
     final message = replyMessage();
     await pumpReply(tester, message: message);
 
-    final senderColor = messageNameColorForSender(
-      theme: null,
-      accentColorId: message.replyToSenderAccentColorId,
-      showNameColors: true,
-      nameColorsDisabledFallback: Colors.black,
-    );
+    final senderColor = accentColorFor(message);
     expect(quoteDecoration(tester).color, senderColor.withValues(alpha: 0.10));
-    expect(
-      find.byKey(const ValueKey('messageReplySenderEmojiStatus')),
-      findsOneWidget,
+    expect(quoteRule(tester), senderColor);
+    expect(authorText(tester, 'Ada').text.style?.color, senderColor);
+
+    // The reply-header emoji is a SCATTER of small glyphs, not one big
+    // watermark: seven entries without an explicit quote.
+    final watermark = find.byKey(
+      const ValueKey('messageReplySenderEmojiStatus'),
     );
+    expect(watermark, findsOneWidget);
+    expect(
+      find.descendant(of: watermark, matching: find.byType(CustomEmojiView)),
+      findsNWidgets(7),
+    );
+    // The quoted author's emoji status is not the reply-header emoji.
+    expect(quoteDescendant(find.byType(StatusEmojiView)), findsNothing);
     expect(
       find.byKey(const ValueKey('messageReplyNavigateUpIcon')),
       findsNothing,
     );
     final previews = tester.widgetList<RichText>(
-      find.descendant(
-        of: find.byKey(const ValueKey('messageReplyQuote')),
-        matching: find.byType(RichText),
-      ),
+      quoteDescendant(find.byType(RichText)),
     );
     expect(
       previews.any(
@@ -137,13 +169,57 @@ void main() {
     );
   });
 
-  testWidgets('our own bubble keeps the marker in the bubble ink', (
+  testWidgets('an explicit quote adds the two quote-only glyphs', (
     tester,
   ) async {
-    // The quoted author has a peer colour; on OUR bubble it must not be used —
-    // the reference client replaces every reply colour with the outgoing reply
-    // line once the message is ours, or the marker disappears into the brand
-    // fill.
+    final message = ChatMessage(
+      id: 8,
+      isOutgoing: false,
+      text: 'agreed',
+      date: 12,
+      contentType: 'messageText',
+      replyToMessageId: 1,
+      replyToDate: 8,
+      replyToSenderAccentColorId: 2,
+      replyToSenderBackgroundEmojiId: 600,
+      replyToQuote: const MessageTextQuote(
+        text: 'the quoted part',
+        position: 0,
+      ),
+    )..replyToSender = 'Ada';
+    await pumpReply(tester, message: message);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('messageReplySenderEmojiStatus')),
+        matching: find.byType(CustomEmojiView),
+      ),
+      findsNWidgets(9),
+    );
+  });
+
+  testWidgets('the emoji scatter never changes the panel geometry', (
+    tester,
+  ) async {
+    await pumpReply(tester, message: replyMessage());
+    final withEmoji = tester.getSize(
+      find.byKey(const ValueKey('messageReplyQuote')),
+    );
+    await pumpReply(
+      tester,
+      message: replyMessage()..replyToSenderBackgroundEmojiId = 0,
+    );
+    final withoutEmoji = tester.getSize(
+      find.byKey(const ValueKey('messageReplyQuote')),
+    );
+    expect(withEmoji, withoutEmoji);
+  });
+
+  testWidgets('an outgoing reply takes the quoted author colour too', (
+    tester,
+  ) async {
+    // exteraless does NOT override a reply colour once the message is ours:
+    // Ada's accent paints our marker as well, and her reply-header emoji
+    // stays. This used to fall back to the bubble ink.
     final message =
         ChatMessage(
             id: 6,
@@ -154,26 +230,87 @@ void main() {
             replyToMessageId: 1,
             replyToDate: 8,
             replyToSenderAccentColorId: 2,
+            replyToSenderBackgroundEmojiId: 600,
             replyToSenderIsPremium: true,
           )
           ..replyToSender = 'Ada'
           ..replyToPreview = 'the quoted line';
-    final theme = await pumpReply(tester, message: message);
-    final ink = theme.themingEnabled
-        ? const Color(0xFFFFFFFF)
-        : AppTheme.bubbleOutgoingText;
-    expect(quoteDecoration(tester).color, ink.withValues(alpha: 0.10));
-    // The author's ink is the paragraph style (the span only carries the
-    // weight), so read the RichText that renders her name.
-    final sender = tester
-        .widgetList<RichText>(
-          find.descendant(
-            of: find.byKey(const ValueKey('messageReplyQuote')),
-            matching: find.byType(RichText),
-          ),
-        )
-        .firstWhere((text) => text.text.toPlainText().contains('Ada'));
-    expect(sender.text.style?.color, ink);
+    await pumpReply(tester, message: message);
+
+    final senderColor = accentColorFor(message);
+    expect(quoteDecoration(tester).color, senderColor.withValues(alpha: 0.10));
+    expect(quoteRule(tester), senderColor);
+    expect(authorText(tester, 'Ada').text.style?.color, senderColor);
+    expect(
+      find.byKey(const ValueKey('messageReplySenderEmojiStatus')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a reply quoting MY message takes my accent, not my status', (
+    tester,
+  ) async {
+    // The quoted message is ours (isOutgoing upstream): the view model stamps
+    // it with our own accent from getMe, so the marker carries our name
+    // colour. Our emoji status is irrelevant to it.
+    final message =
+        ChatMessage(
+            id: 7,
+            isOutgoing: false,
+            text: 'that was quick',
+            date: 12,
+            contentType: 'messageText',
+            replyToMessageId: 3,
+            replyToDate: 11,
+            replyToSenderAccentColorId: 4,
+            replyToSenderBackgroundEmojiId: 700,
+            replyToSenderEmojiStatusId: 612,
+            replyToSenderIsPremium: true,
+          )
+          ..replyToSender = 'Me'
+          ..replyToPreview = 'my own line';
+    await pumpReply(tester, message: message);
+
+    final myColor = accentColorFor(message);
+    expect(quoteDecoration(tester).color, myColor.withValues(alpha: 0.10));
+    expect(quoteRule(tester), myColor);
+    expect(authorText(tester, 'Me').text.style?.color, myColor);
+    expect(quoteDescendant(find.byType(StatusEmojiView)), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('messageReplySenderEmojiStatus')),
+        matching: find.byType(CustomEmojiView),
+      ),
+      findsNWidgets(7),
+    );
+  });
+
+  testWidgets('an emoji status alone paints nothing', (tester) async {
+    final message =
+        ChatMessage(
+            id: 9,
+            isOutgoing: false,
+            text: 'ok',
+            date: 1,
+            contentType: 'messageText',
+            replyToMessageId: 1,
+            replyToDate: 1,
+            replyToSenderEmojiStatusId: 611,
+          )
+          ..replyToSender = 'Ada'
+          ..replyToPreview = 'the quoted line';
+    await pumpReply(tester, message: message);
+
+    // No resolved accent: the theme's reply line, and no emoji at all.
+    expect(
+      quoteDecoration(tester).color,
+      AppTheme.brand.withValues(alpha: 0.10),
+    );
+    expect(
+      find.byKey(const ValueKey('messageReplySenderEmojiStatus')),
+      findsNothing,
+    );
+    expect(quoteDescendant(find.byType(StatusEmojiView)), findsNothing);
   });
 
   testWidgets('turning the switch off leaves a plain theme colour', (

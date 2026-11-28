@@ -825,7 +825,17 @@ extension ChatViewModelUpdates on ChatViewModel {
     m.replyToImageWidth = quoted.imageWidth;
     m.replyToImageHeight = quoted.imageHeight;
     // The marker shows the ORIGINAL author's identity, not this message's.
-    m.replyToSenderAccentColorId = quoted.senderAccentColorId;
+    // A quote of one of OUR messages carries our accent and reply-header
+    // emoji: TDLib puts them on the user, not the message, and our own
+    // messages never reach the sender cache. A chat-sent post keeps its own
+    // (empty) identity instead of borrowing ours.
+    final ownQuoted = quoted.isOutgoing && !quoted.senderIsChat;
+    m.replyToSenderAccentColorId = ownQuoted
+        ? meAccentColorId
+        : quoted.senderAccentColorId;
+    m.replyToSenderBackgroundEmojiId = ownQuoted
+        ? meBackgroundEmojiId
+        : quoted.senderBackgroundEmojiId;
     m.replyToSenderEmojiStatusId = quoted.senderEmojiStatusId;
     m.replyToSenderIsPremium = quoted.senderIsPremium;
     if (quoted.isOutgoing) {
@@ -856,11 +866,13 @@ extension ChatViewModelUpdates on ChatViewModel {
     final existing = _senderCache[senderId];
     if (existing != null && existing.name.isNotEmpty) {
       m.replyToSender = existing.name;
+      _applyQuotedSenderIdentity(m, existing);
       _bumpMaterializedMessageRevisions([m.id]);
       _scheduleCoalescedNotify();
       return;
     }
     String? name;
+    _SenderInfo? info;
     try {
       if (senderId > 0) {
         final user = await _client.query({
@@ -868,6 +880,7 @@ extension ChatViewModelUpdates on ChatViewModel {
           'user_id': senderId,
         });
         name = TDParse.userName(user);
+        info = _senderInfoFromUser(user, role: MemberRole.member, title: null);
       } else {
         final chat = await _client.query({
           '@type': 'getChat',
@@ -878,9 +891,22 @@ extension ChatViewModelUpdates on ChatViewModel {
     } catch (_) {}
     if (name != null && name.isNotEmpty) {
       m.replyToSender = name;
+      if (info != null) _applyQuotedSenderIdentity(m, info);
       _bumpMaterializedMessageRevisions([m.id]);
       _scheduleCoalescedNotify();
     }
+  }
+
+  /// Copies the resolved quoted author's peer styling onto the reply anchor.
+  /// A quote fetched through getMessages is a throwaway parse whose sender
+  /// styling is empty; resolving its author has to bring the name colour and
+  /// the reply-header emoji along, or the marker keeps the theme line for a
+  /// sender we just learned about.
+  void _applyQuotedSenderIdentity(ChatMessage m, _SenderInfo info) {
+    m.replyToSenderAccentColorId = info.accentColorId;
+    m.replyToSenderBackgroundEmojiId = info.backgroundEmojiId;
+    m.replyToSenderEmojiStatusId = info.emojiStatusId;
+    m.replyToSenderIsPremium = info.isPremium;
   }
 
   String _replyPreview(ChatMessage q) {
@@ -1507,6 +1533,7 @@ extension ChatViewModelUpdates on ChatViewModel {
             m.senderIsPremium == info.isPremium &&
             m.senderIsDeleted == info.isDeleted &&
             m.senderAccentColorId == info.accentColorId &&
+            m.senderBackgroundEmojiId == info.backgroundEmojiId &&
             m.senderEmojiStatusId == info.emojiStatusId &&
             m.senderPresence == info.presence) {
           continue;
@@ -1518,6 +1545,7 @@ extension ChatViewModelUpdates on ChatViewModel {
         m.senderIsPremium = info.isPremium;
         m.senderIsDeleted = info.isDeleted;
         m.senderAccentColorId = info.accentColorId;
+        m.senderBackgroundEmojiId = info.backgroundEmojiId;
         m.senderEmojiStatusId = info.emojiStatusId;
         m.senderPresence = info.presence;
         changed = true;
@@ -1540,6 +1568,7 @@ extension ChatViewModelUpdates on ChatViewModel {
             m.senderIsPremium != info.isPremium ||
             m.senderIsDeleted != info.isDeleted ||
             m.senderAccentColorId != info.accentColorId ||
+            m.senderBackgroundEmojiId != info.backgroundEmojiId ||
             m.senderEmojiStatusId != info.emojiStatusId ||
             m.senderPresence != info.presence) {
           m.senderName = info.name;
@@ -1549,6 +1578,7 @@ extension ChatViewModelUpdates on ChatViewModel {
           m.senderIsPremium = info.isPremium;
           m.senderIsDeleted = info.isDeleted;
           m.senderAccentColorId = info.accentColorId;
+          m.senderBackgroundEmojiId = info.backgroundEmojiId;
           m.senderEmojiStatusId = info.emojiStatusId;
           m.senderPresence = info.presence;
           changed = true;
@@ -1736,6 +1766,7 @@ extension ChatViewModelUpdates on ChatViewModel {
       isPremium: user.boolean('is_premium') ?? false,
       isDeleted: TDParse.isDeletedUser(user),
       accentColorId: user.integer('accent_color_id') ?? -1,
+      backgroundEmojiId: user.int64('background_custom_emoji_id') ?? 0,
       emojiStatusId: TDParse.emojiStatusCustomEmojiId(user.obj('emoji_status')),
       presence: TDParse.avatarPresence(user.obj('status')),
     );
@@ -2141,8 +2172,21 @@ extension ChatViewModelUpdates on ChatViewModel {
   }
 
   /// Parses one TDLib message with this chat's group/channel label context.
-  ChatMessage? _parseMessage(Map<String, dynamic> raw) =>
-      TDParse.message(raw, isChannel: isChannel);
+  ChatMessage? _parseMessage(Map<String, dynamic> raw) {
+    final message = TDParse.message(raw, isChannel: isChannel);
+    if (message == null) return null;
+    // TDLib keeps peer-colour identity on the user, not on the message, and
+    // own messages never pass through the sender cache. Stamp our accent and
+    // reply-header emoji here so our own bubbles — and any reply quoting one —
+    // carry our colour. A chat-sent post belongs to the chat, whose accent
+    // this transcript cannot read, so it keeps -1 / 0 instead of borrowing
+    // our identity.
+    if (message.isOutgoing && !message.senderIsChat) {
+      message.senderAccentColorId = meAccentColorId;
+      message.senderBackgroundEmojiId = meBackgroundEmojiId;
+    }
+    return message;
+  }
 
   /// Fills a reply anchor from the mirror when the quoted message was
   /// deleted (Telegram §1.4, self-build gated): the kept copy's text,
@@ -2166,8 +2210,16 @@ extension ChatViewModelUpdates on ChatViewModel {
     m.replyToDate = entry.date;
     if (entry.senderId != 0) {
       final info = _senderCache[entry.senderId];
-      m.replyToSender = info?.name ?? '';
-      m.replyToSenderAccentColorId = info?.accentColorId ?? -1;
+      // A kept copy of OUR own message carries our peer colour and
+      // reply-header emoji: our id is never in the sender cache.
+      final own = entry.senderId == accountUserId;
+      m.replyToSender = own ? meName : (info?.name ?? '');
+      m.replyToSenderAccentColorId = own
+          ? meAccentColorId
+          : (info?.accentColorId ?? -1);
+      m.replyToSenderBackgroundEmojiId = own
+          ? meBackgroundEmojiId
+          : (info?.backgroundEmojiId ?? 0);
       m.replyToSenderEmojiStatusId = info?.emojiStatusId ?? 0;
       m.replyToSenderIsPremium = info?.isPremium ?? false;
       if ((m.replyToSender ?? '').isEmpty && entry.senderId > 0) {

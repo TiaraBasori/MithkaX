@@ -1096,14 +1096,15 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   /// The reply line/name colour: the quoted author's accent colour when the
   /// setting is on and the quote resolved one, else the theme's reply line.
   ///
-  /// Our OWN bubble never takes the quoted author's colour: the reference
-  /// client overrides every reply colour with the outgoing reply line (our
-  /// text colour) once the message is ours, because a peer accent at 10% is
-  /// invisible on the brand fill and its name can clash with the bubble ink.
-  /// Incoming replies keep the accent.
+  /// Applies in BOTH directions, like the reference client: our own replies
+  /// show the quoted author's colour too, and a peer's reply to us shows ours
+  /// (own messages now carry our accent from getMe). Only the accent id
+  /// decides the colour — the emoji status plays no part; a quote with no
+  /// resolved accent keeps the theme line, and the switch off leaves the
+  /// plain theme marker exactly as before.
   Color _replyAccentColor(bool outgoing) {
     final fallback = _messageReplyLineColor(outgoing);
-    if (outgoing || !_theme.replyQuoteSenderStyle) return fallback;
+    if (!_theme.replyQuoteSenderStyle) return fallback;
     final accentColorId = message.replyToSenderAccentColorId;
     if (accentColorId < 0) return fallback;
     final cloudTheme = _theme.cloudThemeFor(_brightness);
@@ -1117,8 +1118,13 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     );
   }
 
-  bool get _replyShowsSenderEmoji =>
-      _theme.replyQuoteSenderStyle && message.replyToSenderEmojiStatusId != 0;
+  /// The quoted author's peer-colour background emoji, drawn as the reply
+  /// marker's glyph scatter. TDLib's `background_custom_emoji_id` — the
+  /// reply-header emoji of the name colour — NOT the account's emoji status,
+  /// which the reference client never puts here. 0 when the setting is off
+  /// or the peer colour carries no emoji.
+  int get _replySenderBackgroundEmojiId =>
+      _theme.replyQuoteSenderStyle ? message.replyToSenderBackgroundEmojiId : 0;
 
   Color _messageReplyTextColor(bool outgoing) {
     if (_usesDecorativeBubbleBackground) {
@@ -4946,9 +4952,9 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
   }
 
   /// exteraless's reply line for a background-less sticker: a faint rounded
-  /// wash in the quoted author's colour, a 3px rule, the author (with their
-  /// custom emoji status when enabled) and the quoted line. Tapping still
-  /// opens the original message.
+  /// wash in the quoted author's colour, a 3px rule, the author and the quoted
+  /// line, with the author's reply-header emoji scattered behind them. Tapping
+  /// still opens the original message.
   Widget _stickerReplyMarker(bool outgoing) {
     final line = _replyAccentColor(outgoing);
     final faded = _messageReplyTextColor(outgoing);
@@ -4958,15 +4964,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         ? null
         : () => widget.bubble.onOpenReply!.call(targetId);
     final preview = (message.replyPreviewText ?? '').trim();
-    final statusId = _replyShowsSenderEmoji
-        ? message.replyToSenderEmojiStatusId
-        : 0;
+    final emojiId = _replySenderBackgroundEmojiId;
     return GestureDetector(
       key: const ValueKey('messageReplyOpenOriginal'),
       behavior: HitTestBehavior.opaque,
       onTap: openOriginal,
       child: Container(
         key: const ValueKey('messageReplyQuote'),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: line.withValues(
             alpha: _brightness == Brightness.dark ? 0.12 : 0.10,
@@ -4974,40 +4979,51 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
           borderRadius: BorderRadius.circular(4),
           border: Border(left: BorderSide(color: line, width: 3)),
         ),
-        padding: EdgeInsets.fromLTRB(
-          message.replyToImage != null ? 8 : 10,
-          5,
-          10,
-          5,
-        ),
-        child: IgnorePointer(
-          child: Row(
-            children: [
-              if (message.replyToImage != null) ...[
-                SizedBox(
-                  key: const ValueKey('messageReplyStickerThumb'),
-                  width: 34,
-                  height: 34,
-                  child: TDImage(
-                    photo:
-                        message.replyToImage?.thumbnail ?? message.replyToImage,
-                    cornerRadius: 4,
-                    cacheWidth: _cachePx(34),
-                    cacheHeight: _cachePx(34),
+        child: Stack(
+          children: [
+            if (emojiId != 0)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: _ReplyEmojiWatermark(
+                    key: const ValueKey('messageReplySenderEmojiStatus'),
+                    id: emojiId,
+                    color: line,
+                    hasQuote: message.replyToQuote != null,
                   ),
                 ),
-                const SizedBox(width: 5),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+              ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                message.replyToImage != null ? 8 : 10,
+                5,
+                10,
+                5,
+              ),
+              child: IgnorePointer(
+                child: Row(
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text.rich(
+                    if (message.replyToImage != null) ...[
+                      SizedBox(
+                        key: const ValueKey('messageReplyStickerThumb'),
+                        width: 34,
+                        height: 34,
+                        child: TDImage(
+                          photo:
+                              message.replyToImage?.thumbnail ??
+                              message.replyToImage,
+                          cornerRadius: 4,
+                          cacheWidth: _cachePx(34),
+                          cacheHeight: _cachePx(34),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text.rich(
                             TextSpan(
                               children: [
                                 if (sender.isNotEmpty)
@@ -5028,37 +5044,25 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
                               color: line,
                             ),
                           ),
-                        ),
-                        if (statusId != 0) ...[
-                          const SizedBox(width: 3),
-                          StatusEmojiView(
-                            key: const ValueKey(
-                              'messageReplySenderEmojiStatus',
+                          if (preview.isNotEmpty)
+                            Text(
+                              preview,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppTextSize.callout,
+                                height: 1.3,
+                                color: faded,
+                              ),
                             ),
-                            id: statusId,
-                            size: 14,
-                            color: line,
-                            animate: false,
-                          ),
                         ],
-                      ],
-                    ),
-                    if (preview.isNotEmpty)
-                      Text(
-                        preview,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTextSize.callout,
-                          height: 1.3,
-                          color: faded,
-                        ),
                       ),
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -5066,12 +5070,12 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
 
   /// 引用 quote block shown above a reply's text.
   ///
-  /// exteraless's reply line, not a second bubble: a faint wash, a 3px rule,
-  /// the author in the accent with their custom emoji status watermark, then
-  /// the quoted body one step below the message's size. An INCOMING reply
-  /// takes the quoted author's colour; our own bubble keeps the bubble's ink
-  /// (see [_replyAccentColor]). The settings switch turns the author styling
-  /// off and leaves one plain theme-coloured marker.
+  /// exteraless's reply line, not a second bubble: a faint wash in the quoted
+  /// author's peer colour, a 3px rule, the author in that colour with their
+  /// reply-header emoji scattered behind the panel, then the quoted body one
+  /// step below the message's size. The colour applies in both directions (see
+  /// [_replyAccentColor]); the settings switch turns the author styling off and
+  /// leaves one plain theme-coloured marker.
   Widget _replyQuote(bool outgoing) {
     final line = _replyAccentColor(outgoing);
     final faded = _messageReplyTextColor(outgoing);
@@ -5080,9 +5084,7 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
     final openOriginal = targetId == null || widget.bubble.onOpenReply == null
         ? null
         : () => widget.bubble.onOpenReply!.call(targetId);
-    final statusId = _replyShowsSenderEmoji
-        ? message.replyToSenderEmojiStatusId
-        : 0;
+    final emojiId = _replySenderBackgroundEmojiId;
     final hasThumb = message.replyToImage != null;
     // The reference client's reply panel: a content-sized rounded block, a
     // 3dp accent rule on the leading edge, the accent at 10% behind it (12% on
@@ -5108,35 +5110,14 @@ class _MessageBubbleState extends State<_ScopedMessageBubble>
         ),
         child: Stack(
           children: [
-            if (statusId != 0)
-              // The status emoji is a watermark on the AUTHOR line only. It used
-              // to be two 46/26dp glyphs pinned to the panel's corners, which
-              // put a 14% wash of colour directly behind the quoted text — the
-              // preview read as smudged. Clip it to the first line's height.
-              Positioned(
-                top: -7,
-                right: -6,
+            if (emojiId != 0)
+              Positioned.fill(
                 child: IgnorePointer(
-                  child: ClipRect(
-                    child: SizedBox(
-                      width: 52,
-                      height: 30,
-                      child: Align(
-                        alignment: Alignment.topRight,
-                        child: Opacity(
-                          opacity: 0.12,
-                          child: StatusEmojiView(
-                            key: const ValueKey(
-                              'messageReplySenderEmojiStatus',
-                            ),
-                            id: statusId,
-                            size: 40,
-                            color: line,
-                            animate: false,
-                          ),
-                        ),
-                      ),
-                    ),
+                  child: _ReplyEmojiWatermark(
+                    key: const ValueKey('messageReplySenderEmojiStatus'),
+                    id: emojiId,
+                    color: line,
+                    hasQuote: message.replyToQuote != null,
                   ),
                 ),
               ),
@@ -6569,4 +6550,89 @@ class _GhostBandChip extends StatelessWidget {
       },
     );
   }
+}
+
+/// One glyph of the reply marker's background-emoji scatter: its offset from
+/// the marker's anchor in dp, its scale, and whether it is drawn only when the
+/// reply quotes an explicit selection (`ReplyMessageLine.IconCoords`).
+class _ReplyEmojiGlyph {
+  const _ReplyEmojiGlyph(
+    this.dx,
+    this.dy,
+    this.scale, {
+    this.quoteOnly = false,
+  });
+
+  final double dx;
+  final double dy;
+  final double scale;
+  final bool quoteOnly;
+}
+
+/// exteraless's reply-header emoji: the quoted author's peer-colour background
+/// emoji (`user.background_custom_emoji_id`), scattered as nine faint glyphs
+/// toward the marker's trailing edge exactly like
+/// `ReplyMessageLine.drawBackground`. The account's own emoji status is never
+/// drawn here — a reply shows the NAME COLOUR's emoji, not a status badge.
+class _ReplyEmojiWatermark extends StatelessWidget {
+  const _ReplyEmojiWatermark({
+    super.key,
+    required this.id,
+    required this.color,
+    required this.hasQuote,
+  });
+
+  final int id;
+  final Color color;
+  final bool hasQuote;
+
+  static const List<_ReplyEmojiGlyph> _glyphs = [
+    _ReplyEmojiGlyph(4, -6.33, 1.0),
+    _ReplyEmojiGlyph(30, 3, 0.78),
+    _ReplyEmojiGlyph(46, -17, 0.6),
+    _ReplyEmojiGlyph(69.66, -0.666, 0.87),
+    _ReplyEmojiGlyph(98, -12.6, 1.03),
+    _ReplyEmojiGlyph(51, 24, 1.0),
+    _ReplyEmojiGlyph(6.33, 20, 0.77),
+    _ReplyEmojiGlyph(-19, 12, 0.8, quoteOnly: true),
+    _ReplyEmojiGlyph(-22, 36, 0.7, quoteOnly: true),
+  ];
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final rect = Offset.zero & constraints.biggest;
+      // The scatter hangs off the panel's trailing edge, vertically centred on
+      // the first line. An explicit quote pulls it 12dp further in, and the
+      // two entries marked quote-only join it. Glyphs that fall outside the
+      // panel are clipped, as in the reference's canvas.clipRect.
+      var x0 = math.max(rect.right - 15, rect.center.dx);
+      if (hasQuote) x0 -= 12;
+      final y0 = math.min(rect.center.dy, rect.top + 21);
+      return ClipRect(
+        child: Stack(
+          children: [
+            for (var i = 0; i < _glyphs.length; i++)
+              if (!_glyphs[i].quoteOnly || hasQuote)
+                Positioned(
+                  key: ValueKey('messageReplySenderEmojiStatusGlyph$i'),
+                  left: x0 - _glyphs[i].dx - 5 * _glyphs[i].scale,
+                  top: y0 + _glyphs[i].dy - 5 * _glyphs[i].scale,
+                  width: 10 * _glyphs[i].scale,
+                  height: 10 * _glyphs[i].scale,
+                  child: Opacity(
+                    opacity: 0.30,
+                    child: CustomEmojiView(
+                      id: id,
+                      size: 10 * _glyphs[i].scale,
+                      color: color,
+                      animate: false,
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      );
+    },
+  );
 }

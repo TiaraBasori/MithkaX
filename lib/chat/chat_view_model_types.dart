@@ -48,6 +48,7 @@ class _SenderInfo {
     this.isPremium = false,
     this.isDeleted = false,
     this.accentColorId = -1,
+    this.backgroundEmojiId = 0,
     this.emojiStatusId = 0,
     this.presence = AvatarPresence.none,
     this.isBot = false,
@@ -62,6 +63,11 @@ class _SenderInfo {
   /// no profile to open and nothing to report.
   final bool isDeleted;
   final int accentColorId;
+
+  /// The sender's peer-colour background emoji (`background_custom_emoji_id`)
+  /// — the glyph the reference client scatters across a reply header. This is
+  /// a property of the name colour, not the account's emoji status.
+  final int backgroundEmojiId;
   final int emojiStatusId;
   final AvatarPresence presence;
 
@@ -77,6 +83,7 @@ class _SenderInfo {
     isPremium: isPremium,
     isDeleted: isDeleted,
     accentColorId: accentColorId,
+    backgroundEmojiId: backgroundEmojiId,
     emojiStatusId: emojiStatusId,
     presence: value,
     isBot: isBot,
