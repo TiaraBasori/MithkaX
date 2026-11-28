@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/app_navigator.dart';
 import '../../app/chat_deep_link_controller.dart';
 import '../../components/app_icons.dart';
+import '../../components/full_page_back_swipe.dart';
 import '../../components/photo_avatar.dart';
 import '../../components/toast.dart';
 import '../../media/media_metadata.dart';
@@ -963,13 +964,16 @@ class _GlobalMusicPlayerOverlayState extends State<GlobalMusicPlayerOverlay> {
                     controller.collapsed ? _dragX / 52 : _dragX / width,
                     0,
                   ),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onPanUpdate: (details) => _onPanUpdate(details, controller),
-                    onPanEnd: (details) => _onPanEnd(details, controller),
-                    child: _CollapsedMusicPlayer(
-                      key: musicCollapsedOverlayKey,
-                      controller: controller,
+                  child: ExcludeFromBackSwipe(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanUpdate: (details) =>
+                          _onPanUpdate(details, controller),
+                      onPanEnd: (details) => _onPanEnd(details, controller),
+                      child: _CollapsedMusicPlayer(
+                        key: musicCollapsedOverlayKey,
+                        controller: controller,
+                      ),
                     ),
                   ),
                 ),
@@ -1109,69 +1113,71 @@ class _GlobalMusicPlayerBarState extends State<GlobalMusicPlayerBar> {
     final closeReveal = width <= 0
         ? 0.0
         : (-_dragX / (width * 0.32)).clamp(0.0, 1.0);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragStart: _onHorizontalDragStart,
-      onHorizontalDragUpdate: _onHorizontalDragUpdate,
-      onHorizontalDragEnd: _onHorizontalDragEnd,
-      onHorizontalDragCancel: _onHorizontalDragCancel,
-      child: SizedBox(
-        width: double.infinity,
-        height: musicPlayerBarHeight + widget.bottomPadding,
-        child: ClipRect(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ColoredBox(color: c.background),
-              if (closeReveal > 0)
-                Opacity(
-                  opacity: closeReveal,
-                  child: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 22),
-                    color: const Color(0xFFFF3B30),
-                    child: const AppIcon(
-                      HeroAppIcons.trash,
-                      size: 24,
-                      color: _musicWhite,
-                    ),
-                  ),
-                ),
-              AnimatedSlide(
-                duration: slideDuration,
-                curve: Curves.easeOutCubic,
-                offset: Offset(width <= 0 ? 0 : _dragX / width, 0),
-                child: Container(
-                  padding: EdgeInsets.fromLTRB(
-                    14,
-                    8,
-                    10,
-                    2 + widget.bottomPadding,
-                  ),
-                  decoration: BoxDecoration(
-                    color: c.background,
-                    border: Border(
-                      top: BorderSide(color: c.divider, width: 0.5),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _musicBlack.withValues(alpha: 0.08),
-                        blurRadius: 18,
-                        offset: const Offset(0, -4),
+    return ExcludeFromBackSwipe(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: _onHorizontalDragStart,
+        onHorizontalDragUpdate: _onHorizontalDragUpdate,
+        onHorizontalDragEnd: _onHorizontalDragEnd,
+        onHorizontalDragCancel: _onHorizontalDragCancel,
+        child: SizedBox(
+          width: double.infinity,
+          height: musicPlayerBarHeight + widget.bottomPadding,
+          child: ClipRect(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: c.background),
+                if (closeReveal > 0)
+                  Opacity(
+                    opacity: closeReveal,
+                    child: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 22),
+                      color: const Color(0xFFFF3B30),
+                      child: const AppIcon(
+                        HeroAppIcons.trash,
+                        size: 24,
+                        color: _musicWhite,
                       ),
-                    ],
+                    ),
                   ),
-                  child: _MusicPlayerBarContents(
-                    controller: controller,
-                    message: message,
-                    music: music,
-                    fraction: fraction,
-                    total: total,
-                    subtitle: subtitle,
+                AnimatedSlide(
+                  duration: slideDuration,
+                  curve: Curves.easeOutCubic,
+                  offset: Offset(width <= 0 ? 0 : _dragX / width, 0),
+                  child: Container(
+                    padding: EdgeInsets.fromLTRB(
+                      14,
+                      8,
+                      10,
+                      2 + widget.bottomPadding,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      border: Border(
+                        top: BorderSide(color: c.divider, width: 0.5),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _musicBlack.withValues(alpha: 0.08),
+                          blurRadius: 18,
+                          offset: const Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    child: _MusicPlayerBarContents(
+                      controller: controller,
+                      message: message,
+                      music: music,
+                      fraction: fraction,
+                      total: total,
+                      subtitle: subtitle,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1499,87 +1505,89 @@ class _MusicMiniPlayerCardState extends State<MusicMiniPlayerCard> {
             ? 0.0
             : (-_dragX / (width * 0.32)).clamp(0.0, 1.0);
         final radius = BorderRadius.circular(AppRadius.card);
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: _onHorizontalDragStart,
-          onHorizontalDragUpdate: _onHorizontalDragUpdate,
-          onHorizontalDragEnd: _onHorizontalDragEnd,
-          onHorizontalDragCancel: _onHorizontalDragCancel,
-          child: SizedBox(
-            height: collapsed
-                ? musicMiniPlayerPillHeight
-                : musicMiniPlayerCardHeight,
-            // The shadow lives outside the clip, so it can paint past the
-            // rounded edge instead of being cut off by it.
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                boxShadow: [
-                  BoxShadow(
-                    color: _musicBlack.withValues(alpha: 0.10),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: radius,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ColoredBox(color: context.colors.navBar),
-                    if (closeReveal > 0)
-                      Opacity(
-                        key: musicMiniPlayerTrashKey,
-                        opacity: closeReveal,
-                        child: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 18),
-                          color: const Color(0xFFFF3B30),
-                          child: const AppIcon(
-                            HeroAppIcons.trash,
-                            size: 22,
-                            color: _musicWhite,
-                          ),
-                        ),
-                      ),
-                    AnimatedSlide(
-                      duration: slideDuration,
-                      curve: Curves.easeOutCubic,
-                      offset: Offset(width <= 0 ? 0 : _dragX / width, 0),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: context.colors.navBar,
-                          borderRadius: radius,
-                          border: Border.all(
-                            color: context.colors.divider,
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: collapsed
-                                  ? _pill(context, music)
-                                  : _card(context, music, message),
-                            ),
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              height: 2,
-                              child: _MiniProgressLine(
-                                fraction: fraction,
-                                track: context.colors.divider,
-                                fill: musicPlayerAccent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+        return ExcludeFromBackSwipe(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: _onHorizontalDragStart,
+            onHorizontalDragUpdate: _onHorizontalDragUpdate,
+            onHorizontalDragEnd: _onHorizontalDragEnd,
+            onHorizontalDragCancel: _onHorizontalDragCancel,
+            child: SizedBox(
+              height: collapsed
+                  ? musicMiniPlayerPillHeight
+                  : musicMiniPlayerCardHeight,
+              // The shadow lives outside the clip, so it can paint past the
+              // rounded edge instead of being cut off by it.
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _musicBlack.withValues(alpha: 0.10),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
                     ),
                   ],
+                ),
+                child: ClipRRect(
+                  borderRadius: radius,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ColoredBox(color: context.colors.navBar),
+                      if (closeReveal > 0)
+                        Opacity(
+                          key: musicMiniPlayerTrashKey,
+                          opacity: closeReveal,
+                          child: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 18),
+                            color: const Color(0xFFFF3B30),
+                            child: const AppIcon(
+                              HeroAppIcons.trash,
+                              size: 22,
+                              color: _musicWhite,
+                            ),
+                          ),
+                        ),
+                      AnimatedSlide(
+                        duration: slideDuration,
+                        curve: Curves.easeOutCubic,
+                        offset: Offset(width <= 0 ? 0 : _dragX / width, 0),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: context.colors.navBar,
+                            borderRadius: radius,
+                            border: Border.all(
+                              color: context.colors.divider,
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Stack(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: collapsed
+                                    ? _pill(context, music)
+                                    : _card(context, music, message),
+                              ),
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                height: 2,
+                                child: _MiniProgressLine(
+                                  fraction: fraction,
+                                  track: context.colors.divider,
+                                  fill: musicPlayerAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

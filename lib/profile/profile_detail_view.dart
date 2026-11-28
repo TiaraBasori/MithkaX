@@ -25,7 +25,6 @@ import '../chat/appearance/chat_wallpaper.dart';
 import '../chat/chat_first_contact_info.dart';
 import '../chat/links_search/chat_search_view.dart';
 import '../chat/links_search/link_handler.dart';
-import '../chat/media/audio_search_view.dart';
 import '../chat/media/full_image_viewer.dart';
 import '../chat/media/music_player_controller.dart';
 import '../chat/messages/telegram_rich_text.dart';
@@ -113,8 +112,9 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
   List<StickerItem> _gifts = const [];
   List<int> _postStoryIds = const [];
   List<int> _archivedStoryIds = const [];
-  String _musicTitle = '';
-  ChatMessage? _musicMessage;
+
+  /// The profile's saved track (`userFullInfo.first_profile_audio`).
+  MessageMusic? _music;
   bool _musicPressed = false;
   bool _hideIdentity = false;
   bool _isMe = false;
@@ -179,10 +179,7 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
     try {
       final me = await TdClient.shared.query({'@type': 'getMe'});
       if (mounted) {
-        setState(() {
-          _isMe = me.int64('id') == widget.userId;
-          if (_isMe) _musicTitle = _defaultOwnMusicTitle;
-        });
+        setState(() => _isMe = me.int64('id') == widget.userId);
       }
     } catch (_) {}
     try {
@@ -234,12 +231,12 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
                 business?.obj('opening_hours'),
           );
           _giftCount = giftCount;
-          _musicTitle = _isMe
-              ? _defaultOwnMusicTitle
-              : _extractMusicTitle(full, _bio);
+          // Telegram keeps the saved track here for every account, our own
+          // included: `music` / `business_info.music` are free-text fields,
+          // not the track, and carry nothing playable.
+          _music = TDParse.musicFromAudio(full.obj('first_profile_audio'));
         });
         if (giftCount > 0) unawaited(_loadGifts());
-        await _resolveMusicCandidate(_musicTitle);
       }
     } catch (_) {}
     try {
@@ -640,22 +637,6 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
     );
   }
 
-  Future<void> _openMusicSearch() async {
-    final initial = _musicTitle.trim();
-    final selected = await Navigator.of(context).push<(int, ChatMessage)>(
-      MaterialPageRoute(
-        builder: (_) =>
-            AudioSearchView(initialQuery: initial, selectOnly: true),
-      ),
-    );
-    if (selected == null || !mounted) return;
-    final (_, message) = selected;
-    setState(() {
-      _musicMessage = message;
-      _musicTitle = message.music?.title ?? message.text;
-    });
-  }
-
   String _durationString(int seconds) {
     final s = seconds < 0 ? 0 : seconds;
     final h = s ~/ 3600;
@@ -783,8 +764,6 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
   bool get _hasProfileCollections =>
       _postStoryIds.isNotEmpty || _archivedStoryIds.isNotEmpty;
 
-  static const _defaultOwnMusicTitle = 'SEKAI NO OWARI - The Peak';
-
   String _formatBirthday(Map<String, dynamic>? bd) {
     if (bd == null) return '';
     final d = bd.integer('day') ?? 0;
@@ -844,56 +823,17 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
   }
 
-  String _extractMusicTitle(Map<String, dynamic> full, String bio) {
-    for (final source in [
-      full.str('music'),
-      full.obj('business_info')?.str('music'),
-      bio,
-    ]) {
-      final value = source?.trim();
-      if (value == null || value.isEmpty) continue;
-      final match = RegExp(
-        r'(?:\u97f3\u4e50|music)\s*[:\uff1a]\s*(.+)',
-        caseSensitive: false,
-      ).firstMatch(value);
-      if (match != null) return match.group(1)!.trim();
-    }
-    return '';
-  }
-
-  Future<void> _resolveMusicCandidate(String title) async {
-    final q = title.trim();
-    if (q.isEmpty || _musicMessage?.music?.file != null) return;
-    try {
-      final res = await TdClient.shared.query({
-        '@type': 'searchMessages',
-        'chat_list': {'@type': 'chatListMain'},
-        'query': q,
-        'offset_date': 0,
-        'offset_chat_id': 0,
-        'offset_message_id': 0,
-        'limit': 1,
-        'filter': {'@type': 'searchMessagesFilterAudio'},
-        'min_date': 0,
-        'max_date': 0,
-      });
-      ChatMessage? first;
-      for (final object
-          in res.objects('messages') ?? const <Map<String, dynamic>>[]) {
-        final message = TDParse.message(object);
-        if (message?.music?.file != null) {
-          first = message;
-          break;
-        }
-      }
-      if (first == null || !mounted) return;
-      final resolved = first;
-      setState(() {
-        _musicMessage = resolved;
-        _musicTitle = resolved.music?.title ?? q;
-      });
-    } catch (_) {}
-  }
+  /// Wraps the saved track in a message for the shared player: profile music
+  /// has no message of its own, so id/date stay zero and the chat id is the
+  /// page's own conversation when it is known.
+  ChatMessage _profileMusicMessage(MessageMusic music) => ChatMessage(
+    id: 0,
+    isOutgoing: false,
+    text: '',
+    date: 0,
+    chatId: _chatId ?? 0,
+    music: music,
+  );
 
   /// Cover in Telegram's profile colors + overlapping avatar +
   /// name/username/status.
@@ -1308,28 +1248,21 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
   Widget _musicRow() {
     final c = context.colors;
     final controller = MusicPlayerController.shared;
-    final title = _musicTitle.trim();
-    final music = _musicMessage?.music;
+    final music = _music;
+    final title = (music?.title ?? '').trim();
     final musicFile = music?.file;
     final canPlay = musicFile != null;
-    final chatId = _chatId;
-    final toggle = canPlay && chatId != null
-        ? () {
-            // Route through the shared player so the track joins the global
-            // queue, the mini bar and the system media controls.
-            if (controller.isActive(musicFile)) {
-              controller.toggleCurrent();
-            } else if (_musicMessage != null) {
-              unawaited(
-                controller.playChat(
-                  _musicMessage!,
-                  chatId,
-                  title: title.isEmpty ? _name : title,
-                ),
-              );
-            }
-          }
-        : null;
+    void toggle() {
+      // Route through the shared player so the track joins the global queue,
+      // the mini bar and the system media controls. The saved track has no
+      // message around it, hence the synthetic one.
+      if (controller.isActive(musicFile)) {
+        controller.toggleCurrent();
+      } else if (music != null) {
+        controller.play(_profileMusicMessage(music));
+      }
+    }
+
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -1344,7 +1277,7 @@ class _ProfileDetailViewState extends State<ProfileDetailView> {
         final value = (position.inMilliseconds / totalMs).clamp(0.0, 1.0);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: canPlay ? toggle : _openMusicSearch,
+          onTap: canPlay ? toggle : null,
           onTapDown: (_) => setState(() => _musicPressed = true),
           onTapCancel: () => setState(() => _musicPressed = false),
           onTapUp: (_) => setState(() => _musicPressed = false),

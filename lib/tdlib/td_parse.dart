@@ -2701,28 +2701,8 @@ abstract final class TDParse {
           );
         }
       case 'messageAudio':
-        final audio = content.obj('audio');
-        if (audio != null) {
-          final mini = decodeMiniThumb(audio.obj('album_cover_minithumbnail'));
-          final title = _cleanString(audio.str('title'));
-          final fileName = _cleanString(audio.str('file_name'));
-          final performer = _cleanString(audio.str('performer'));
-          return MediaAttachment(
-            music: MessageMusic(
-              title:
-                  title ??
-                  fileName ??
-                  AppStrings.t(AppStringKeys.profileDetailMusic),
-              performer: performer,
-              cover: fileRef(
-                audio.obj('album_cover_thumbnail')?.obj('file'),
-                miniThumb: mini,
-              ),
-              file: fileRef(audio.obj('audio')),
-              duration: audio.integer('duration') ?? 0,
-            ),
-          );
-        }
+        final music = musicFromAudio(content.obj('audio'));
+        if (music != null) return MediaAttachment(music: music);
       case 'messageDocument':
         final doc = content.obj('document');
         if (doc != null) {
@@ -2743,6 +2723,31 @@ abstract final class TDParse {
         }
     }
     return const MediaAttachment();
+  }
+
+  /// Parses a TDLib `audio` object into the player's track description.
+  ///
+  /// `messageAudio` content and `userFullInfo.first_profile_audio` carry the
+  /// same object; the profile's saved music has no message around it. The
+  /// title falls back to the file name, then to the generic "Music" label, so
+  /// a track with no metadata is still named instead of blank.
+  static MessageMusic? musicFromAudio(Map<String, dynamic>? audio) {
+    if (audio == null) return null;
+    final mini = decodeMiniThumb(audio.obj('album_cover_minithumbnail'));
+    final title = _cleanString(audio.str('title'));
+    final fileName = _cleanString(audio.str('file_name'));
+    final performer = _cleanString(audio.str('performer'));
+    return MessageMusic(
+      title:
+          title ?? fileName ?? AppStrings.t(AppStringKeys.profileDetailMusic),
+      performer: performer,
+      cover: fileRef(
+        audio.obj('album_cover_thumbnail')?.obj('file'),
+        miniThumb: mini,
+      ),
+      file: fileRef(audio.obj('audio')),
+      duration: audio.integer('duration') ?? 0,
+    );
   }
 
   static String messageText(
